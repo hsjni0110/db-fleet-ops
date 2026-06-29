@@ -6,14 +6,23 @@ import static org.mockito.Mockito.when;
 
 import java.time.OffsetDateTime;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
+import com.dbfleetops.health.domain.DatabaseErrorCode;
 import com.dbfleetops.health.domain.DatabaseHealth;
 import com.dbfleetops.health.domain.DatabaseStatus;
 import com.dbfleetops.health.port.DatabaseHealthProbe;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 @ExtendWith(MockitoExtension.class)
 class DatabaseHealthServiceTest {
@@ -21,8 +30,29 @@ class DatabaseHealthServiceTest {
     @Mock
     private DatabaseHealthProbe databaseHealthProbe;
 
+    private Logger logger;
+    private ListAppender<ILoggingEvent> appender;
+
+    @BeforeEach
+    void setUpLogger() {
+        logger = (Logger) LoggerFactory.getLogger(
+                DatabaseHealthService.class
+        );
+
+        appender = new ListAppender<>();
+        appender.start();
+
+        logger.addAppender(appender);
+    }
+
+    @AfterEach
+    void tearDownLogger() {
+        logger.detachAppender(appender);
+        appender.stop();
+    }
+
     @Test
-    void returnsHealthResultFromProbe() {
+    void returnsUpHealthResultAndLogsAtInfoLevel() {
         DatabaseHealth expected = DatabaseHealth.up(
                 "MYSQL",
                 "127.0.0.1",
@@ -37,10 +67,12 @@ class DatabaseHealthServiceTest {
                 .thenReturn(expected);
 
         DatabaseHealthService service =
-                new DatabaseHealthService(databaseHealthProbe);
+                new DatabaseHealthService(
+                        databaseHealthProbe
+                );
 
         DatabaseHealth actual =
-                service.checkDatabaseHealth();
+                service.checkDefaultDatabase();
 
         assertThat(actual)
                 .isEqualTo(expected);
@@ -49,5 +81,137 @@ class DatabaseHealthServiceTest {
                 .isEqualTo(DatabaseStatus.UP);
 
         verify(databaseHealthProbe).check();
+
+        assertThat(appender.list)
+                .hasSize(1);
+
+        ILoggingEvent event =
+                appender.list.getFirst();
+
+        assertThat(event.getLevel())
+                .isEqualTo(Level.INFO);
+
+        assertThat(event.getFormattedMessage())
+                .contains(
+                        "database_health_checked",
+                        "databaseType=MYSQL",
+                        "host=127.0.0.1",
+                        "port=3306",
+                        "status=UP",
+                        "latencyMs=12",
+                        "errorCode=NONE"
+                );
+    }
+
+    @Test
+    void returnsDownHealthResultAndLogsAtWarnLevel() {
+        DatabaseHealth expected = DatabaseHealth.down(
+                "MYSQL",
+                "127.0.0.1",
+                3306,
+                1000L,
+                OffsetDateTime.parse(
+                        "2026-06-29T17:31:00+09:00"
+                ),
+                DatabaseErrorCode.CONNECTION_REFUSED,
+                "Database connection was refused."
+        );
+
+        when(databaseHealthProbe.check())
+                .thenReturn(expected);
+
+        DatabaseHealthService service =
+                new DatabaseHealthService(
+                        databaseHealthProbe
+                );
+
+        DatabaseHealth actual =
+                service.checkDefaultDatabase();
+
+        assertThat(actual)
+                .isEqualTo(expected);
+
+        assertThat(actual.status())
+                .isEqualTo(DatabaseStatus.DOWN);
+
+        assertThat(actual.errorCode())
+                .isEqualTo(
+                        DatabaseErrorCode.CONNECTION_REFUSED
+                );
+
+        verify(databaseHealthProbe).check();
+
+        assertThat(appender.list)
+                .hasSize(1);
+
+        ILoggingEvent event =
+                appender.list.getFirst();
+
+        assertThat(event.getLevel())
+                .isEqualTo(Level.WARN);
+
+        assertThat(event.getFormattedMessage())
+                .contains(
+                        "database_health_checked",
+                        "databaseType=MYSQL",
+                        "host=127.0.0.1",
+                        "port=3306",
+                        "status=DOWN",
+                        "latencyMs=1000",
+                        "errorCode=CONNECTION_REFUSED"
+                );
+    }
+
+    @Test
+    void logsAuthenticationFailureErrorCode() {
+        DatabaseHealth expected = DatabaseHealth.down(
+                "MYSQL",
+                "127.0.0.1",
+                3306,
+                45L,
+                OffsetDateTime.parse(
+                        "2026-06-29T17:32:00+09:00"
+                ),
+                DatabaseErrorCode.AUTHENTICATION_FAILED,
+                "Database authentication failed."
+        );
+
+        when(databaseHealthProbe.check())
+                .thenReturn(expected);
+
+        DatabaseHealthService service =
+                new DatabaseHealthService(
+                        databaseHealthProbe
+                );
+
+        DatabaseHealth actual =
+                service.checkDefaultDatabase();
+
+        assertThat(actual.status())
+                .isEqualTo(DatabaseStatus.DOWN);
+
+        assertThat(actual.errorCode())
+                .isEqualTo(
+                        DatabaseErrorCode.AUTHENTICATION_FAILED
+                );
+
+        assertThat(appender.list)
+                .hasSize(1);
+
+        ILoggingEvent event =
+                appender.list.getFirst();
+
+        assertThat(event.getLevel())
+                .isEqualTo(Level.WARN);
+
+        assertThat(event.getFormattedMessage())
+                .contains(
+                        "status=DOWN",
+                        "errorCode=AUTHENTICATION_FAILED"
+                )
+                .doesNotContain(
+                        "password",
+                        "local_monitor_password"
+                );
     }
 }

@@ -23,7 +23,7 @@ public class DatabaseHealthController {
     @GetMapping("/health")
     public ResponseEntity<DatabaseHealthResponse> getHealth() {
         DatabaseHealth health =
-                databaseHealthService.checkDatabaseHealth();
+                databaseHealthService.checkDefaultDatabase();
 
         DatabaseHealthResponse response =
                 DatabaseHealthResponse.from(health);
