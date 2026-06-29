@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: db-fleetops
+
+server:
+  port: ${SERVER_PORT:8080}
+
+db-fleetops:
+  target:
+    host: ${DB_TARGET_HOST:localhost}
+    port: ${DB_TARGET_PORT:3306}
+    database: ${DB_TARGET_NAME:dbops_target}
+    username: ${DB_TARGET_USERNAME:db_monitor}
+    password: ${DB_TARGET_PASSWORD}
+    connect-timeout: ${DB_CONNECT_TIMEOUT:2s}
+    socket-timeout: ${DB_SOCKET_TIMEOUT:2s}
