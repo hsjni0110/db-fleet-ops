@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 import java.time.OffsetDateTime;
 
@@ -90,7 +91,7 @@ class DatabaseHealthControllerTest {
                                 )
                 );
     }
-    
+
     @Test
     void returnsDownWhenDatabaseIsUnavailable() throws Exception {
         DatabaseHealth health = DatabaseHealth.down(
@@ -125,6 +126,50 @@ class DatabaseHealthControllerTest {
                         jsonPath("$.message")
                                 .value(
                                         "Database connection was refused."
+                                )
+                );
+    }
+    @Test
+    void returnsProblemDetailForUnknownPath()
+            throws Exception {
+
+        mockMvc.perform(
+                        get("/api/v1/not-exists")
+                                .header(
+                                        "X-Request-ID",
+                                        "not-found-test-001"
+                                )
+                )
+                .andExpect(status().isNotFound())
+                .andExpect(
+                        content().contentTypeCompatibleWith(
+                                "application/problem+json"
+                        )
+                )
+                .andExpect(
+                        jsonPath("$.title")
+                                .value("Resource not found")
+                )
+                .andExpect(
+                        jsonPath("$.status")
+                                .value(404)
+                )
+                .andExpect(
+                        jsonPath("$.detail")
+                                .value(
+                                        "The requested resource could not be found."
+                                )
+                )
+                .andExpect(
+                        jsonPath("$.errorCode")
+                                .value(
+                                        "DBOPS-COMMON-40401"
+                                )
+                )
+                .andExpect(
+                        jsonPath("$.requestId")
+                                .value(
+                                        "not-found-test-001"
                                 )
                 );
     }

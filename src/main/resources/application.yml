@@ -1,6 +1,10 @@
 spring:
   application:
     name: db-fleetops
+    
+  mvc:
+    problemdetails:
+      enabled: true
 
 server:
   port: ${SERVER_PORT:8080}
