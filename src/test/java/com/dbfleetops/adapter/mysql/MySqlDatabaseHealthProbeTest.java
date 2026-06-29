@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 import com.dbfleetops.config.TargetDatabaseProperties;
+import com.dbfleetops.health.application.DatabaseErrorClassifier;
 import com.dbfleetops.health.domain.DatabaseHealth;
 import com.dbfleetops.health.domain.DatabaseStatus;
 
@@ -25,15 +26,20 @@ class MySqlDatabaseHealthProbeTest {
                     Duration.ofSeconds(2)
             );
 
-        MySqlDatabaseHealthProbe probe =
-                new MySqlDatabaseHealthProbe(properties);
+            DatabaseErrorClassifier classifier = new DatabaseErrorClassifier();
 
-        DatabaseHealth result = probe.check();
-        assertThat(result.status())
-                .as("errorCode=%s, message=%s",
-                        result.errorCode(),
-                        result.message())
-                .isEqualTo(DatabaseStatus.UP);
+            MySqlDatabaseHealthProbe probe =
+                    new MySqlDatabaseHealthProbe(
+                            properties,
+                            classifier
+                    );
+
+            DatabaseHealth result = probe.check();
+            assertThat(result.status())
+                    .as("errorCode=%s, message=%s",
+                            result.errorCode(),
+                            result.message())
+                    .isEqualTo(DatabaseStatus.UP);
     }
 
     @Test
@@ -49,8 +55,13 @@ class MySqlDatabaseHealthProbeTest {
                         Duration.ofSeconds(1)
                 );
 
+        DatabaseErrorClassifier classifier = new DatabaseErrorClassifier();
+
         MySqlDatabaseHealthProbe probe =
-                new MySqlDatabaseHealthProbe(properties);
+                new MySqlDatabaseHealthProbe(
+                        properties,
+                        classifier
+                );
 
         DatabaseHealth result = probe.check();
 
