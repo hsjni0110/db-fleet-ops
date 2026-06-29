@@ -1,4 +1,4 @@
-package com.dbfleetops.db_fleetops.config;
+package com.dbfleetops.config;
 
 import java.time.Duration;
 

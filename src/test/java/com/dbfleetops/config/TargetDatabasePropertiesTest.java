@@ -1,4 +1,4 @@
-package com.dbfleetops.db_fleetops;
+package com.dbfleetops.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -7,8 +7,6 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-
-import com.dbfleetops.db_fleetops.config.TargetDatabaseProperties;
 
 @SpringBootTest(properties = {
     "db-fleetops.target.host=localhost",
