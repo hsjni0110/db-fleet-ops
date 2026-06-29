@@ -35,3 +35,7 @@ out/
 
 ### VS Code ###
 .vscode/
+.env                  Git 제외
+.env.local            Git 제외
+.env.test             Git 제외
+.env.example          Git 포함
