@@ -7,10 +7,20 @@ server:
 
 db-fleetops:
   target:
-    host: ${DB_TARGET_HOST:localhost}
+    host: ${DB_TARGET_HOST:127.0.0.1}
     port: ${DB_TARGET_PORT:3306}
     database: ${DB_TARGET_NAME:dbops_target}
     username: ${DB_TARGET_USERNAME:db_monitor}
     password: ${DB_TARGET_PASSWORD}
     connect-timeout: ${DB_CONNECT_TIMEOUT:2s}
     socket-timeout: ${DB_SOCKET_TIMEOUT:2s}
+
+logging:
+  pattern:
+    console: >-
+      %d{yyyy-MM-dd HH:mm:ss.SSS}
+      %-5level
+      [%thread]
+      [requestId=%X{requestId:-none}]
+      %logger{36}
+      - %msg%n
