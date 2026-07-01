@@ -7,6 +7,7 @@ import com.dbfleetops.health.dto.DatabaseVersionResponse;
 import com.dbfleetops.health.dto.LockWaitResponse;
 import com.dbfleetops.health.dto.LongTransactionResponse;
 import com.dbfleetops.health.dto.SessionResponse;
+import com.dbfleetops.health.dto.SlowQueryResponse;
 
 import java.util.List;
 
@@ -76,6 +77,15 @@ public class DatabaseDiagnosticController {
     ) {
         return ResponseEntity.ok(
                 diagnosticService.getLockWaits(databaseId)
+        );
+    }
+
+    @GetMapping("/slow-queries")
+    public ResponseEntity<List<SlowQueryResponse>> getSlowQueries(
+            @PathVariable Long databaseId
+    ) {
+        return ResponseEntity.ok(
+                diagnosticService.getSlowQueries(databaseId)
         );
     }
 }

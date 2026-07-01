@@ -11,12 +11,14 @@ import com.dbfleetops.health.domain.DatabaseVersionInfo;
 import com.dbfleetops.health.domain.LockWaitInfo;
 import com.dbfleetops.health.domain.LongTransactionInfo;
 import com.dbfleetops.health.domain.SessionInfo;
+import com.dbfleetops.health.domain.SlowQueryInfo;
 import com.dbfleetops.health.dto.ConnectionSummaryResponse;
 import com.dbfleetops.health.dto.DatabaseUptimeResponse;
 import com.dbfleetops.health.dto.DatabaseVersionResponse;
 import com.dbfleetops.health.dto.LockWaitResponse;
 import com.dbfleetops.health.dto.LongTransactionResponse;
 import com.dbfleetops.health.dto.SessionResponse;
+import com.dbfleetops.health.dto.SlowQueryResponse;
 import com.dbfleetops.health.port.DatabaseDiagnosticPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -448,5 +450,81 @@ class DatabaseDiagnosticServiceTest {
 
         verify(diagnosticPort)
                 .getLockWaits(database, credential);
+    }
+
+    @Test
+    void getSlowQueriesReturnsSlowQueryResponses() {
+        ManagedDatabase database = newDatabase();
+
+        DatabaseCredential credential =
+                new DatabaseCredential(
+                        1L,
+                        "root",
+                        "password"
+                );
+
+        DatabaseDiagnosticService service =
+                new DatabaseDiagnosticService(
+                        databaseRepository,
+                        credentialRepository,
+                        portRegistry
+                );
+
+        when(databaseRepository.findById(1L))
+                .thenReturn(Optional.of(database));
+
+        when(credentialRepository.findByDatabaseId(1L))
+                .thenReturn(Optional.of(credential));
+
+        when(portRegistry.getPort(DatabaseEngine.MYSQL))
+                .thenReturn(diagnosticPort);
+
+        when(diagnosticPort.getSlowQueries(database, credential))
+                .thenReturn(List.of(
+                        new SlowQueryInfo(
+                                "SELECT * FROM orders WHERE id = ?",
+                                100L,
+                                0.123456,
+                                1.234567,
+                                1000L,
+                                10L
+                        )
+                ));
+
+        List<SlowQueryResponse> responses =
+                service.getSlowQueries(1L);
+
+        assertThat(responses)
+                .hasSize(1);
+
+        SlowQueryResponse response =
+                responses.getFirst();
+
+        assertThat(response.databaseId())
+                .isEqualTo(1L);
+
+        assertThat(response.engine())
+                .isEqualTo(DatabaseEngine.MYSQL);
+
+        assertThat(response.digestText())
+                .isEqualTo("SELECT * FROM orders WHERE id = ?");
+
+        assertThat(response.executionCount())
+                .isEqualTo(100L);
+
+        assertThat(response.averageSeconds())
+                .isEqualTo(0.123456);
+
+        assertThat(response.maxSeconds())
+                .isEqualTo(1.234567);
+
+        assertThat(response.rowsExamined())
+                .isEqualTo(1000L);
+
+        assertThat(response.rowsSent())
+                .isEqualTo(10L);
+
+        verify(diagnosticPort)
+                .getSlowQueries(database, credential);
     }
 }

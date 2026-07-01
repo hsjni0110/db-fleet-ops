@@ -354,9 +354,48 @@ public class MySqlDiagnosticAdapter implements DatabaseDiagnosticPort {
             ManagedDatabase database,
             DatabaseCredential credential
     ) {
-        throw new UnsupportedOperationException(
-                "Slow query diagnostic is not implemented yet."
-        );
+        String sql = """
+                SELECT
+                    DIGEST_TEXT,
+                    COUNT_STAR,
+                    ROUND(AVG_TIMER_WAIT / 1000000000000, 6) AS avg_seconds,
+                    ROUND(MAX_TIMER_WAIT / 1000000000000, 6) AS max_seconds,
+                    SUM_ROWS_EXAMINED,
+                    SUM_ROWS_SENT
+                FROM performance_schema.events_statements_summary_by_digest
+                WHERE DIGEST_TEXT IS NOT NULL
+                ORDER BY AVG_TIMER_WAIT DESC
+                LIMIT 10
+                """;
+
+        try (
+                Connection connection = getConnection(database, credential);
+                Statement statement = connection.createStatement();
+                ResultSet resultSet = statement.executeQuery(sql)
+        ) {
+            List<SlowQueryInfo> slowQueries =
+                    new java.util.ArrayList<>();
+
+            while (resultSet.next()) {
+                slowQueries.add(
+                        new SlowQueryInfo(
+                                preview(resultSet.getString("DIGEST_TEXT")),
+                                resultSet.getLong("COUNT_STAR"),
+                                resultSet.getDouble("avg_seconds"),
+                                resultSet.getDouble("max_seconds"),
+                                resultSet.getLong("SUM_ROWS_EXAMINED"),
+                                resultSet.getLong("SUM_ROWS_SENT")
+                        )
+                );
+            }
+
+            return slowQueries;
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Failed to get MySQL slow queries.",
+                    e
+            );
+        }
     }
 
     private Connection getConnection(

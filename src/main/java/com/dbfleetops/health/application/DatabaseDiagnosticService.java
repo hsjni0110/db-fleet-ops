@@ -10,6 +10,7 @@ import com.dbfleetops.health.dto.DatabaseVersionResponse;
 import com.dbfleetops.health.dto.LockWaitResponse;
 import com.dbfleetops.health.dto.LongTransactionResponse;
 import com.dbfleetops.health.dto.SessionResponse;
+import com.dbfleetops.health.dto.SlowQueryResponse;
 import com.dbfleetops.health.port.DatabaseDiagnosticPort;
 
 import java.util.List;
@@ -177,6 +178,26 @@ public class DatabaseDiagnosticService {
                 )
                 .stream()
                 .map(info -> LockWaitResponse.from(
+                        databaseId,
+                        target.database().getEngine(),
+                        info
+                ))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SlowQueryResponse> getSlowQueries(
+            Long databaseId
+    ) {
+        DiagnosticTarget target = getTarget(databaseId);
+
+        return target.port()
+                .getSlowQueries(
+                        target.database(),
+                        target.credential()
+                )
+                .stream()
+                .map(info -> SlowQueryResponse.from(
                         databaseId,
                         target.database().getEngine(),
                         info

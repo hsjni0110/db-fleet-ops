@@ -8,6 +8,7 @@ import com.dbfleetops.health.dto.DatabaseVersionResponse;
 import com.dbfleetops.health.dto.LockWaitResponse;
 import com.dbfleetops.health.dto.LongTransactionResponse;
 import com.dbfleetops.health.dto.SessionResponse;
+import com.dbfleetops.health.dto.SlowQueryResponse;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -176,5 +177,36 @@ class DatabaseDiagnosticControllerTest {
                 .andExpect(jsonPath("$[0].waitingThreadId").value(11))
                 .andExpect(jsonPath("$[0].blockingTransactionId").value("blocking-1"))
                 .andExpect(jsonPath("$[0].blockingThreadId").value(10));
+    }
+
+    @Test
+    void getSlowQueriesReturnsSlowQueryResponses() throws Exception {
+        when(diagnosticService.getSlowQueries(1L))
+                .thenReturn(List.of(
+                        new SlowQueryResponse(
+                                1L,
+                                DatabaseEngine.MYSQL,
+                                "SELECT * FROM orders WHERE id = ?",
+                                100L,
+                                0.123456,
+                                1.234567,
+                                1000L,
+                                10L
+                        )
+                ));
+
+        mockMvc.perform(get(
+                        "/api/v1/database-instances/1/diagnostics/slow-queries"
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].databaseId").value(1))
+                .andExpect(jsonPath("$[0].engine").value("MYSQL"))
+                .andExpect(jsonPath("$[0].digestText")
+                        .value("SELECT * FROM orders WHERE id = ?"))
+                .andExpect(jsonPath("$[0].executionCount").value(100))
+                .andExpect(jsonPath("$[0].averageSeconds").value(0.123456))
+                .andExpect(jsonPath("$[0].maxSeconds").value(1.234567))
+                .andExpect(jsonPath("$[0].rowsExamined").value(1000))
+                .andExpect(jsonPath("$[0].rowsSent").value(10));
     }
 }
