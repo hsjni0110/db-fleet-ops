@@ -4,6 +4,8 @@ import com.dbfleetops.health.application.DatabaseDiagnosticService;
 import com.dbfleetops.health.dto.ConnectionSummaryResponse;
 import com.dbfleetops.health.dto.DatabaseUptimeResponse;
 import com.dbfleetops.health.dto.DatabaseVersionResponse;
+import com.dbfleetops.health.dto.LockWaitResponse;
+import com.dbfleetops.health.dto.LongTransactionResponse;
 import com.dbfleetops.health.dto.SessionResponse;
 
 import java.util.List;
@@ -56,6 +58,24 @@ public class DatabaseDiagnosticController {
     ) {
         return ResponseEntity.ok(
                 diagnosticService.getSessions(databaseId)
+        );
+    }
+
+    @GetMapping("/long-transactions")
+    public ResponseEntity<List<LongTransactionResponse>> getLongTransactions(
+            @PathVariable Long databaseId
+    ) {
+        return ResponseEntity.ok(
+                diagnosticService.getLongTransactions(databaseId)
+        );
+    }
+
+    @GetMapping("/lock-waits")
+    public ResponseEntity<List<LockWaitResponse>> getLockWaits(
+            @PathVariable Long databaseId
+    ) {
+        return ResponseEntity.ok(
+                diagnosticService.getLockWaits(databaseId)
         );
     }
 }

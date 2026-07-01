@@ -7,6 +7,8 @@ import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.health.dto.ConnectionSummaryResponse;
 import com.dbfleetops.health.dto.DatabaseUptimeResponse;
 import com.dbfleetops.health.dto.DatabaseVersionResponse;
+import com.dbfleetops.health.dto.LockWaitResponse;
+import com.dbfleetops.health.dto.LongTransactionResponse;
 import com.dbfleetops.health.dto.SessionResponse;
 import com.dbfleetops.health.port.DatabaseDiagnosticPort;
 
@@ -135,6 +137,46 @@ public class DatabaseDiagnosticService {
                 )
                 .stream()
                 .map(info -> SessionResponse.from(
+                        databaseId,
+                        target.database().getEngine(),
+                        info
+                ))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<LongTransactionResponse> getLongTransactions(
+            Long databaseId
+    ) {
+        DiagnosticTarget target = getTarget(databaseId);
+
+        return target.port()
+                .getLongTransactions(
+                        target.database(),
+                        target.credential()
+                )
+                .stream()
+                .map(info -> LongTransactionResponse.from(
+                        databaseId,
+                        target.database().getEngine(),
+                        info
+                ))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<LockWaitResponse> getLockWaits(
+            Long databaseId
+    ) {
+        DiagnosticTarget target = getTarget(databaseId);
+
+        return target.port()
+                .getLockWaits(
+                        target.database(),
+                        target.credential()
+                )
+                .stream()
+                .map(info -> LockWaitResponse.from(
                         databaseId,
                         target.database().getEngine(),
                         info

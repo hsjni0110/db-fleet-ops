@@ -5,6 +5,8 @@ import com.dbfleetops.health.application.DatabaseDiagnosticService;
 import com.dbfleetops.health.dto.ConnectionSummaryResponse;
 import com.dbfleetops.health.dto.DatabaseUptimeResponse;
 import com.dbfleetops.health.dto.DatabaseVersionResponse;
+import com.dbfleetops.health.dto.LockWaitResponse;
+import com.dbfleetops.health.dto.LongTransactionResponse;
 import com.dbfleetops.health.dto.SessionResponse;
 
 import org.junit.jupiter.api.Test;
@@ -17,6 +19,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @WebMvcTest(DatabaseDiagnosticController.class)
@@ -117,5 +120,61 @@ class DatabaseDiagnosticControllerTest {
                 .andExpect(jsonPath("$[0].command").value("Query"))
                 .andExpect(jsonPath("$[0].queryPreview")
                         .value("SELECT * FROM orders"));
+    }
+
+    @Test
+    void getLongTransactionsReturnsLongTransactionResponses() throws Exception {
+        when(diagnosticService.getLongTransactions(1L))
+                .thenReturn(List.of(
+                        new LongTransactionResponse(
+                                1L,
+                                DatabaseEngine.MYSQL,
+                                "12345",
+                                "RUNNING",
+                                LocalDateTime.of(2026, 7, 1, 15, 30),
+                                120L,
+                                10L,
+                                "UPDATE orders SET status = 'PAID'"
+                        )
+                ));
+
+        mockMvc.perform(get(
+                        "/api/v1/database-instances/1/diagnostics/long-transactions"
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].databaseId").value(1))
+                .andExpect(jsonPath("$[0].engine").value("MYSQL"))
+                .andExpect(jsonPath("$[0].transactionId").value("12345"))
+                .andExpect(jsonPath("$[0].state").value("RUNNING"))
+                .andExpect(jsonPath("$[0].durationSeconds").value(120))
+                .andExpect(jsonPath("$[0].threadId").value(10));
+    }
+
+    @Test
+    void getLockWaitsReturnsLockWaitResponses() throws Exception {
+        when(diagnosticService.getLockWaits(1L))
+                .thenReturn(List.of(
+                        new LockWaitResponse(
+                                1L,
+                                DatabaseEngine.MYSQL,
+                                "waiting-1",
+                                11L,
+                                "UPDATE orders SET status = 'PAID'",
+                                "blocking-1",
+                                10L,
+                                "SELECT * FROM orders WHERE id = 1"
+                        )
+                ));
+
+        mockMvc.perform(get(
+                        "/api/v1/database-instances/1/diagnostics/lock-waits"
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].databaseId").value(1))
+                .andExpect(jsonPath("$[0].engine").value("MYSQL"))
+                .andExpect(jsonPath("$[0].waitingTransactionId").value("waiting-1"))
+                .andExpect(jsonPath("$[0].waitingThreadId").value(11))
+                .andExpect(jsonPath("$[0].blockingTransactionId").value("blocking-1"))
+                .andExpect(jsonPath("$[0].blockingThreadId").value(10));
     }
 }

@@ -255,9 +255,48 @@ public class MySqlDiagnosticAdapter implements DatabaseDiagnosticPort {
             ManagedDatabase database,
             DatabaseCredential credential
     ) {
-        throw new UnsupportedOperationException(
-                "Long transaction diagnostic is not implemented yet."
-        );
+        String sql = """
+                SELECT
+                    trx_id,
+                    trx_state,
+                    trx_started,
+                    TIMESTAMPDIFF(SECOND, trx_started, NOW()) AS duration_seconds,
+                    trx_mysql_thread_id,
+                    trx_query
+                FROM information_schema.innodb_trx
+                WHERE TIMESTAMPDIFF(SECOND, trx_started, NOW()) >= 30
+                ORDER BY trx_started ASC
+                """;
+
+        try (
+                Connection connection = getConnection(database, credential);
+                Statement statement = connection.createStatement();
+                ResultSet resultSet = statement.executeQuery(sql)
+        ) {
+            List<LongTransactionInfo> transactions =
+                    new java.util.ArrayList<>();
+
+            while (resultSet.next()) {
+                transactions.add(
+                        new LongTransactionInfo(
+                                resultSet.getString("trx_id"),
+                                resultSet.getString("trx_state"),
+                                resultSet.getTimestamp("trx_started")
+                                        .toLocalDateTime(),
+                                resultSet.getLong("duration_seconds"),
+                                resultSet.getLong("trx_mysql_thread_id"),
+                                preview(resultSet.getString("trx_query"))
+                        )
+                );
+            }
+
+            return transactions;
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Failed to get MySQL long transactions.",
+                    e
+            );
+        }
     }
 
     @Override
@@ -265,9 +304,49 @@ public class MySqlDiagnosticAdapter implements DatabaseDiagnosticPort {
             ManagedDatabase database,
             DatabaseCredential credential
     ) {
-        throw new UnsupportedOperationException(
-                "Lock wait diagnostic is not implemented yet."
-        );
+        String sql = """
+                SELECT
+                    waiting_trx.trx_id AS waiting_trx_id,
+                    waiting_trx.trx_mysql_thread_id AS waiting_thread_id,
+                    waiting_trx.trx_query AS waiting_query,
+                    blocking_trx.trx_id AS blocking_trx_id,
+                    blocking_trx.trx_mysql_thread_id AS blocking_thread_id,
+                    blocking_trx.trx_query AS blocking_query
+                FROM information_schema.innodb_lock_waits lock_waits
+                JOIN information_schema.innodb_trx waiting_trx
+                    ON lock_waits.requesting_trx_id = waiting_trx.trx_id
+                JOIN information_schema.innodb_trx blocking_trx
+                    ON lock_waits.blocking_trx_id = blocking_trx.trx_id
+                """;
+
+        try (
+                Connection connection = getConnection(database, credential);
+                Statement statement = connection.createStatement();
+                ResultSet resultSet = statement.executeQuery(sql)
+        ) {
+            List<LockWaitInfo> lockWaits =
+                    new java.util.ArrayList<>();
+
+            while (resultSet.next()) {
+                lockWaits.add(
+                        new LockWaitInfo(
+                                resultSet.getString("waiting_trx_id"),
+                                resultSet.getLong("waiting_thread_id"),
+                                preview(resultSet.getString("waiting_query")),
+                                resultSet.getString("blocking_trx_id"),
+                                resultSet.getLong("blocking_thread_id"),
+                                preview(resultSet.getString("blocking_query"))
+                        )
+                );
+            }
+
+            return lockWaits;
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Failed to get MySQL lock waits.",
+                    e
+            );
+        }
     }
 
     @Override
