@@ -9,6 +9,7 @@ import com.dbfleetops.health.domain.DatabaseHealthResult;
 import com.dbfleetops.health.domain.DatabaseStatus;
 import com.dbfleetops.health.dto.DatabaseHealthResponse;
 import com.dbfleetops.health.infra.DatabaseHealthResultRepository;
+import com.dbfleetops.health.port.DatabaseHealthCheckPort;
 import com.dbfleetops.health.port.DatabaseHealthProbe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,20 +25,20 @@ public class DatabaseHealthService {
     private final DatabaseHealthProbe databaseHealthProbe;
     private final ManagedDatabaseRepository databaseRepository;
     private final DatabaseCredentialRepository credentialRepository;
-    private final DatabaseHealthAdapterFactory adapterFactory;
+    private final DatabaseHealthCheckPortRegistry healthCheckPortRegistry;
     private final DatabaseHealthResultRepository healthResultRepository;
 
     public DatabaseHealthService(
             DatabaseHealthProbe databaseHealthProbe,
             ManagedDatabaseRepository databaseRepository,
             DatabaseCredentialRepository credentialRepository,
-            DatabaseHealthAdapterFactory adapterFactory,
+            DatabaseHealthCheckPortRegistry healthCheckPortRegistry,
             DatabaseHealthResultRepository healthResultRepository
     ) {
         this.databaseHealthProbe = databaseHealthProbe;
         this.databaseRepository = databaseRepository;
         this.credentialRepository = credentialRepository;
-        this.adapterFactory = adapterFactory;
+        this.healthCheckPortRegistry = healthCheckPortRegistry;
         this.healthResultRepository = healthResultRepository;
     }
 
@@ -68,11 +69,11 @@ public class DatabaseHealthService {
                         "Credential not found. databaseId=" + databaseId
                 ));
 
-        DatabaseHealthAdapter adapter =
-                adapterFactory.getAdapter(database.getEngine());
+        DatabaseHealthCheckPort port =
+                healthCheckPortRegistry.getPort(database.getEngine());
 
-        DatabaseHealthAdapter.HealthCheckResult checkResult =
-                adapter.check(database, credential);
+        DatabaseHealthCheckPort.HealthCheckResult checkResult =
+                port.check(database, credential);
 
         DatabaseHealthResult result = new DatabaseHealthResult(
                 databaseId,

@@ -30,6 +30,7 @@ import com.dbfleetops.health.domain.DatabaseStatus;
 import com.dbfleetops.health.domain.HealthStatus;
 import com.dbfleetops.health.dto.DatabaseHealthResponse;
 import com.dbfleetops.health.infra.DatabaseHealthResultRepository;
+import com.dbfleetops.health.port.DatabaseHealthCheckPort;
 import com.dbfleetops.health.port.DatabaseHealthProbe;
 
 import ch.qos.logback.classic.Level;
@@ -50,7 +51,7 @@ class DatabaseHealthServiceTest {
     private DatabaseCredentialRepository credentialRepository;
 
     @Mock
-    private DatabaseHealthAdapterFactory adapterFactory;
+    private DatabaseHealthCheckPortRegistry healthCheckPortRegistry;
 
     @Mock
     private DatabaseHealthResultRepository healthResultRepository;
@@ -66,7 +67,7 @@ class DatabaseHealthServiceTest {
                 databaseHealthProbe,
                 databaseRepository,
                 credentialRepository,
-                adapterFactory,
+                healthCheckPortRegistry,
                 healthResultRepository
         );
 
@@ -255,11 +256,10 @@ class DatabaseHealthServiceTest {
                 "password"
         );
 
-        DatabaseHealthAdapter adapter =
-                mock(DatabaseHealthAdapter.class);
+        DatabaseHealthCheckPort port = mock(DatabaseHealthCheckPort.class);
 
-        DatabaseHealthAdapter.HealthCheckResult checkResult =
-                new DatabaseHealthAdapter.HealthCheckResult(
+        DatabaseHealthCheckPort.HealthCheckResult checkResult =
+                new DatabaseHealthCheckPort.HealthCheckResult(
                         HealthStatus.HEALTHY,
                         true,
                         15L,
@@ -272,10 +272,10 @@ class DatabaseHealthServiceTest {
         when(credentialRepository.findByDatabaseId(1L))
                 .thenReturn(Optional.of(credential));
 
-        when(adapterFactory.getAdapter(DatabaseEngine.MYSQL))
-                .thenReturn(adapter);
+        when(healthCheckPortRegistry.getPort(DatabaseEngine.MYSQL))
+                .thenReturn(port);
 
-        when(adapter.check(database, credential))
+        when(port.check(database, credential))
                 .thenReturn(checkResult);
 
         when(healthResultRepository.save(any(DatabaseHealthResult.class)))
@@ -296,10 +296,10 @@ class DatabaseHealthServiceTest {
         assertThat(response.responseTimeMs())
                 .isEqualTo(15L);
 
-        verify(adapterFactory)
-                .getAdapter(DatabaseEngine.MYSQL);
+        verify(healthCheckPortRegistry)
+                .getPort(DatabaseEngine.MYSQL);
 
-        verify(adapter)
+        verify(port)
                 .check(database, credential);
 
         verify(healthResultRepository)
@@ -330,7 +330,7 @@ class DatabaseHealthServiceTest {
                 () -> service.check(1L)
         );
 
-        verifyNoInteractions(adapterFactory);
+        verifyNoInteractions(healthCheckPortRegistry);
         verifyNoInteractions(healthResultRepository);
     }
 }
