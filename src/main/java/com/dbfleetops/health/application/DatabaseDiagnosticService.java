@@ -7,7 +7,11 @@ import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.health.dto.ConnectionSummaryResponse;
 import com.dbfleetops.health.dto.DatabaseUptimeResponse;
 import com.dbfleetops.health.dto.DatabaseVersionResponse;
+import com.dbfleetops.health.dto.SessionResponse;
 import com.dbfleetops.health.port.DatabaseDiagnosticPort;
+
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -116,5 +120,25 @@ public class DatabaseDiagnosticService {
                         target.credential()
                 )
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<SessionResponse> getSessions(
+            Long databaseId
+    ) {
+        DiagnosticTarget target = getTarget(databaseId);
+
+        return target.port()
+                .getSessions(
+                        target.database(),
+                        target.credential()
+                )
+                .stream()
+                .map(info -> SessionResponse.from(
+                        databaseId,
+                        target.database().getEngine(),
+                        info
+                ))
+                .toList();
     }
 }

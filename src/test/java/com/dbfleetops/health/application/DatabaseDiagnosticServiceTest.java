@@ -8,15 +8,18 @@ import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.health.domain.ConnectionSummary;
 import com.dbfleetops.health.domain.DatabaseUptimeInfo;
 import com.dbfleetops.health.domain.DatabaseVersionInfo;
+import com.dbfleetops.health.domain.SessionInfo;
 import com.dbfleetops.health.dto.ConnectionSummaryResponse;
 import com.dbfleetops.health.dto.DatabaseUptimeResponse;
 import com.dbfleetops.health.dto.DatabaseVersionResponse;
+import com.dbfleetops.health.dto.SessionResponse;
 import com.dbfleetops.health.port.DatabaseDiagnosticPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -228,5 +231,77 @@ class DatabaseDiagnosticServiceTest {
 
         verify(diagnosticPort)
                 .getConnectionSummary(database, credential);
+    }
+
+    @Test
+    void getSessionsReturnsSessionResponses() {
+        ManagedDatabase database = newDatabase();
+
+        DatabaseCredential credential =
+                new DatabaseCredential(
+                        1L,
+                        "root",
+                        "password"
+                );
+
+        DatabaseDiagnosticService service =
+                new DatabaseDiagnosticService(
+                        databaseRepository,
+                        credentialRepository,
+                        portRegistry
+                );
+
+        when(databaseRepository.findById(1L))
+                .thenReturn(Optional.of(database));
+
+        when(credentialRepository.findByDatabaseId(1L))
+                .thenReturn(Optional.of(credential));
+
+        when(portRegistry.getPort(DatabaseEngine.MYSQL))
+                .thenReturn(diagnosticPort);
+
+        when(diagnosticPort.getSessions(database, credential))
+                .thenReturn(List.of(
+                        new SessionInfo(
+                                10L,
+                                "db_monitor",
+                                "localhost:50000",
+                                "orders",
+                                "Query",
+                                3L,
+                                "executing",
+                                "SELECT * FROM orders"
+                        )
+                ));
+
+        List<SessionResponse> responses =
+                service.getSessions(1L);
+
+        assertThat(responses)
+                .hasSize(1);
+
+        SessionResponse response =
+                responses.getFirst();
+
+        assertThat(response.databaseId())
+                .isEqualTo(1L);
+
+        assertThat(response.engine())
+                .isEqualTo(DatabaseEngine.MYSQL);
+
+        assertThat(response.processId())
+                .isEqualTo(10L);
+
+        assertThat(response.user())
+                .isEqualTo("db_monitor");
+
+        assertThat(response.command())
+                .isEqualTo("Query");
+
+        assertThat(response.queryPreview())
+                .isEqualTo("SELECT * FROM orders");
+
+        verify(diagnosticPort)
+                .getSessions(database, credential);
     }
 }

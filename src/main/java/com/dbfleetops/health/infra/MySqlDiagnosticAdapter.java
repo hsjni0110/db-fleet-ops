@@ -183,9 +183,71 @@ public class MySqlDiagnosticAdapter implements DatabaseDiagnosticPort {
             ManagedDatabase database,
             DatabaseCredential credential
     ) {
-        throw new UnsupportedOperationException(
-                "Session diagnostic is not implemented yet."
-        );
+        String sql = """
+                SELECT
+                    ID,
+                    USER,
+                    HOST,
+                    DB,
+                    COMMAND,
+                    TIME,
+                    STATE,
+                    INFO
+                FROM information_schema.PROCESSLIST
+                ORDER BY TIME DESC
+                """;
+
+        try (
+                Connection connection = getConnection(database, credential);
+                Statement statement = connection.createStatement();
+                ResultSet resultSet = statement.executeQuery(sql)
+        ) {
+            List<SessionInfo> sessions =
+                    new java.util.ArrayList<>();
+
+            while (resultSet.next()) {
+                sessions.add(
+                        new SessionInfo(
+                                resultSet.getLong("ID"),
+                                resultSet.getString("USER"),
+                                resultSet.getString("HOST"),
+                                resultSet.getString("DB"),
+                                resultSet.getString("COMMAND"),
+                                resultSet.getLong("TIME"),
+                                resultSet.getString("STATE"),
+                                preview(
+                                        resultSet.getString("INFO")
+                                )
+                        )
+                );
+            }
+
+            return sessions;
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Failed to get MySQL sessions.",
+                    e
+            );
+        }
+    }
+
+    private String preview(
+        String value
+    ) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        String normalized =
+                value.replaceAll("\\s+", " ").trim();
+
+        int maxLength = 300;
+
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+
+        return normalized.substring(0, maxLength);
     }
 
     @Override

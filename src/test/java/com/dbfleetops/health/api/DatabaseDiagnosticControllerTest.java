@@ -5,6 +5,8 @@ import com.dbfleetops.health.application.DatabaseDiagnosticService;
 import com.dbfleetops.health.dto.ConnectionSummaryResponse;
 import com.dbfleetops.health.dto.DatabaseUptimeResponse;
 import com.dbfleetops.health.dto.DatabaseVersionResponse;
+import com.dbfleetops.health.dto.SessionResponse;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -14,6 +16,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+import java.util.List;
 
 @WebMvcTest(DatabaseDiagnosticController.class)
 class DatabaseDiagnosticControllerTest {
@@ -82,5 +86,36 @@ class DatabaseDiagnosticControllerTest {
                 .andExpect(jsonPath("$.runningConnections").value(2))
                 .andExpect(jsonPath("$.maxConnections").value(151))
                 .andExpect(jsonPath("$.usagePercent").value(7.95));
+    }
+
+    @Test
+    void getSessionsReturnsSessionResponses() throws Exception {
+        when(diagnosticService.getSessions(1L))
+                .thenReturn(List.of(
+                        new SessionResponse(
+                                1L,
+                                DatabaseEngine.MYSQL,
+                                10L,
+                                "db_monitor",
+                                "localhost:50000",
+                                "orders",
+                                "Query",
+                                3L,
+                                "executing",
+                                "SELECT * FROM orders"
+                        )
+                ));
+
+        mockMvc.perform(get(
+                        "/api/v1/database-instances/1/diagnostics/sessions"
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].databaseId").value(1))
+                .andExpect(jsonPath("$[0].engine").value("MYSQL"))
+                .andExpect(jsonPath("$[0].processId").value(10))
+                .andExpect(jsonPath("$[0].user").value("db_monitor"))
+                .andExpect(jsonPath("$[0].command").value("Query"))
+                .andExpect(jsonPath("$[0].queryPreview")
+                        .value("SELECT * FROM orders"));
     }
 }
