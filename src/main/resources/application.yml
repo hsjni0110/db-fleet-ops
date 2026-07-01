@@ -1,7 +1,21 @@
 spring:
   application:
     name: db-fleetops
-    
+
+  datasource:
+    url: ${DB_FLEETOPS_DATASOURCE_URL:jdbc:h2:mem:dbfleetops;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
+    driver-class-name: ${DB_FLEETOPS_DATASOURCE_DRIVER:org.h2.Driver}
+    username: ${DB_FLEETOPS_DATASOURCE_USERNAME:sa}
+    password: ${DB_FLEETOPS_DATASOURCE_PASSWORD:}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: ${DB_FLEETOPS_HIBERNATE_DIALECT:org.hibernate.dialect.H2Dialect}
+    show-sql: false
+
   mvc:
     problemdetails:
       enabled: true

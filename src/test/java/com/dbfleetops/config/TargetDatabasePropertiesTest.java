@@ -7,6 +7,7 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest(properties = {
     "db-fleetops.target.host=localhost",
@@ -17,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
     "db-fleetops.target.connect-timeout=2s",
     "db-fleetops.target.socket-timeout=3s"
 })
+@ActiveProfiles("test")
 public class TargetDatabasePropertiesTest {
 
     @Autowired

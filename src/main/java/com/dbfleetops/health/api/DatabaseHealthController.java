@@ -1,15 +1,11 @@
 package com.dbfleetops.health.api;
 
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
 import com.dbfleetops.health.application.DatabaseHealthService;
 import com.dbfleetops.health.domain.DatabaseHealth;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/databases/default")
 public class DatabaseHealthController {
 
     private final DatabaseHealthService databaseHealthService;
@@ -20,13 +16,23 @@ public class DatabaseHealthController {
         this.databaseHealthService = databaseHealthService;
     }
 
-    @GetMapping("/health")
+    @GetMapping("/api/v1/databases/default/health")
     public ResponseEntity<DatabaseHealthResponse> getHealth() {
         DatabaseHealth health =
                 databaseHealthService.checkDefaultDatabase();
 
         DatabaseHealthResponse response =
                 DatabaseHealthResponse.from(health);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/api/v1/database-instances/{databaseId}/health-checks")
+    public ResponseEntity<com.dbfleetops.health.dto.DatabaseHealthResponse> checkDatabaseInstance(
+            @PathVariable Long databaseId
+    ) {
+        com.dbfleetops.health.dto.DatabaseHealthResponse response =
+                databaseHealthService.check(databaseId);
 
         return ResponseEntity.ok(response);
     }
