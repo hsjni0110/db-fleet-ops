@@ -2,6 +2,7 @@ package com.dbfleetops.health.api;
 
 import com.dbfleetops.database.domain.DatabaseEngine;
 import com.dbfleetops.health.application.DatabaseDiagnosticService;
+import com.dbfleetops.health.dto.ConnectionSummaryResponse;
 import com.dbfleetops.health.dto.DatabaseUptimeResponse;
 import com.dbfleetops.health.dto.DatabaseVersionResponse;
 import org.junit.jupiter.api.Test;
@@ -57,5 +58,29 @@ class DatabaseDiagnosticControllerTest {
                 .andExpect(jsonPath("$.databaseId").value(1))
                 .andExpect(jsonPath("$.engine").value("MYSQL"))
                 .andExpect(jsonPath("$.uptimeSeconds").value(3600));
+    }
+
+    @Test
+    void getConnectionSummaryReturnsConnectionSummaryResponse() throws Exception {
+        when(diagnosticService.getConnectionSummary(1L))
+                .thenReturn(new ConnectionSummaryResponse(
+                        1L,
+                        DatabaseEngine.MYSQL,
+                        12,
+                        2,
+                        151,
+                        7.95
+                ));
+
+        mockMvc.perform(get(
+                        "/api/v1/database-instances/1/diagnostics/connections"
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.databaseId").value(1))
+                .andExpect(jsonPath("$.engine").value("MYSQL"))
+                .andExpect(jsonPath("$.currentConnections").value(12))
+                .andExpect(jsonPath("$.runningConnections").value(2))
+                .andExpect(jsonPath("$.maxConnections").value(151))
+                .andExpect(jsonPath("$.usagePercent").value(7.95));
     }
 }

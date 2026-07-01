@@ -4,6 +4,7 @@ import com.dbfleetops.database.domain.DatabaseCredential;
 import com.dbfleetops.database.domain.ManagedDatabase;
 import com.dbfleetops.database.infra.DatabaseCredentialRepository;
 import com.dbfleetops.database.infra.ManagedDatabaseRepository;
+import com.dbfleetops.health.dto.ConnectionSummaryResponse;
 import com.dbfleetops.health.dto.DatabaseUptimeResponse;
 import com.dbfleetops.health.dto.DatabaseVersionResponse;
 import com.dbfleetops.health.port.DatabaseDiagnosticPort;
@@ -98,5 +99,22 @@ public class DatabaseDiagnosticService {
             DatabaseCredential credential,
             DatabaseDiagnosticPort port
     ) {
+    }
+
+    @Transactional(readOnly = true)
+    public ConnectionSummaryResponse getConnectionSummary(
+            Long databaseId
+    ) {
+        DiagnosticTarget target =
+                getTarget(databaseId);
+
+        return ConnectionSummaryResponse.from(
+                databaseId,
+                target.database().getEngine(),
+                target.port().getConnectionSummary(
+                        target.database(),
+                        target.credential()
+                )
+        );
     }
 }

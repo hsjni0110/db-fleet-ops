@@ -84,9 +84,98 @@ public class MySqlDiagnosticAdapter implements DatabaseDiagnosticPort {
             ManagedDatabase database,
             DatabaseCredential credential
     ) {
-        throw new UnsupportedOperationException(
-                "Connection summary diagnostic is not implemented yet."
-        );
+        try (
+                Connection connection = getConnection(database, credential);
+                Statement statement = connection.createStatement()
+        ) {
+            int currentConnections = getStatusValue(
+                    statement,
+                    "Threads_connected"
+            );
+    
+            int runningConnections = getStatusValue(
+                    statement,
+                    "Threads_running"
+            );
+    
+            int maxConnections = getVariableValue(
+                    statement,
+                    "max_connections"
+            );
+    
+            double usagePercent =
+                    calculateUsagePercent(
+                            currentConnections,
+                            maxConnections
+                    );
+    
+            return new ConnectionSummary(
+                    currentConnections,
+                    runningConnections,
+                    maxConnections,
+                    usagePercent
+            );
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Failed to get MySQL connection summary.",
+                    e
+            );
+        }
+    }
+
+    private int getStatusValue(
+        Statement statement,
+        String name
+    ) throws Exception {
+        try (
+                ResultSet resultSet = statement.executeQuery(
+                        "SHOW GLOBAL STATUS LIKE '" + name + "'"
+                )
+        ) {
+            if (resultSet.next()) {
+                return Integer.parseInt(
+                        resultSet.getString("Value")
+                );
+            }
+
+            throw new IllegalStateException(
+                    "MySQL status value not found. name=" + name
+            );
+        }
+    }
+
+    private int getVariableValue(
+            Statement statement,
+            String name
+    ) throws Exception {
+        try (
+                ResultSet resultSet = statement.executeQuery(
+                        "SHOW GLOBAL VARIABLES LIKE '" + name + "'"
+                )
+        ) {
+            if (resultSet.next()) {
+                return Integer.parseInt(
+                        resultSet.getString("Value")
+                );
+            }
+
+            throw new IllegalStateException(
+                    "MySQL variable value not found. name=" + name
+            );
+        }
+    }
+
+    private double calculateUsagePercent(
+            int currentConnections,
+            int maxConnections
+    ) {
+        if (maxConnections <= 0) {
+            return 0.0;
+        }
+
+        return Math.round(
+                ((double) currentConnections / maxConnections * 100.0) * 100.0
+        ) / 100.0;
     }
 
     @Override

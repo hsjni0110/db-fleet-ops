@@ -1,6 +1,7 @@
 package com.dbfleetops.health.api;
 
 import com.dbfleetops.health.application.DatabaseDiagnosticService;
+import com.dbfleetops.health.dto.ConnectionSummaryResponse;
 import com.dbfleetops.health.dto.DatabaseUptimeResponse;
 import com.dbfleetops.health.dto.DatabaseVersionResponse;
 import org.springframework.http.ResponseEntity;
@@ -35,4 +36,13 @@ public class DatabaseDiagnosticController {
                 diagnosticService.getUptime(databaseId)
         );
     }
+
+    @GetMapping("/connections")
+    public ResponseEntity<ConnectionSummaryResponse> getConnectionSummary(
+            @PathVariable Long databaseId
+    ) {
+        return ResponseEntity.ok(
+                diagnosticService.getConnectionSummary(databaseId)
+        );
+}
 }

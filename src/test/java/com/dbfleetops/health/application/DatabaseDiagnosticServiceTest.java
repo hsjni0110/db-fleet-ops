@@ -5,8 +5,10 @@ import com.dbfleetops.database.domain.DatabaseEngine;
 import com.dbfleetops.database.domain.ManagedDatabase;
 import com.dbfleetops.database.infra.DatabaseCredentialRepository;
 import com.dbfleetops.database.infra.ManagedDatabaseRepository;
+import com.dbfleetops.health.domain.ConnectionSummary;
 import com.dbfleetops.health.domain.DatabaseUptimeInfo;
 import com.dbfleetops.health.domain.DatabaseVersionInfo;
+import com.dbfleetops.health.dto.ConnectionSummaryResponse;
 import com.dbfleetops.health.dto.DatabaseUptimeResponse;
 import com.dbfleetops.health.dto.DatabaseVersionResponse;
 import com.dbfleetops.health.port.DatabaseDiagnosticPort;
@@ -166,5 +168,65 @@ class DatabaseDiagnosticServiceTest {
                 "platform-team",
                 "test database"
         );
+    }
+
+    @Test
+    void getConnectionSummaryReturnsConnectionSummary() {
+        ManagedDatabase database = newDatabase();
+
+        DatabaseCredential credential =
+                new DatabaseCredential(
+                        1L,
+                        "root",
+                        "password"
+                );
+
+        DatabaseDiagnosticService service =
+                new DatabaseDiagnosticService(
+                        databaseRepository,
+                        credentialRepository,
+                        portRegistry
+                );
+
+        when(databaseRepository.findById(1L))
+                .thenReturn(Optional.of(database));
+
+        when(credentialRepository.findByDatabaseId(1L))
+                .thenReturn(Optional.of(credential));
+
+        when(portRegistry.getPort(DatabaseEngine.MYSQL))
+                .thenReturn(diagnosticPort);
+
+        when(diagnosticPort.getConnectionSummary(database, credential))
+                .thenReturn(new ConnectionSummary(
+                        12,
+                        2,
+                        151,
+                        7.95
+                ));
+
+        ConnectionSummaryResponse response =
+                service.getConnectionSummary(1L);
+
+        assertThat(response.databaseId())
+                .isEqualTo(1L);
+
+        assertThat(response.engine())
+                .isEqualTo(DatabaseEngine.MYSQL);
+
+        assertThat(response.currentConnections())
+                .isEqualTo(12);
+
+        assertThat(response.runningConnections())
+                .isEqualTo(2);
+
+        assertThat(response.maxConnections())
+                .isEqualTo(151);
+
+        assertThat(response.usagePercent())
+                .isEqualTo(7.95);
+
+        verify(diagnosticPort)
+                .getConnectionSummary(database, credential);
     }
 }
