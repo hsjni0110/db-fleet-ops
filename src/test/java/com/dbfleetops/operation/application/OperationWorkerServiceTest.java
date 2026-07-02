@@ -4,6 +4,9 @@ import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.dto.ClaimJobResponse;
+import com.dbfleetops.operation.dto.FailJobRequest;
+import com.dbfleetops.operation.dto.OperationJobResponse;
+import com.dbfleetops.operation.dto.SucceedJobRequest;
 import com.dbfleetops.operation.infra.OperationJobRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,8 +15,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -95,5 +100,150 @@ class OperationWorkerServiceTest {
 
         assertThat(job.getLeaseUntil())
                 .isNotNull();
+    }
+
+    @Test
+    void succeedJobChangesRunningJobToSucceeded() {
+        OperationJob job =
+                OperationJob.create(
+                        JobType.BACKUP,
+                        1L,
+                        "local-user",
+                        "idem-001"
+                );
+
+        job.start(
+                "worker-1",
+                LocalDateTime.now().plusSeconds(60)
+        );
+
+        when(jobRepository.findById(1L))
+                .thenReturn(Optional.of(job));
+
+        OperationWorkerService service =
+                new OperationWorkerService(jobRepository);
+
+        OperationJobResponse response =
+                service.succeedJob(
+                        "worker-1",
+                        1L,
+                        new SucceedJobRequest("backup completed")
+                );
+
+        assertThat(response.status())
+                .isEqualTo(JobStatus.SUCCEEDED);
+
+        assertThat(response.resultCode())
+                .isEqualTo("SUCCESS");
+
+        assertThat(response.resultMessage())
+                .isEqualTo("backup completed");
+
+        assertThat(job.getStatus())
+                .isEqualTo(JobStatus.SUCCEEDED);
+    }
+
+    @Test
+    void failJobChangesRunningJobToFailed() {
+        OperationJob job =
+                OperationJob.create(
+                        JobType.BACKUP,
+                        1L,
+                        "local-user",
+                        "idem-001"
+                );
+
+        job.start(
+                "worker-1",
+                LocalDateTime.now().plusSeconds(60)
+        );
+
+        when(jobRepository.findById(1L))
+                .thenReturn(Optional.of(job));
+
+        OperationWorkerService service =
+                new OperationWorkerService(jobRepository);
+
+        OperationJobResponse response =
+                service.failJob(
+                        "worker-1",
+                        1L,
+                        new FailJobRequest(
+                                "BACKUP_FAILED",
+                                "mysqldump failed"
+                        )
+                );
+
+        assertThat(response.status())
+                .isEqualTo(JobStatus.FAILED);
+
+        assertThat(response.resultCode())
+                .isEqualTo("BACKUP_FAILED");
+
+        assertThat(response.resultMessage())
+                .isEqualTo("mysqldump failed");
+
+        assertThat(job.getStatus())
+                .isEqualTo(JobStatus.FAILED);
+    }
+
+    @Test
+    void succeedJobThrowsExceptionWhenWorkerDoesNotOwnJob() {
+        OperationJob job =
+                OperationJob.create(
+                        JobType.BACKUP,
+                        1L,
+                        "local-user",
+                        "idem-001"
+                );
+
+        job.start(
+                "worker-1",
+                LocalDateTime.now().plusSeconds(60)
+        );
+
+        when(jobRepository.findById(1L))
+                .thenReturn(Optional.of(job));
+
+        OperationWorkerService service =
+                new OperationWorkerService(jobRepository);
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> service.succeedJob(
+                        "worker-2",
+                        1L,
+                        new SucceedJobRequest("backup completed")
+                )
+        );
+    }
+
+    @Test
+    void failJobThrowsExceptionWhenJobIsNotRunning() {
+        OperationJob job =
+                OperationJob.create(
+                        JobType.BACKUP,
+                        1L,
+                        "local-user",
+                        "idem-001"
+                );
+
+        when(jobRepository.findById(1L))
+                .thenReturn(Optional.of(job));
+
+        OperationWorkerService service =
+                new OperationWorkerService(jobRepository);
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> service.failJob(
+                        "worker-1",
+                        1L,
+                        new FailJobRequest(
+                                "BACKUP_FAILED",
+                                "mysqldump failed"
+                        )
+                )
+        );
     }
 }
