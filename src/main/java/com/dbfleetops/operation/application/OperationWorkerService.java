@@ -92,6 +92,12 @@ public class OperationWorkerService {
                 request.resultMessage()
         );
 
+        if (request.retryable() && job.getRetryCount() < job.getMaxRetryCount()) {
+            job.retry(
+                    LocalDateTime.now().plusSeconds(30)
+            );
+        }
+
         return OperationJobResponse.from(job);
     }
 

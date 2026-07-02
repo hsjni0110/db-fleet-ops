@@ -134,7 +134,8 @@ class OperationWorkerControllerTest {
         String body = """
                 {
                 "resultCode": "BACKUP_FAILED",
-                "resultMessage": "mysqldump failed"
+                "resultMessage": "mysqldump failed",
+                "retryable": false
                 }
                 """;
 
@@ -148,5 +149,50 @@ class OperationWorkerControllerTest {
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.resultCode").value("BACKUP_FAILED"))
                 .andExpect(jsonPath("$.resultMessage").value("mysqldump failed"));
+    }
+
+    @Test
+    void failJobReturnsQueuedJobWhenRetryable() throws Exception {
+        when(workerService.failJob(
+                org.mockito.ArgumentMatchers.eq("worker-1"),
+                org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.any()
+        )).thenReturn(new OperationJobResponse(
+                1L,
+                JobType.BACKUP,
+                JobStatus.QUEUED,
+                1L,
+                "local-user",
+                1,
+                3,
+                null,
+                null,
+                LocalDateTime.of(2026, 7, 2, 16, 1),
+                LocalDateTime.of(2026, 7, 2, 15, 59),
+                null,
+                "BACKUP_FAILED",
+                "temporary error",
+                LocalDateTime.of(2026, 7, 2, 15, 58)
+        ));
+
+        String body = """
+                {
+                "resultCode": "BACKUP_FAILED",
+                "resultMessage": "temporary error",
+                "retryable": true
+                }
+                """;
+
+        mockMvc.perform(post(
+                        "/internal/v1/workers/worker-1/jobs/1/fail"
+                )
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.jobId").value(1))
+                .andExpect(jsonPath("$.status").value("QUEUED"))
+                .andExpect(jsonPath("$.retryCount").value(1))
+                .andExpect(jsonPath("$.resultCode").value("BACKUP_FAILED"))
+                .andExpect(jsonPath("$.resultMessage").value("temporary error"));
     }
 }

@@ -170,7 +170,8 @@ class OperationWorkerServiceTest {
                         1L,
                         new FailJobRequest(
                                 "BACKUP_FAILED",
-                                "mysqldump failed"
+                                "mysqldump failed",
+                                false
                         )
                 );
 
@@ -241,9 +242,103 @@ class OperationWorkerServiceTest {
                         1L,
                         new FailJobRequest(
                                 "BACKUP_FAILED",
-                                "mysqldump failed"
+                                "mysqldump failed",
+                                false
                         )
                 )
         );
+    }
+
+    @Test
+    void failJobKeepsFailedWhenRetryableIsFalse() {
+        OperationJob job =
+                OperationJob.create(
+                        JobType.BACKUP,
+                        1L,
+                        "local-user",
+                        "idem-001"
+                );
+
+        job.start(
+                "worker-1",
+                LocalDateTime.now().plusSeconds(60)
+        );
+
+        when(jobRepository.findById(1L))
+                .thenReturn(Optional.of(job));
+
+        OperationWorkerService service =
+                new OperationWorkerService(jobRepository);
+
+        OperationJobResponse response =
+                service.failJob(
+                        "worker-1",
+                        1L,
+                        new FailJobRequest(
+                                "BACKUP_FAILED",
+                                "mysqldump failed",
+                                false
+                        )
+                );
+
+        assertThat(response.status())
+                .isEqualTo(JobStatus.FAILED);
+
+        assertThat(response.retryCount())
+                .isZero();
+
+        assertThat(response.resultCode())
+                .isEqualTo("BACKUP_FAILED");
+    }
+
+    @Test
+    void failJobRetriesWhenRetryableIsTrue() {
+        OperationJob job =
+                OperationJob.create(
+                        JobType.BACKUP,
+                        1L,
+                        "local-user",
+                        "idem-001"
+                );
+
+        job.start(
+                "worker-1",
+                LocalDateTime.now().plusSeconds(60)
+        );
+
+        when(jobRepository.findById(1L))
+                .thenReturn(Optional.of(job));
+
+        OperationWorkerService service =
+                new OperationWorkerService(jobRepository);
+
+        OperationJobResponse response =
+                service.failJob(
+                        "worker-1",
+                        1L,
+                        new FailJobRequest(
+                                "BACKUP_FAILED",
+                                "temporary error",
+                                true
+                        )
+                );
+
+        assertThat(response.status())
+                .isEqualTo(JobStatus.QUEUED);
+
+        assertThat(response.retryCount())
+                .isEqualTo(1);
+
+        assertThat(response.availableAt())
+                .isNotNull();
+
+        assertThat(response.leaseOwner())
+                .isNull();
+
+        assertThat(response.leaseUntil())
+                .isNull();
+
+        assertThat(job.getStatus())
+                .isEqualTo(JobStatus.QUEUED);
     }
 }
