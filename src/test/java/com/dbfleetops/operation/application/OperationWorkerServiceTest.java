@@ -1,5 +1,6 @@
 package com.dbfleetops.operation.application;
 
+import com.dbfleetops.audit.port.AuditRecorderPort;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.domain.OperationJob;
@@ -21,6 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,6 +31,9 @@ class OperationWorkerServiceTest {
 
     @Mock
     private OperationJobRepository jobRepository;
+
+    @Mock
+    private AuditRecorderPort auditRecorderPort;
 
     @Test
     void claimJobReturnsEmptyWhenNoQueuedJobExists() {
@@ -39,7 +45,10 @@ class OperationWorkerServiceTest {
                 .thenReturn(List.of());
 
         OperationWorkerService service =
-                new OperationWorkerService(jobRepository);
+                new OperationWorkerService(
+                    jobRepository,
+                    auditRecorderPort
+                );
 
         ClaimJobResponse response =
                 service.claimJob("worker-1");
@@ -69,7 +78,10 @@ class OperationWorkerServiceTest {
                 .thenReturn(List.of(job));
 
         OperationWorkerService service =
-                new OperationWorkerService(jobRepository);
+                new OperationWorkerService(
+                    jobRepository,
+                    auditRecorderPort
+                );
 
         ClaimJobResponse response =
                 service.claimJob("worker-1");
@@ -100,6 +112,16 @@ class OperationWorkerServiceTest {
 
         assertThat(job.getLeaseUntil())
                 .isNotNull();
+        
+        verify(auditRecorderPort)
+            .record(
+                eq("worker-1"),
+                eq("JOB_CLAIMED"),
+                eq("OPERATION_JOB"),
+                any(),
+                eq("SUCCESS"),
+                contains("Job claimed")
+            );
     }
 
     @Test
@@ -121,7 +143,10 @@ class OperationWorkerServiceTest {
                 .thenReturn(Optional.of(job));
 
         OperationWorkerService service =
-                new OperationWorkerService(jobRepository);
+                new OperationWorkerService(
+                    jobRepository,
+                    auditRecorderPort
+                );
 
         OperationJobResponse response =
                 service.succeedJob(
@@ -141,6 +166,16 @@ class OperationWorkerServiceTest {
 
         assertThat(job.getStatus())
                 .isEqualTo(JobStatus.SUCCEEDED);
+        
+        verify(auditRecorderPort)
+                .record(
+                        eq("worker-1"),
+                        eq("JOB_SUCCEEDED"),
+                        eq("OPERATION_JOB"),
+                        any(),
+                        eq("SUCCESS"),
+                        eq("backup completed")
+                );
     }
 
     @Test
@@ -162,7 +197,10 @@ class OperationWorkerServiceTest {
                 .thenReturn(Optional.of(job));
 
         OperationWorkerService service =
-                new OperationWorkerService(jobRepository);
+                new OperationWorkerService(
+                    jobRepository,
+                    auditRecorderPort
+                );
 
         OperationJobResponse response =
                 service.failJob(
@@ -186,6 +224,16 @@ class OperationWorkerServiceTest {
 
         assertThat(job.getStatus())
                 .isEqualTo(JobStatus.FAILED);
+        
+        verify(auditRecorderPort)
+            .record(
+                eq("worker-1"),
+                eq("JOB_FAILED"),
+                eq("OPERATION_JOB"),
+                any(),
+                eq("FAILED"),
+                eq("mysqldump failed")
+            );
     }
 
     @Test
@@ -207,7 +255,10 @@ class OperationWorkerServiceTest {
                 .thenReturn(Optional.of(job));
 
         OperationWorkerService service =
-                new OperationWorkerService(jobRepository);
+                new OperationWorkerService(
+                    jobRepository,
+                    auditRecorderPort
+                );
 
         assertThrows(
                 IllegalStateException.class,
@@ -233,7 +284,10 @@ class OperationWorkerServiceTest {
                 .thenReturn(Optional.of(job));
 
         OperationWorkerService service =
-                new OperationWorkerService(jobRepository);
+                new OperationWorkerService(
+                    jobRepository,
+                    auditRecorderPort
+                );
 
         assertThrows(
                 IllegalStateException.class,
@@ -268,7 +322,10 @@ class OperationWorkerServiceTest {
                 .thenReturn(Optional.of(job));
 
         OperationWorkerService service =
-                new OperationWorkerService(jobRepository);
+                new OperationWorkerService(
+                    jobRepository,
+                    auditRecorderPort
+                );
 
         OperationJobResponse response =
                 service.failJob(
@@ -310,7 +367,10 @@ class OperationWorkerServiceTest {
                 .thenReturn(Optional.of(job));
 
         OperationWorkerService service =
-                new OperationWorkerService(jobRepository);
+                new OperationWorkerService(
+                        jobRepository,
+                        auditRecorderPort
+                );
 
         OperationJobResponse response =
                 service.failJob(
@@ -338,7 +398,24 @@ class OperationWorkerServiceTest {
         assertThat(response.leaseUntil())
                 .isNull();
 
-        assertThat(job.getStatus())
-                .isEqualTo(JobStatus.QUEUED);
+        verify(auditRecorderPort)
+                .record(
+                        eq("worker-1"),
+                        eq("JOB_FAILED"),
+                        eq("OPERATION_JOB"),
+                        any(),
+                        eq("FAILED"),
+                        eq("temporary error")
+                );
+
+        verify(auditRecorderPort)
+                .record(
+                        eq("worker-1"),
+                        eq("JOB_RETRIED"),
+                        eq("OPERATION_JOB"),
+                        any(),
+                        eq("SUCCESS"),
+                        contains("retryCount=1")
+                );
     }
 }

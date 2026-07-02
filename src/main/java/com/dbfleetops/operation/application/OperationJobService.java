@@ -1,5 +1,6 @@
 package com.dbfleetops.operation.application;
 
+import com.dbfleetops.audit.port.AuditRecorderPort;
 import com.dbfleetops.database.domain.ManagedDatabase;
 import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.operation.domain.JobType;
@@ -15,13 +16,16 @@ public class OperationJobService {
 
     private final ManagedDatabaseRepository databaseRepository;
     private final OperationJobRepository jobRepository;
+    private final AuditRecorderPort auditRecorderPort;
 
     public OperationJobService(
             ManagedDatabaseRepository databaseRepository,
-            OperationJobRepository jobRepository
+            OperationJobRepository jobRepository,
+            AuditRecorderPort auditRecorderPort
     ) {
         this.databaseRepository = databaseRepository;
         this.jobRepository = jobRepository;
+        this.auditRecorderPort = auditRecorderPort;
     }
 
     @Transactional
@@ -94,6 +98,15 @@ public class OperationJobService {
 
         OperationJob savedJob =
                 jobRepository.save(job);
+        
+        auditRecorderPort.record(
+                request.requestedBy(),
+                "JOB_CREATED",
+                "OPERATION_JOB",
+                String.valueOf(savedJob.getId()),
+                "SUCCESS",
+                "Backup job created. databaseId=" + databaseId
+        );
 
         return OperationJobResponse.from(savedJob);
     }

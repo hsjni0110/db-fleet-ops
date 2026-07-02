@@ -1,5 +1,6 @@
 package com.dbfleetops.operation.application;
 
+import com.dbfleetops.audit.port.AuditRecorderPort;
 import com.dbfleetops.database.domain.DatabaseEngine;
 import com.dbfleetops.database.domain.ManagedDatabase;
 import com.dbfleetops.database.infra.ManagedDatabaseRepository;
@@ -18,6 +19,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,6 +32,9 @@ class OperationJobServiceTest {
 
     @Mock
     private OperationJobRepository jobRepository;
+
+    @Mock
+    private AuditRecorderPort auditRecorderPort;
 
     @Test
     void createBackupJobCreatesQueuedJob() {
@@ -64,7 +71,8 @@ class OperationJobServiceTest {
         OperationJobService service =
                 new OperationJobService(
                         databaseRepository,
-                        jobRepository
+                        jobRepository,
+                        auditRecorderPort
                 );
 
         OperationJobResponse response =
@@ -88,6 +96,16 @@ class OperationJobServiceTest {
 
         verify(jobRepository)
                 .save(any(OperationJob.class));
+
+        verify(auditRecorderPort)
+                .record(
+                        eq("local-user"),
+                        eq("JOB_CREATED"),
+                        eq("OPERATION_JOB"),
+                        any(),
+                        eq("SUCCESS"),
+                        contains("Backup job created")
+                );
     }
 
     @Test
@@ -122,7 +140,8 @@ class OperationJobServiceTest {
         OperationJobService service =
                 new OperationJobService(
                         databaseRepository,
-                        jobRepository
+                        jobRepository,
+                        auditRecorderPort
                 );
 
         OperationJobResponse response =
@@ -140,6 +159,16 @@ class OperationJobServiceTest {
 
         verify(jobRepository, never())
                 .save(any(OperationJob.class));
+
+        verify(auditRecorderPort, never())
+                .record(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any()
+                );
     }
 
     @Test
@@ -155,7 +184,8 @@ class OperationJobServiceTest {
         OperationJobService service =
                 new OperationJobService(
                         databaseRepository,
-                        jobRepository
+                        jobRepository,
+                        auditRecorderPort
                 );
 
         assertThrows(
@@ -189,7 +219,8 @@ class OperationJobServiceTest {
         OperationJobService service =
                 new OperationJobService(
                         databaseRepository,
-                        jobRepository
+                        jobRepository,
+                        auditRecorderPort
                 );
 
         OperationJobResponse response =

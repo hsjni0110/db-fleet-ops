@@ -1,5 +1,6 @@
 package com.dbfleetops.operation.application;
 
+import com.dbfleetops.audit.port.AuditRecorderPort;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.dto.ClaimJobResponse;
@@ -20,11 +21,14 @@ public class OperationWorkerService {
     private static final long LEASE_SECONDS = 60L;
 
     private final OperationJobRepository jobRepository;
+    private final AuditRecorderPort auditRecorderPort;
 
     public OperationWorkerService(
-            OperationJobRepository jobRepository
+            OperationJobRepository jobRepository,
+            AuditRecorderPort auditRecorderPort
     ) {
         this.jobRepository = jobRepository;
+        this.auditRecorderPort = auditRecorderPort;
     }
 
     @Transactional
@@ -53,6 +57,15 @@ public class OperationWorkerService {
                 now.plusSeconds(LEASE_SECONDS)
         );
 
+        auditRecorderPort.record(
+                workerId,        
+                "JOB_CLAIMED",
+                "OPERATION_JOB",
+                String.valueOf(job.getId()),
+                "SUCCESS",
+                "Job claimed by worker. leaseUntil=" + job.getLeaseUntil()
+        );
+
         return ClaimJobResponse.claimed(job);
     }
 
@@ -69,6 +82,15 @@ public class OperationWorkerService {
                 );
 
         job.succeed(
+                request.resultMessage()
+        );
+
+        auditRecorderPort.record(
+                workerId,
+                "JOB_SUCCEEDED",
+                "OPERATION_JOB",
+                String.valueOf(job.getId()),
+                "SUCCESS",
                 request.resultMessage()
         );
 
@@ -92,9 +114,27 @@ public class OperationWorkerService {
                 request.resultMessage()
         );
 
+        auditRecorderPort.record(
+                workerId,
+                "JOB_FAILED",
+                "OPERATION_JOB",
+                String.valueOf(job.getId()),
+                "FAILED",
+                request.resultMessage()
+        );
+
         if (request.retryable() && job.getRetryCount() < job.getMaxRetryCount()) {
             job.retry(
                     LocalDateTime.now().plusSeconds(30)
+            );
+
+            auditRecorderPort.record(
+                workerId,
+                "JOB_RETRIED",
+                "OPERATION_JOB",
+                String.valueOf(job.getId()),
+                "SUCCESS",
+                "Job re-queued. retryCount=" + job.getRetryCount()
             );
         }
 
