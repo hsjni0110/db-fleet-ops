@@ -1,45 +1,90 @@
 package com.dbfleetops.operation.domain;
 
+import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 
+@Entity
+@Table(
+        name = "operation_job",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_operation_job_idempotency",
+                        columnNames = {
+                                "targetDatabaseId",
+                                "jobType",
+                                "idempotencyKey"
+                        }
+                )
+        }
+)
 public class OperationJob {
 
-    private final Long id;
-    private final JobType jobType;
-    private final Long targetDatabaseId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Enumerated(EnumType.STRING)
+    private JobType jobType;
+
+    private Long targetDatabaseId;
+
+    @Enumerated(EnumType.STRING)
     private JobStatus status;
-    private final String requestedBy;
-    private final String idempotencyKey;
+
+    private String requestedBy;
+
+    private String idempotencyKey;
+
+    @Column(length = 2000)
+    private String requestPayload;
+
+    private int priority;
 
     private int retryCount;
-    private final int maxRetryCount;
+
+    private int maxRetryCount;
 
     private String leaseOwner;
+
     private LocalDateTime leaseUntil;
+
     private LocalDateTime availableAt;
+
     private LocalDateTime startedAt;
+
     private LocalDateTime finishedAt;
 
     private String resultCode;
+
+    @Column(length = 2000)
     private String resultMessage;
 
-    private final LocalDateTime createdAt;
+    @Version
+    private Long version;
+
+    private LocalDateTime createdAt;
+
     private LocalDateTime updatedAt;
 
+    protected OperationJob() {
+    }
+
     private OperationJob(
-            Long id,
             JobType jobType,
             Long targetDatabaseId,
             String requestedBy,
             String idempotencyKey,
+            String requestPayload,
             int maxRetryCount
     ) {
-        this.id = id;
         this.jobType = jobType;
         this.targetDatabaseId = targetDatabaseId;
         this.requestedBy = requestedBy;
         this.idempotencyKey = idempotencyKey;
+        this.requestPayload = requestPayload;
         this.status = JobStatus.QUEUED;
+        this.priority = 0;
         this.retryCount = 0;
         this.maxRetryCount = maxRetryCount;
         this.availableAt = LocalDateTime.now();
@@ -53,12 +98,28 @@ public class OperationJob {
             String requestedBy,
             String idempotencyKey
     ) {
-        return new OperationJob(
-                null,
+        return create(
                 jobType,
                 targetDatabaseId,
                 requestedBy,
                 idempotencyKey,
+                null
+        );
+    }
+
+    public static OperationJob create(
+            JobType jobType,
+            Long targetDatabaseId,
+            String requestedBy,
+            String idempotencyKey,
+            String requestPayload
+    ) {
+        return new OperationJob(
+                jobType,
+                targetDatabaseId,
+                requestedBy,
+                idempotencyKey,
+                requestPayload,
                 3
         );
     }
@@ -192,6 +253,14 @@ public class OperationJob {
         return idempotencyKey;
     }
 
+    public String getRequestPayload() {
+        return requestPayload;
+    }
+
+    public int getPriority() {
+        return priority;
+    }
+
     public int getRetryCount() {
         return retryCount;
     }
@@ -226,6 +295,10 @@ public class OperationJob {
 
     public String getResultMessage() {
         return resultMessage;
+    }
+
+    public Long getVersion() {
+        return version;
     }
 
     public LocalDateTime getCreatedAt() {
