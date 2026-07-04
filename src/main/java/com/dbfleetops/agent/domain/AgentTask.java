@@ -1,31 +1,52 @@
 package com.dbfleetops.agent.domain;
 
+import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 
+@Entity
+@Table(name = "agent_task")
 public class AgentTask {
 
-    private final Long id;
-    private final Long agentId;
-    private final AgentTaskType taskType;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
+    private Long agentId;
+
+    @Enumerated(EnumType.STRING)
+    private AgentTaskType taskType;
+
+    @Enumerated(EnumType.STRING)
     private AgentTaskStatus status;
-    private final String parametersJson;
+
+    @Column(length = 2000)
+    private String parametersJson;
+
+    @Column(length = 4000)
     private String resultPayloadJson;
+
     private String errorCode;
+
+    @Column(length = 2000)
     private String errorMessage;
 
     private LocalDateTime startedAt;
+
     private LocalDateTime completedAt;
-    private final LocalDateTime createdAt;
+
+    private LocalDateTime createdAt;
+
     private LocalDateTime updatedAt;
 
+    protected AgentTask() {
+    }
+
     private AgentTask(
-            Long id,
             Long agentId,
             AgentTaskType taskType,
             String parametersJson
     ) {
-        this.id = id;
         this.agentId = agentId;
         this.taskType = taskType;
         this.parametersJson = parametersJson;
@@ -40,7 +61,6 @@ public class AgentTask {
             String parametersJson
     ) {
         return new AgentTask(
-                null,
                 agentId,
                 taskType,
                 parametersJson
