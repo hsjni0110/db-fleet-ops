@@ -9,18 +9,48 @@ import (
 )
 
 type AgentService struct {
-	heartbeatPort port.HeartbeatPort
-	linuxInfoPort port.LinuxInfoPort
+	registrationPort port.RegistrationPort
+	heartbeatPort   port.HeartbeatPort
+	linuxInfoPort   port.LinuxInfoPort
 }
 
 func NewAgentService(
+	registrationPort port.RegistrationPort,
 	heartbeatPort port.HeartbeatPort,
 	linuxInfoPort port.LinuxInfoPort,
 ) *AgentService {
 	return &AgentService{
-		heartbeatPort: heartbeatPort,
-		linuxInfoPort: linuxInfoPort,
+		registrationPort: registrationPort,
+		heartbeatPort:   heartbeatPort,
+		linuxInfoPort:   linuxInfoPort,
 	}
+}
+
+func (s *AgentService) Register(
+	ctx context.Context,
+) error {
+	agentInfo, err := s.linuxInfoPort.CollectAgentInfo(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	result, err := s.registrationPort.RegisterAgent(
+		ctx,
+		agentInfo,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	log.Printf(
+		"agent_registered agentId=%d status=%s",
+		result.AgentID,
+		result.Status,
+	)
+
+	return nil
 }
 
 func (s *AgentService) SendHeartbeat(

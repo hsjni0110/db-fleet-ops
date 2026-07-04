@@ -4,28 +4,12 @@ import (
 	"context"
 	"log"
 
+	agenthttp "db-fleetops-agent/internal/infra/http"
+
 	"db-fleetops-agent/internal/application"
 	"db-fleetops-agent/internal/config"
 	"db-fleetops-agent/internal/domain"
 )
-
-type noopHeartbeatPort struct {
-}
-
-func (n *noopHeartbeatPort) SendHeartbeat(
-	ctx context.Context,
-	agentInfo domain.AgentInfo,
-) error {
-	log.Printf(
-		"noop_heartbeat agentName=%s hostname=%s os=%s version=%s",
-		agentInfo.AgentName,
-		agentInfo.Hostname,
-		agentInfo.OSName,
-		agentInfo.AgentVersion,
-	)
-
-	return nil
-}
 
 type staticLinuxInfoPort struct {
 	agentInfo domain.AgentInfo
@@ -49,14 +33,26 @@ func main() {
 		cfg.AgentVersion,
 	)
 
+	controlPlaneClient :=
+		agenthttp.NewControlPlaneClient(
+			cfg.ControlPlaneURL,
+		)
+
 	service := application.NewAgentService(
-		&noopHeartbeatPort{},
+		controlPlaneClient,
+		controlPlaneClient,
 		&staticLinuxInfoPort{
 			agentInfo: agentInfo,
 		},
 	)
 
-	if err := service.SendHeartbeat(context.Background()); err != nil {
+	ctx := context.Background()
+
+	if err := service.Register(ctx); err != nil {
+		log.Fatalf("failed to register agent: %v", err)
+	}
+
+	if err := service.SendHeartbeat(ctx); err != nil {
 		log.Fatalf("failed to send heartbeat: %v", err)
 	}
 }

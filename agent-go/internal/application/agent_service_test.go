@@ -5,7 +5,25 @@ import (
 	"testing"
 
 	"db-fleetops-agent/internal/domain"
+	"db-fleetops-agent/internal/port"
 )
+
+type fakeRegistrationPort struct {
+	called bool
+}
+
+func (f *fakeRegistrationPort) RegisterAgent(
+	ctx context.Context,
+	agentInfo domain.AgentInfo,
+) (port.RegistrationResult, error) {
+	f.called = true
+
+	return port.RegistrationResult{
+		AgentID:    1,
+		AgentToken: "agent-token-001",
+		Status:     "ONLINE",
+	}, nil
+}
 
 type fakeHeartbeatPort struct {
 	called    bool
@@ -32,6 +50,39 @@ func (f *fakeLinuxInfoPort) CollectAgentInfo(
 	return f.agentInfo, nil
 }
 
+func TestRegisterCollectsAgentInfoAndRegistersAgent(t *testing.T) {
+	expectedInfo := domain.AgentInfo{
+		AgentName:    "local-agent",
+		Hostname:     "localhost",
+		IPAddress:    "127.0.0.1",
+		OSName:       "Linux",
+		Architecture: "amd64",
+		AgentVersion: "0.1.0",
+	}
+
+	registrationPort := &fakeRegistrationPort{}
+	heartbeatPort := &fakeHeartbeatPort{}
+	linuxInfoPort := &fakeLinuxInfoPort{
+		agentInfo: expectedInfo,
+	}
+
+	service := NewAgentService(
+		registrationPort,
+		heartbeatPort,
+		linuxInfoPort,
+	)
+
+	err := service.Register(context.Background())
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if !registrationPort.called {
+		t.Fatal("expected registration port to be called")
+	}
+}
+
 func TestSendHeartbeatCollectsAgentInfoAndSendsHeartbeat(t *testing.T) {
 	expectedInfo := domain.AgentInfo{
 		AgentName:    "local-agent",
@@ -42,12 +93,14 @@ func TestSendHeartbeatCollectsAgentInfoAndSendsHeartbeat(t *testing.T) {
 		AgentVersion: "0.1.0",
 	}
 
+	registrationPort := &fakeRegistrationPort{}
 	heartbeatPort := &fakeHeartbeatPort{}
 	linuxInfoPort := &fakeLinuxInfoPort{
 		agentInfo: expectedInfo,
 	}
 
 	service := NewAgentService(
+		registrationPort,
 		heartbeatPort,
 		linuxInfoPort,
 	)
