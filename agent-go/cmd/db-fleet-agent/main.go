@@ -5,45 +5,30 @@ import (
 	"log"
 
 	agenthttp "db-fleetops-agent/internal/infra/http"
+	agentlinux "db-fleetops-agent/internal/infra/linux"
 
 	"db-fleetops-agent/internal/application"
 	"db-fleetops-agent/internal/config"
-	"db-fleetops-agent/internal/domain"
 )
-
-type staticLinuxInfoPort struct {
-	agentInfo domain.AgentInfo
-}
-
-func (s *staticLinuxInfoPort) CollectAgentInfo(
-	ctx context.Context,
-) (domain.AgentInfo, error) {
-	return s.agentInfo, nil
-}
 
 func main() {
 	cfg := config.Load()
-
-	agentInfo := application.NewStaticAgentInfo(
-		cfg.AgentName,
-		"localhost",
-		"127.0.0.1",
-		"Linux",
-		"amd64",
-		cfg.AgentVersion,
-	)
 
 	controlPlaneClient :=
 		agenthttp.NewControlPlaneClient(
 			cfg.ControlPlaneURL,
 		)
 
+	linuxInfoCollector :=
+		agentlinux.NewLinuxInfoCollector(
+			cfg.AgentName,
+			cfg.AgentVersion,
+		)
+
 	service := application.NewAgentService(
 		controlPlaneClient,
 		controlPlaneClient,
-		&staticLinuxInfoPort{
-			agentInfo: agentInfo,
-		},
+		linuxInfoCollector,
 	)
 
 	ctx := context.Background()
