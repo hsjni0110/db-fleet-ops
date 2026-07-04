@@ -35,6 +35,9 @@ func main() {
 				task.NewLinuxStatusHandler(
 					linuxStatusCollector,
 				),
+				task.NewMySQLBackupHandler(
+					"/tmp/db-fleetops-backups",
+				),
 			},
 		)
 
