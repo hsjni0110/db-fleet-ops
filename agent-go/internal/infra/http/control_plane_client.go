@@ -165,3 +165,173 @@ func (c *ControlPlaneClient) postJSON(
 
 	return json.NewDecoder(response.Body).Decode(responseBody)
 }
+
+type nextTaskResponse struct {
+	HasTask        bool   `json:"hasTask"`
+	TaskID         int64  `json:"taskId"`
+	TaskType       string `json:"taskType"`
+	ParametersJSON string `json:"parametersJson"`
+}
+
+func (c *ControlPlaneClient) FetchNextTask(
+	ctx context.Context,
+) (*port.Task, error) {
+	if c.agentID == 0 || c.agentToken == "" {
+		return nil, fmt.Errorf("agent is not registered")
+	}
+
+	path := fmt.Sprintf(
+		"/internal/v1/agents/%d/tasks/next?agentToken=%s",
+		c.agentID,
+		c.agentToken,
+	)
+
+	var responseBody nextTaskResponse
+
+	err := c.getJSON(
+		ctx,
+		path,
+		&responseBody,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !responseBody.HasTask {
+		return nil, nil
+	}
+
+	return &port.Task{
+		TaskID:         responseBody.TaskID,
+		TaskType:       responseBody.TaskType,
+		ParametersJSON: responseBody.ParametersJSON,
+	}, nil
+}
+
+type taskTokenRequest struct {
+	AgentToken string `json:"agentToken"`
+}
+
+func (c *ControlPlaneClient) StartTask(
+	ctx context.Context,
+	taskID int64,
+) error {
+	path := fmt.Sprintf(
+		"/internal/v1/agents/%d/tasks/%d/start",
+		c.agentID,
+		taskID,
+	)
+
+	requestBody := taskTokenRequest{
+		AgentToken: c.agentToken,
+	}
+
+	var responseBody map[string]any
+
+	return c.postJSON(
+		ctx,
+		path,
+		requestBody,
+		&responseBody,
+	)
+}
+
+type completeTaskRequest struct {
+	AgentToken        string `json:"agentToken"`
+	ResultPayloadJSON string `json:"resultPayloadJson"`
+}
+
+func (c *ControlPlaneClient) CompleteTask(
+	ctx context.Context,
+	taskID int64,
+	resultPayloadJSON string,
+) error {
+	path := fmt.Sprintf(
+		"/internal/v1/agents/%d/tasks/%d/complete",
+		c.agentID,
+		taskID,
+	)
+
+	requestBody := completeTaskRequest{
+		AgentToken:        c.agentToken,
+		ResultPayloadJSON: resultPayloadJSON,
+	}
+
+	var responseBody map[string]any
+
+	return c.postJSON(
+		ctx,
+		path,
+		requestBody,
+		&responseBody,
+	)
+}
+
+type failTaskRequest struct {
+	AgentToken  string `json:"agentToken"`
+	ErrorCode   string `json:"errorCode"`
+	ErrorMessage string `json:"errorMessage"`
+}
+
+func (c *ControlPlaneClient) FailTask(
+	ctx context.Context,
+	taskID int64,
+	errorCode string,
+	errorMessage string,
+) error {
+	path := fmt.Sprintf(
+		"/internal/v1/agents/%d/tasks/%d/fail",
+		c.agentID,
+		taskID,
+	)
+
+	requestBody := failTaskRequest{
+		AgentToken:   c.agentToken,
+		ErrorCode:    errorCode,
+		ErrorMessage: errorMessage,
+	}
+
+	var responseBody map[string]any
+
+	return c.postJSON(
+		ctx,
+		path,
+		requestBody,
+		&responseBody,
+	)
+}
+
+func (c *ControlPlaneClient) getJSON(
+	ctx context.Context,
+	path string,
+	responseBody any,
+) error {
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		c.baseURL+path,
+		nil,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	response, err := c.httpClient.Do(request)
+
+	if err != nil {
+		return err
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf(
+			"control plane returned non-2xx status: %d",
+			response.StatusCode,
+		)
+	}
+
+	return json.NewDecoder(response.Body).Decode(responseBody)
+}

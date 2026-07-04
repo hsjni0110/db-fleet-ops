@@ -6,6 +6,7 @@ import (
 
 	agenthttp "db-fleetops-agent/internal/infra/http"
 	agentlinux "db-fleetops-agent/internal/infra/linux"
+	"db-fleetops-agent/internal/task"
 
 	"db-fleetops-agent/internal/application"
 	"db-fleetops-agent/internal/config"
@@ -25,10 +26,24 @@ func main() {
 			cfg.AgentVersion,
 		)
 
+	linuxStatusCollector :=
+		agentlinux.NewLinuxStatusCollector()
+
+	dispatcher :=
+		task.NewDispatcher(
+			[]task.Handler{
+				task.NewLinuxStatusHandler(
+					linuxStatusCollector,
+				),
+			},
+		)
+
 	service := application.NewAgentService(
 		controlPlaneClient,
 		controlPlaneClient,
+		controlPlaneClient,
 		linuxInfoCollector,
+		dispatcher,
 	)
 
 	ctx := context.Background()
@@ -39,5 +54,9 @@ func main() {
 
 	if err := service.SendHeartbeat(ctx); err != nil {
 		log.Fatalf("failed to send heartbeat: %v", err)
+	}
+
+	if err := service.PollAndHandleTask(ctx); err != nil {
+		log.Fatalf("failed to handle task: %v", err)
 	}
 }
