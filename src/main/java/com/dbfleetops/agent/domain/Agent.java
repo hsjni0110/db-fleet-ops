@@ -1,24 +1,42 @@
 package com.dbfleetops.agent.domain;
 
+import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 
+@Entity
+@Table(name = "agent")
 public class Agent {
 
-    private final Long id;
-    private final String agentName;
-    private final String hostname;
-    private final String ipAddress;
-    private final String osName;
-    private final String agentVersion;
-    private final String agentToken;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
+    private String agentName;
+
+    private String hostname;
+
+    private String ipAddress;
+
+    private String osName;
+
+    private String agentVersion;
+
+    private String agentToken;
+
+    @Enumerated(EnumType.STRING)
     private AgentStatus status;
+
     private LocalDateTime lastHeartbeatAt;
-    private final LocalDateTime createdAt;
+
+    private LocalDateTime createdAt;
+
     private LocalDateTime updatedAt;
 
+    protected Agent() {
+    }
+
     private Agent(
-            Long id,
             String agentName,
             String hostname,
             String ipAddress,
@@ -26,7 +44,6 @@ public class Agent {
             String agentVersion,
             String agentToken
     ) {
-        this.id = id;
         this.agentName = agentName;
         this.hostname = hostname;
         this.ipAddress = ipAddress;
@@ -48,7 +65,6 @@ public class Agent {
             String agentToken
     ) {
         return new Agent(
-                null,
                 agentName,
                 hostname,
                 ipAddress,
