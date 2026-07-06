@@ -3,6 +3,9 @@ package com.dbfleetops.operation.application;
 import com.dbfleetops.agent.domain.Agent;
 import com.dbfleetops.agent.domain.AgentStatus;
 import com.dbfleetops.agent.infra.AgentRepository;
+import com.dbfleetops.operation.domain.JobStatus;
+import com.dbfleetops.operation.domain.JobType;
+import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.domain.OperationTask;
 import com.dbfleetops.operation.domain.OperationTaskStatus;
 import com.dbfleetops.operation.domain.OperationTaskType;
@@ -12,6 +15,7 @@ import com.dbfleetops.operation.dto.FailOperationTaskRequest;
 import com.dbfleetops.operation.dto.NextOperationTaskResponse;
 import com.dbfleetops.operation.dto.OperationTaskResponse;
 import com.dbfleetops.operation.dto.StartOperationTaskRequest;
+import com.dbfleetops.operation.infra.OperationJobRepository;
 import com.dbfleetops.operation.infra.OperationTaskRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +39,9 @@ class OperationTaskServiceTest {
         @Mock
         private OperationTaskRepository taskRepository;
 
+        @Mock
+        private OperationJobRepository jobRepository;
+
         @Test
         void createTaskCreatesQueuedTask() {
                 Agent agent = newAgent();
@@ -44,8 +51,8 @@ class OperationTaskServiceTest {
                 when(taskRepository.save(any(OperationTask.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-                OperationTaskService service =
-                                new OperationTaskService(agentRepository, taskRepository);
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository);
 
                 var response = service.createTask(new CreateOperationTaskRequest(1L, null,
                                 OperationTaskType.COLLECT_LINUX_STATUS, "{}"));
@@ -67,8 +74,8 @@ class OperationTaskServiceTest {
                 when(taskRepository.findTop1ByAgentIdAndStatusOrderByCreatedAtAsc(1L,
                                 OperationTaskStatus.QUEUED)).thenReturn(List.of(task));
 
-                OperationTaskService service =
-                                new OperationTaskService(agentRepository, taskRepository);
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository);
 
                 NextOperationTaskResponse response = service.nextTask(1L, "agent-token-001");
 
@@ -88,8 +95,8 @@ class OperationTaskServiceTest {
 
                 when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
-                OperationTaskService service =
-                                new OperationTaskService(agentRepository, taskRepository);
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository);
 
                 var response = service.startTask(1L, 10L,
                                 new StartOperationTaskRequest("agent-token-001"));
@@ -110,8 +117,8 @@ class OperationTaskServiceTest {
 
                 when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
-                OperationTaskService service =
-                                new OperationTaskService(agentRepository, taskRepository);
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository);
 
                 var response = service.completeTask(1L, 10L, new CompleteOperationTaskRequest(
                                 "agent-token-001", "{\"cpuUsagePercent\":12.5}"));
@@ -134,8 +141,8 @@ class OperationTaskServiceTest {
 
                 when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
-                OperationTaskService service =
-                                new OperationTaskService(agentRepository, taskRepository);
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository);
 
                 var response = service.failTask(1L, 10L,
                                 new FailOperationTaskRequest("agent-token-001",
@@ -153,8 +160,8 @@ class OperationTaskServiceTest {
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
-                OperationTaskService service =
-                                new OperationTaskService(agentRepository, taskRepository);
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository);
 
                 assertThrows(IllegalArgumentException.class,
                                 () -> service.nextTask(1L, "wrong-token"));
@@ -176,8 +183,8 @@ class OperationTaskServiceTest {
                 when(taskRepository.save(any(OperationTask.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-                OperationTaskService service =
-                                new OperationTaskService(agentRepository, taskRepository);
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository);
 
                 OperationTaskResponse response = service.createBackupTaskForOperationJob(100L, 1L);
 
@@ -197,10 +204,104 @@ class OperationTaskServiceTest {
                                 .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
                                                 .thenReturn(Optional.empty());
 
-                OperationTaskService service =
-                                new OperationTaskService(agentRepository, taskRepository);
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository);
 
                 assertThrows(IllegalStateException.class,
                                 () -> service.createBackupTaskForOperationJob(100L, 1L));
+        }
+
+        @Test
+        void completeTaskChangesLinkedOperationJobToSucceeded() {
+                Agent agent = newAgent();
+
+                OperationTask task = OperationTask.createForJob(1L, 100L,
+                                OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
+
+                task.start();
+
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", java.time.LocalDateTime.now().plusSeconds(60));
+
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+
+                when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
+
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository);
+
+                service.completeTask(1L, 10L, new CompleteOperationTaskRequest("agent-token-001",
+                                "{\"status\":\"CREATED\"}"));
+
+                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
+
+                assertThat(job.getStatus()).isEqualTo(JobStatus.SUCCEEDED);
+
+                assertThat(job.getResultCode()).isEqualTo("SUCCESS");
+
+                assertThat(job.getResultMessage()).isEqualTo("{\"status\":\"CREATED\"}");
+        }
+
+        @Test
+        void failTaskChangesLinkedOperationJobToFailed() {
+                Agent agent = newAgent();
+
+                OperationTask task = OperationTask.createForJob(1L, 100L,
+                                OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
+
+                task.start();
+
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", java.time.LocalDateTime.now().plusSeconds(60));
+
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+
+                when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
+
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository);
+
+                service.failTask(1L, 10L, new FailOperationTaskRequest("agent-token-001",
+                                "BACKUP_FAILED", "mysqldump failed"));
+
+                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.FAILED);
+
+                assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
+
+                assertThat(job.getResultCode()).isEqualTo("BACKUP_FAILED");
+
+                assertThat(job.getResultMessage()).isEqualTo("mysqldump failed");
+        }
+
+        @Test
+        void completeTaskDoesNotChangeOperationJobWhenTaskIsNotLinked() {
+                Agent agent = newAgent();
+
+                OperationTask task = OperationTask.create(1L,
+                                OperationTaskType.COLLECT_LINUX_STATUS, "{}");
+
+                task.start();
+
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository);
+
+                service.completeTask(1L, 10L, new CompleteOperationTaskRequest("agent-token-001",
+                                "{\"cpuUsagePercent\":12.5}"));
+
+                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
+
+                org.mockito.Mockito.verifyNoInteractions(jobRepository);
         }
 }

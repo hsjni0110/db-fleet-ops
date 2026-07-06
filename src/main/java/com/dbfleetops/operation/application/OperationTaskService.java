@@ -3,10 +3,12 @@ package com.dbfleetops.operation.application;
 import com.dbfleetops.agent.domain.Agent;
 import com.dbfleetops.agent.domain.AgentStatus;
 import com.dbfleetops.agent.infra.AgentRepository;
+import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.domain.OperationTask;
 import com.dbfleetops.operation.domain.OperationTaskStatus;
 import com.dbfleetops.operation.domain.OperationTaskType;
 import com.dbfleetops.operation.dto.*;
+import com.dbfleetops.operation.infra.OperationJobRepository;
 import com.dbfleetops.operation.infra.OperationTaskRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,11 +18,13 @@ public class OperationTaskService {
 
     private final AgentRepository agentRepository;
     private final OperationTaskRepository taskRepository;
+    private final OperationJobRepository jobRepository;
 
     public OperationTaskService(AgentRepository agentRepository,
-            OperationTaskRepository taskRepository) {
+            OperationTaskRepository taskRepository, OperationJobRepository jobRepository) {
         this.agentRepository = agentRepository;
         this.taskRepository = taskRepository;
+        this.jobRepository = jobRepository;
     }
 
     @Transactional
@@ -75,6 +79,12 @@ public class OperationTaskService {
 
         task.complete(request.resultPayloadJson());
 
+        OperationJob job = getLinkedOperationJob(task);
+
+        if (job != null) {
+            job.succeed(request.resultPayloadJson());
+        }
+
         return OperationTaskResponse.from(task);
     }
 
@@ -86,6 +96,12 @@ public class OperationTaskService {
         OperationTask task = getTaskOwnedByAgent(agentId, taskId);
 
         task.fail(request.errorCode(), request.errorMessage());
+
+        OperationJob job = getLinkedOperationJob(task);
+
+        if (job != null) {
+            job.fail(request.errorCode(), request.errorMessage());
+        }
 
         return OperationTaskResponse.from(task);
     }
@@ -136,5 +152,15 @@ public class OperationTaskService {
         OperationTask savedTask = taskRepository.save(task);
 
         return OperationTaskResponse.from(savedTask);
+    }
+
+    private OperationJob getLinkedOperationJob(OperationTask task) {
+        if (task.getOperationJobId() == null) {
+            return null;
+        }
+
+        return jobRepository.findById(task.getOperationJobId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Operation job not found. operationJobId=" + task.getOperationJobId()));
     }
 }
