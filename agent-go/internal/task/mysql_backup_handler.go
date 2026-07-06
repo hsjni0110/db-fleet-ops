@@ -3,8 +3,8 @@ package task
 import (
 	"context"
 	"encoding/json"
-	"time"
 
+	"db-fleetops-agent/internal/infra/backup"
 	"db-fleetops-agent/internal/port"
 )
 
@@ -12,19 +12,24 @@ const TaskTypeMySQLLogicalBackup = "MYSQL_LOGICAL_BACKUP"
 
 type MySQLBackupRequest struct {
 	DatabaseName string `json:"databaseName"`
+	Host         string `json:"host"`
+	Port         int    `json:"port"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
 	BackupType   string `json:"backupType"`
 	Compression  bool   `json:"compression"`
 }
 
-type MySQLBackupResult struct {
-	Status     string `json:"status"`
-	BackupFile string `json:"backupFile"`
-	CreatedAt  string `json:"createdAt"`
-	Message    string `json:"message"`
+type MySQLBackupRunner interface {
+	Run(
+		ctx context.Context,
+		request backup.MySQLDumpRequest,
+	) (backup.MySQLDumpResult, error)
 }
 
 type MySQLBackupHandler struct {
 	backupDirectory string
+	runner          MySQLBackupRunner
 }
 
 func NewMySQLBackupHandler(
@@ -32,6 +37,17 @@ func NewMySQLBackupHandler(
 ) *MySQLBackupHandler {
 	return &MySQLBackupHandler{
 		backupDirectory: backupDirectory,
+		runner:          backup.NewMySQLDumpRunner(),
+	}
+}
+
+func NewMySQLBackupHandlerWithRunner(
+	backupDirectory string,
+	runner MySQLBackupRunner,
+) *MySQLBackupHandler {
+	return &MySQLBackupHandler{
+		backupDirectory: backupDirectory,
+		runner:          runner,
 	}
 }
 
@@ -47,34 +63,33 @@ func (h *MySQLBackupHandler) Handle(
 ) (string, error) {
 	var request MySQLBackupRequest
 
-	if task.ParametersJSON != "" {
-		if err := json.Unmarshal(
-			[]byte(task.ParametersJSON),
-			&request,
-		); err != nil {
-			return "", err
-		}
+	if err := json.Unmarshal(
+		[]byte(task.ParametersJSON),
+		&request,
+	); err != nil {
+		return "", err
 	}
 
-	if request.DatabaseName == "" {
-		request.DatabaseName = "unknown"
+	result, err :=
+		h.runner.Run(
+			ctx,
+			backup.MySQLDumpRequest{
+				Host:            request.Host,
+				Port:            request.Port,
+				Username:        request.Username,
+				Password:        request.Password,
+				DatabaseName:    request.DatabaseName,
+				BackupDirectory: h.backupDirectory,
+				Compression:     request.Compression,
+			},
+		)
+
+	if err != nil {
+		return "", err
 	}
 
-	now := time.Now()
-
-	result := MySQLBackupResult{
-		Status: "CREATED",
-		BackupFile: h.backupDirectory +
-			"/" +
-			request.DatabaseName +
-			"-" +
-			now.Format("20060102-150405") +
-			".sql",
-		CreatedAt: now.Format(time.RFC3339),
-		Message:   "stub mysql logical backup completed",
-	}
-
-	resultBytes, err := json.Marshal(result)
+	resultBytes, err :=
+		json.Marshal(result)
 
 	if err != nil {
 		return "", err
