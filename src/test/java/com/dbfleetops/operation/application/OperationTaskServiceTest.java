@@ -1,7 +1,9 @@
 package com.dbfleetops.operation.application;
 
 import com.dbfleetops.agent.domain.Agent;
+import com.dbfleetops.agent.domain.AgentHostMetric;
 import com.dbfleetops.agent.domain.AgentStatus;
+import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
@@ -29,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class OperationTaskServiceTest {
@@ -42,6 +45,9 @@ class OperationTaskServiceTest {
         @Mock
         private OperationJobRepository jobRepository;
 
+        @Mock
+        private AgentHostMetricRepository agentHostMetricRepository;
+
         @Test
         void createTaskCreatesQueuedTask() {
                 Agent agent = newAgent();
@@ -52,7 +58,7 @@ class OperationTaskServiceTest {
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
                 OperationTaskService service = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository);
+                                taskRepository, jobRepository, agentHostMetricRepository);
 
                 var response = service.createTask(new CreateOperationTaskRequest(1L, null,
                                 OperationTaskType.COLLECT_LINUX_STATUS, "{}"));
@@ -75,7 +81,7 @@ class OperationTaskServiceTest {
                                 OperationTaskStatus.QUEUED)).thenReturn(List.of(task));
 
                 OperationTaskService service = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository);
+                                taskRepository, jobRepository, agentHostMetricRepository);
 
                 NextOperationTaskResponse response = service.nextTask(1L, "agent-token-001");
 
@@ -96,7 +102,7 @@ class OperationTaskServiceTest {
                 when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
                 OperationTaskService service = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository);
+                                taskRepository, jobRepository, agentHostMetricRepository);
 
                 var response = service.startTask(1L, 10L,
                                 new StartOperationTaskRequest("agent-token-001"));
@@ -118,7 +124,7 @@ class OperationTaskServiceTest {
                 when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
                 OperationTaskService service = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository);
+                                taskRepository, jobRepository, agentHostMetricRepository);
 
                 var response = service.completeTask(1L, 10L, new CompleteOperationTaskRequest(
                                 "agent-token-001", "{\"cpuUsagePercent\":12.5}"));
@@ -142,7 +148,7 @@ class OperationTaskServiceTest {
                 when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
                 OperationTaskService service = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository);
+                                taskRepository, jobRepository, agentHostMetricRepository);
 
                 var response = service.failTask(1L, 10L,
                                 new FailOperationTaskRequest("agent-token-001",
@@ -161,7 +167,7 @@ class OperationTaskServiceTest {
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
                 OperationTaskService service = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository);
+                                taskRepository, jobRepository, agentHostMetricRepository);
 
                 assertThrows(IllegalArgumentException.class,
                                 () -> service.nextTask(1L, "wrong-token"));
@@ -184,7 +190,7 @@ class OperationTaskServiceTest {
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
                 OperationTaskService service = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository);
+                                taskRepository, jobRepository, agentHostMetricRepository);
 
                 OperationTaskResponse response = service.createBackupTaskForOperationJob(100L, 1L);
 
@@ -205,7 +211,7 @@ class OperationTaskServiceTest {
                                                 .thenReturn(Optional.empty());
 
                 OperationTaskService service = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository);
+                                taskRepository, jobRepository, agentHostMetricRepository);
 
                 assertThrows(IllegalStateException.class,
                                 () -> service.createBackupTaskForOperationJob(100L, 1L));
@@ -232,7 +238,7 @@ class OperationTaskServiceTest {
                 when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
 
                 OperationTaskService service = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository);
+                                taskRepository, jobRepository, agentHostMetricRepository);
 
                 service.completeTask(1L, 10L, new CompleteOperationTaskRequest("agent-token-001",
                                 "{\"status\":\"CREATED\"}"));
@@ -267,7 +273,7 @@ class OperationTaskServiceTest {
                 when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
 
                 OperationTaskService service = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository);
+                                taskRepository, jobRepository, agentHostMetricRepository);
 
                 service.failTask(1L, 10L, new FailOperationTaskRequest("agent-token-001",
                                 "BACKUP_FAILED", "mysqldump failed"));
@@ -295,7 +301,7 @@ class OperationTaskServiceTest {
                 when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
                 OperationTaskService service = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository);
+                                taskRepository, jobRepository, agentHostMetricRepository);
 
                 service.completeTask(1L, 10L, new CompleteOperationTaskRequest("agent-token-001",
                                 "{\"cpuUsagePercent\":12.5}"));
@@ -303,5 +309,33 @@ class OperationTaskServiceTest {
                 assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
 
                 org.mockito.Mockito.verifyNoInteractions(jobRepository);
+        }
+
+        @Test
+        void completeLinuxStatusTaskPersistsAgentHostMetric() {
+                Agent agent = newAgent();
+
+                OperationTask task = OperationTask.create(1L,
+                                OperationTaskType.COLLECT_LINUX_STATUS, "{}");
+
+                task.start();
+
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+
+                OperationTaskService service = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository, agentHostMetricRepository);
+
+                service.completeTask(1L, 10L,
+                                new CompleteOperationTaskRequest("agent-token-001", """
+                                                {
+                                                  "cpuUsagePercent": 12.5,
+                                                  "memoryUsagePercent": 61.2,
+                                                  "diskUsagePercent": 70.1
+                                                }
+                                                """));
+
+                verify(agentHostMetricRepository).save(any(AgentHostMetric.class));
         }
 }

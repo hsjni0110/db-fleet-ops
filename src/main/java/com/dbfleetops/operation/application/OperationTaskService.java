@@ -1,7 +1,9 @@
 package com.dbfleetops.operation.application;
 
 import com.dbfleetops.agent.domain.Agent;
+import com.dbfleetops.agent.domain.AgentHostMetric;
 import com.dbfleetops.agent.domain.AgentStatus;
+import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
 import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.domain.OperationTask;
@@ -10,6 +12,8 @@ import com.dbfleetops.operation.domain.OperationTaskType;
 import com.dbfleetops.operation.dto.*;
 import com.dbfleetops.operation.infra.OperationJobRepository;
 import com.dbfleetops.operation.infra.OperationTaskRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,12 +23,16 @@ public class OperationTaskService {
     private final AgentRepository agentRepository;
     private final OperationTaskRepository taskRepository;
     private final OperationJobRepository jobRepository;
+    private final AgentHostMetricRepository agentHostMetricRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public OperationTaskService(AgentRepository agentRepository,
-            OperationTaskRepository taskRepository, OperationJobRepository jobRepository) {
+            OperationTaskRepository taskRepository, OperationJobRepository jobRepository,
+            AgentHostMetricRepository agentHostMetricRepository) {
         this.agentRepository = agentRepository;
         this.taskRepository = taskRepository;
         this.jobRepository = jobRepository;
+        this.agentHostMetricRepository = agentHostMetricRepository;
     }
 
     @Transactional
@@ -79,6 +87,8 @@ public class OperationTaskService {
 
         task.complete(request.resultPayloadJson());
 
+        persistLinuxStatusMetricIfNeeded(task, request.resultPayloadJson());
+
         OperationJob job = getLinkedOperationJob(task);
 
         if (job != null) {
@@ -86,6 +96,25 @@ public class OperationTaskService {
         }
 
         return OperationTaskResponse.from(task);
+    }
+
+    private void persistLinuxStatusMetricIfNeeded(OperationTask task, String resultPayloadJson) {
+        if (task.getTaskType() != OperationTaskType.COLLECT_LINUX_STATUS) {
+            return;
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(resultPayloadJson);
+
+            AgentHostMetric metric = AgentHostMetric.create(task.getAgentId(),
+                    root.path("cpuUsagePercent").asDouble(),
+                    root.path("memoryUsagePercent").asDouble(),
+                    root.path("diskUsagePercent").asDouble());
+
+            agentHostMetricRepository.save(metric);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("Invalid linux status metric payload.", exception);
+        }
     }
 
     @Transactional

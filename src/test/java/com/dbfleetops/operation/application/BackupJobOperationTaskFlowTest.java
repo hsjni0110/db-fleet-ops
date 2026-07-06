@@ -2,6 +2,7 @@ package com.dbfleetops.operation.application;
 
 import com.dbfleetops.agent.domain.Agent;
 import com.dbfleetops.agent.domain.AgentStatus;
+import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
 import com.dbfleetops.audit.port.AuditRecorderPort;
 import com.dbfleetops.operation.domain.JobStatus;
@@ -45,6 +46,9 @@ class BackupJobOperationTaskFlowTest {
     @Mock
     private AuditRecorderPort auditRecorderPort;
 
+    @Mock
+    private AgentHostMetricRepository agentHostMetricRepository;
+
     @Test
     void backupJobClaimCreatesTaskAndTaskCompleteSucceedsJob() {
         OperationJob job = OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
@@ -72,8 +76,8 @@ class BackupJobOperationTaskFlowTest {
             return task;
         });
 
-        OperationTaskService taskService =
-                new OperationTaskService(agentRepository, taskRepository, jobRepository);
+        OperationTaskService taskService = new OperationTaskService(agentRepository, taskRepository,
+                jobRepository, agentHostMetricRepository);
 
         OperationWorkerService workerService =
                 new OperationWorkerService(jobRepository, auditRecorderPort, taskService);
@@ -133,8 +137,8 @@ class BackupJobOperationTaskFlowTest {
 
         when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
 
-        OperationTaskService taskService =
-                new OperationTaskService(agentRepository, taskRepository, jobRepository);
+        OperationTaskService taskService = new OperationTaskService(agentRepository, taskRepository,
+                jobRepository, agentHostMetricRepository);
 
         taskService.failTask(1L, 10L, new FailOperationTaskRequest("agent-token-001",
                 "BACKUP_FAILED", "mysqldump failed"));
