@@ -1,6 +1,13 @@
 package com.dbfleetops.agent.domain;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
 
@@ -13,6 +20,8 @@ public class AgentTask {
     private Long id;
 
     private Long agentId;
+
+    private Long operationJobId;
 
     @Enumerated(EnumType.STRING)
     private AgentTaskType taskType;
@@ -39,15 +48,12 @@ public class AgentTask {
 
     private LocalDateTime updatedAt;
 
-    protected AgentTask() {
-    }
+    protected AgentTask() {}
 
-    private AgentTask(
-            Long agentId,
-            AgentTaskType taskType,
-            String parametersJson
-    ) {
+    private AgentTask(Long agentId, Long operationJobId, AgentTaskType taskType,
+            String parametersJson) {
         this.agentId = agentId;
+        this.operationJobId = operationJobId;
         this.taskType = taskType;
         this.parametersJson = parametersJson;
         this.status = AgentTaskStatus.QUEUED;
@@ -55,23 +61,19 @@ public class AgentTask {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public static AgentTask create(
-            Long agentId,
-            AgentTaskType taskType,
-            String parametersJson
-    ) {
-        return new AgentTask(
-                agentId,
-                taskType,
-                parametersJson
-        );
+    public static AgentTask create(Long agentId, AgentTaskType taskType, String parametersJson) {
+        return new AgentTask(agentId, null, taskType, parametersJson);
+    }
+
+    public static AgentTask createForOperationJob(Long agentId, Long operationJobId,
+            AgentTaskType taskType, String parametersJson) {
+        return new AgentTask(agentId, operationJobId, taskType, parametersJson);
     }
 
     public void start() {
         if (status != AgentTaskStatus.QUEUED) {
             throw new IllegalStateException(
-                    "Only QUEUED task can be started. currentStatus=" + status
-            );
+                    "Only QUEUED task can be started. currentStatus=" + status);
         }
 
         this.status = AgentTaskStatus.RUNNING;
@@ -79,13 +81,10 @@ public class AgentTask {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void complete(
-            String resultPayloadJson
-    ) {
+    public void complete(String resultPayloadJson) {
         if (status != AgentTaskStatus.RUNNING) {
             throw new IllegalStateException(
-                    "Only RUNNING task can be completed. currentStatus=" + status
-            );
+                    "Only RUNNING task can be completed. currentStatus=" + status);
         }
 
         this.status = AgentTaskStatus.SUCCEEDED;
@@ -94,14 +93,10 @@ public class AgentTask {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void fail(
-            String errorCode,
-            String errorMessage
-    ) {
+    public void fail(String errorCode, String errorMessage) {
         if (status != AgentTaskStatus.RUNNING) {
             throw new IllegalStateException(
-                    "Only RUNNING task can be failed. currentStatus=" + status
-            );
+                    "Only RUNNING task can be failed. currentStatus=" + status);
         }
 
         this.status = AgentTaskStatus.FAILED;
@@ -113,15 +108,11 @@ public class AgentTask {
 
     public void cancel() {
         if (status == AgentTaskStatus.SUCCEEDED) {
-            throw new IllegalStateException(
-                    "SUCCEEDED task cannot be cancelled."
-            );
+            throw new IllegalStateException("SUCCEEDED task cannot be cancelled.");
         }
 
         if (status == AgentTaskStatus.FAILED) {
-            throw new IllegalStateException(
-                    "FAILED task cannot be cancelled."
-            );
+            throw new IllegalStateException("FAILED task cannot be cancelled.");
         }
 
         this.status = AgentTaskStatus.CANCELLED;
@@ -135,6 +126,10 @@ public class AgentTask {
 
     public Long getAgentId() {
         return agentId;
+    }
+
+    public Long getOperationJobId() {
+        return operationJobId;
     }
 
     public AgentTaskType getTaskType() {

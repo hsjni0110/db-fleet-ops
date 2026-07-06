@@ -2,7 +2,11 @@ package com.dbfleetops.agent.integration;
 
 import com.dbfleetops.agent.domain.Agent;
 import com.dbfleetops.agent.domain.AgentStatus;
+import com.dbfleetops.agent.domain.AgentTask;
+import com.dbfleetops.agent.domain.AgentTaskStatus;
+import com.dbfleetops.agent.domain.AgentTaskType;
 import com.dbfleetops.agent.infra.AgentRepository;
+import com.dbfleetops.agent.infra.AgentTaskRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -14,109 +18,90 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 class AgentPersistenceTest {
 
-    @Autowired
-    private AgentRepository agentRepository;
+        @Autowired
+        private AgentRepository agentRepository;
 
-    @Test
-    void saveAndFindAgent() {
-        Agent agent =
-                Agent.register(
-                        "local-agent",
-                        "localhost",
-                        "127.0.0.1",
-                        "Linux",
-                        "0.1.0",
-                        "agent-token-001"
-                );
+        @Autowired
+        private AgentTaskRepository taskRepository;
 
-        Agent savedAgent =
-                agentRepository.save(agent);
+        @Test
+        void saveAndFindAgent() {
+                Agent agent = Agent.register("local-agent", "localhost", "127.0.0.1", "Linux",
+                                "0.1.0", "agent-token-001");
 
-        Agent foundAgent =
-                agentRepository.findById(savedAgent.getId())
-                        .orElseThrow();
+                Agent savedAgent = agentRepository.save(agent);
 
-        assertThat(foundAgent.getAgentName())
-                .isEqualTo("local-agent");
+                Agent foundAgent = agentRepository.findById(savedAgent.getId()).orElseThrow();
 
-        assertThat(foundAgent.getHostname())
-                .isEqualTo("localhost");
+                assertThat(foundAgent.getAgentName()).isEqualTo("local-agent");
 
-        assertThat(foundAgent.getStatus())
-                .isEqualTo(AgentStatus.ONLINE);
+                assertThat(foundAgent.getHostname()).isEqualTo("localhost");
 
-        assertThat(foundAgent.getAgentToken())
-                .isEqualTo("agent-token-001");
+                assertThat(foundAgent.getStatus()).isEqualTo(AgentStatus.ONLINE);
 
-        assertThat(foundAgent.getLastHeartbeatAt())
-                .isNotNull();
-    }
+                assertThat(foundAgent.getAgentToken()).isEqualTo("agent-token-001");
 
-    @Test
-    void heartbeatUpdateIsPersisted() {
-        Agent agent =
-                Agent.register(
-                        "local-agent",
-                        "localhost",
-                        "127.0.0.1",
-                        "Linux",
-                        "0.1.0",
-                        "agent-token-001"
-                );
+                assertThat(foundAgent.getLastHeartbeatAt()).isNotNull();
+        }
 
-        Agent savedAgent =
-                agentRepository.save(agent);
+        @Test
+        void heartbeatUpdateIsPersisted() {
+                Agent agent = Agent.register("local-agent", "localhost", "127.0.0.1", "Linux",
+                                "0.1.0", "agent-token-001");
 
-        savedAgent.markOffline();
+                Agent savedAgent = agentRepository.save(agent);
 
-        agentRepository.flush();
+                savedAgent.markOffline();
 
-        Agent offlineAgent =
-                agentRepository.findById(savedAgent.getId())
-                        .orElseThrow();
+                agentRepository.flush();
 
-        assertThat(offlineAgent.getStatus())
-                .isEqualTo(AgentStatus.OFFLINE);
+                Agent offlineAgent = agentRepository.findById(savedAgent.getId()).orElseThrow();
 
-        offlineAgent.heartbeat();
+                assertThat(offlineAgent.getStatus()).isEqualTo(AgentStatus.OFFLINE);
 
-        agentRepository.flush();
+                offlineAgent.heartbeat();
 
-        Agent onlineAgent =
-                agentRepository.findById(savedAgent.getId())
-                        .orElseThrow();
+                agentRepository.flush();
 
-        assertThat(onlineAgent.getStatus())
-                .isEqualTo(AgentStatus.ONLINE);
+                Agent onlineAgent = agentRepository.findById(savedAgent.getId()).orElseThrow();
 
-        assertThat(onlineAgent.getLastHeartbeatAt())
-                .isNotNull();
-    }
+                assertThat(onlineAgent.getStatus()).isEqualTo(AgentStatus.ONLINE);
 
-    @Test
-    void disabledStatusIsPersisted() {
-        Agent agent =
-                Agent.register(
-                        "local-agent",
-                        "localhost",
-                        "127.0.0.1",
-                        "Linux",
-                        "0.1.0",
-                        "agent-token-001"
-                );
+                assertThat(onlineAgent.getLastHeartbeatAt()).isNotNull();
+        }
 
-        Agent savedAgent =
-                agentRepository.save(agent);
+        @Test
+        void disabledStatusIsPersisted() {
+                Agent agent = Agent.register("local-agent", "localhost", "127.0.0.1", "Linux",
+                                "0.1.0", "agent-token-001");
 
-        savedAgent.disable();
+                Agent savedAgent = agentRepository.save(agent);
 
-        agentRepository.flush();
+                savedAgent.disable();
 
-        Agent foundAgent =
-                agentRepository.findById(savedAgent.getId())
-                        .orElseThrow();
+                agentRepository.flush();
 
-        assertThat(foundAgent.getStatus())
-                .isEqualTo(AgentStatus.DISABLED);
-    }
+                Agent foundAgent = agentRepository.findById(savedAgent.getId()).orElseThrow();
+
+                assertThat(foundAgent.getStatus()).isEqualTo(AgentStatus.DISABLED);
+        }
+
+        @Test
+        void operationJobIdIsPersisted() {
+                AgentTask task = AgentTask.createForOperationJob(1L, 100L,
+                                AgentTaskType.MYSQL_LOGICAL_BACKUP,
+                                "{\"databaseName\":\"orders\"}");
+
+                AgentTask savedTask = taskRepository.save(task);
+
+                AgentTask foundTask = taskRepository.findById(savedTask.getId()).orElseThrow();
+
+                assertThat(foundTask.getAgentId()).isEqualTo(1L);
+
+                assertThat(foundTask.getOperationJobId()).isEqualTo(100L);
+
+                assertThat(foundTask.getTaskType()).isEqualTo(AgentTaskType.MYSQL_LOGICAL_BACKUP);
+
+                assertThat(foundTask.getStatus()).isEqualTo(AgentTaskStatus.QUEUED);
+        }
 }

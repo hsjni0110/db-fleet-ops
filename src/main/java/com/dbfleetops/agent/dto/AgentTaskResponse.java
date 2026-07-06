@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public record AgentTaskResponse(
         Long taskId,
         Long agentId,
+        Long operationJobId,
         AgentTaskType taskType,
         AgentTaskStatus status,
         String parametersJson,
@@ -25,6 +26,7 @@ public record AgentTaskResponse(
         return new AgentTaskResponse(
                 task.getId(),
                 task.getAgentId(),
+                task.getOperationJobId(),
                 task.getTaskType(),
                 task.getStatus(),
                 task.getParametersJson(),
