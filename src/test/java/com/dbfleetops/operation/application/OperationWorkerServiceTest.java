@@ -1,5 +1,6 @@
 package com.dbfleetops.operation.application;
 
+import com.dbfleetops.agent.application.AgentTaskService;
 import com.dbfleetops.audit.port.AuditRecorderPort;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
@@ -25,397 +26,239 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.nullable;
 
 @ExtendWith(MockitoExtension.class)
 class OperationWorkerServiceTest {
 
-    @Mock
-    private OperationJobRepository jobRepository;
+        @Mock
+        private OperationJobRepository jobRepository;
 
-    @Mock
-    private AuditRecorderPort auditRecorderPort;
+        @Mock
+        private AuditRecorderPort auditRecorderPort;
 
-    @Test
-    void claimJobReturnsEmptyWhenNoQueuedJobExists() {
-        when(jobRepository
-                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
-                        eq(JobStatus.QUEUED),
-                        any(LocalDateTime.class)
-                ))
-                .thenReturn(List.of());
+        @Mock
+        private AgentTaskService agentTaskService;
 
-        OperationWorkerService service =
-                new OperationWorkerService(
-                    jobRepository,
-                    auditRecorderPort
+        @Test
+        void claimJobReturnsEmptyWhenNoQueuedJobExists() {
+                when(jobRepository
+                                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
+                                                eq(JobStatus.QUEUED), any(LocalDateTime.class)))
+                                                                .thenReturn(List.of());
+
+                OperationWorkerService service = new OperationWorkerService(jobRepository,
+                                auditRecorderPort, agentTaskService);
+
+                ClaimJobResponse response = service.claimJob("worker-1");
+
+                assertThat(response.claimed()).isFalse();
+
+                assertThat(response.jobId()).isNull();
+        }
+
+        @Test
+        void claimJobChangesQueuedJobToRunningAndSetsLease() {
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                when(jobRepository
+                                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
+                                                eq(JobStatus.QUEUED), any(LocalDateTime.class)))
+                                                                .thenReturn(List.of(job));
+
+                OperationWorkerService service = new OperationWorkerService(jobRepository,
+                                auditRecorderPort, agentTaskService);
+
+                ClaimJobResponse response = service.claimJob("worker-1");
+
+                assertThat(response.claimed()).isTrue();
+
+                assertThat(response.jobType()).isEqualTo(JobType.BACKUP);
+
+                assertThat(response.status()).isEqualTo(JobStatus.RUNNING);
+
+                assertThat(response.targetDatabaseId()).isEqualTo(1L);
+
+                assertThat(response.leaseOwner()).isEqualTo("worker-1");
+
+                assertThat(response.leaseUntil()).isNotNull();
+
+                assertThat(job.getStatus()).isEqualTo(JobStatus.RUNNING);
+
+                assertThat(job.getLeaseOwner()).isEqualTo("worker-1");
+
+                assertThat(job.getLeaseUntil()).isNotNull();
+
+                verify(auditRecorderPort).record(eq("worker-1"), eq("JOB_CLAIMED"),
+                                eq("OPERATION_JOB"), any(), eq("SUCCESS"), contains("Job claimed"));
+        }
+
+        @Test
+        void succeedJobChangesRunningJobToSucceeded() {
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", LocalDateTime.now().plusSeconds(60));
+
+                when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
+
+                OperationWorkerService service = new OperationWorkerService(jobRepository,
+                                auditRecorderPort, agentTaskService);
+
+                OperationJobResponse response = service.succeedJob("worker-1", 1L,
+                                new SucceedJobRequest("backup completed"));
+
+                assertThat(response.status()).isEqualTo(JobStatus.SUCCEEDED);
+
+                assertThat(response.resultCode()).isEqualTo("SUCCESS");
+
+                assertThat(response.resultMessage()).isEqualTo("backup completed");
+
+                assertThat(job.getStatus()).isEqualTo(JobStatus.SUCCEEDED);
+
+                verify(auditRecorderPort).record(eq("worker-1"), eq("JOB_SUCCEEDED"),
+                                eq("OPERATION_JOB"), any(), eq("SUCCESS"), eq("backup completed"));
+        }
+
+        @Test
+        void failJobChangesRunningJobToFailed() {
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", LocalDateTime.now().plusSeconds(60));
+
+                when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
+
+                OperationWorkerService service = new OperationWorkerService(jobRepository,
+                                auditRecorderPort, agentTaskService);
+
+                OperationJobResponse response = service.failJob("worker-1", 1L,
+                                new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false));
+
+                assertThat(response.status()).isEqualTo(JobStatus.FAILED);
+
+                assertThat(response.resultCode()).isEqualTo("BACKUP_FAILED");
+
+                assertThat(response.resultMessage()).isEqualTo("mysqldump failed");
+
+                assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
+
+                verify(auditRecorderPort).record(eq("worker-1"), eq("JOB_FAILED"),
+                                eq("OPERATION_JOB"), any(), eq("FAILED"), eq("mysqldump failed"));
+        }
+
+        @Test
+        void succeedJobThrowsExceptionWhenWorkerDoesNotOwnJob() {
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", LocalDateTime.now().plusSeconds(60));
+
+                when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
+
+                OperationWorkerService service = new OperationWorkerService(jobRepository,
+                                auditRecorderPort, agentTaskService);
+
+                assertThrows(IllegalStateException.class, () -> service.succeedJob("worker-2", 1L,
+                                new SucceedJobRequest("backup completed")));
+        }
+
+        @Test
+        void failJobThrowsExceptionWhenJobIsNotRunning() {
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
+
+                OperationWorkerService service = new OperationWorkerService(jobRepository,
+                                auditRecorderPort, agentTaskService);
+
+                assertThrows(IllegalStateException.class, () -> service.failJob("worker-1", 1L,
+                                new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false)));
+        }
+
+        @Test
+        void failJobKeepsFailedWhenRetryableIsFalse() {
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", LocalDateTime.now().plusSeconds(60));
+
+                when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
+
+                OperationWorkerService service = new OperationWorkerService(jobRepository,
+                                auditRecorderPort, agentTaskService);
+
+                OperationJobResponse response = service.failJob("worker-1", 1L,
+                                new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false));
+
+                assertThat(response.status()).isEqualTo(JobStatus.FAILED);
+
+                assertThat(response.retryCount()).isZero();
+
+                assertThat(response.resultCode()).isEqualTo("BACKUP_FAILED");
+        }
+
+        @Test
+        void failJobRetriesWhenRetryableIsTrue() {
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", LocalDateTime.now().plusSeconds(60));
+
+                when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
+
+                OperationWorkerService service = new OperationWorkerService(jobRepository,
+                                auditRecorderPort, agentTaskService
+
                 );
 
-        ClaimJobResponse response =
-                service.claimJob("worker-1");
+                OperationJobResponse response = service.failJob("worker-1", 1L,
+                                new FailJobRequest("BACKUP_FAILED", "temporary error", true));
 
-        assertThat(response.claimed())
-                .isFalse();
+                assertThat(response.status()).isEqualTo(JobStatus.QUEUED);
 
-        assertThat(response.jobId())
-                .isNull();
-    }
+                assertThat(response.retryCount()).isEqualTo(1);
 
-    @Test
-    void claimJobChangesQueuedJobToRunningAndSetsLease() {
-        OperationJob job =
-                OperationJob.create(
-                        JobType.BACKUP,
-                        1L,
-                        "local-user",
-                        "idem-001"
-                );
+                assertThat(response.availableAt()).isNotNull();
 
-        when(jobRepository
-                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
-                        eq(JobStatus.QUEUED),
-                        any(LocalDateTime.class)
-                ))
-                .thenReturn(List.of(job));
+                assertThat(response.leaseOwner()).isNull();
 
-        OperationWorkerService service =
-                new OperationWorkerService(
-                    jobRepository,
-                    auditRecorderPort
-                );
+                assertThat(response.leaseUntil()).isNull();
 
-        ClaimJobResponse response =
-                service.claimJob("worker-1");
+                verify(auditRecorderPort).record(eq("worker-1"), eq("JOB_FAILED"),
+                                eq("OPERATION_JOB"), any(), eq("FAILED"), eq("temporary error"));
 
-        assertThat(response.claimed())
-                .isTrue();
+                verify(auditRecorderPort).record(eq("worker-1"), eq("JOB_RETRIED"),
+                                eq("OPERATION_JOB"), any(), eq("SUCCESS"),
+                                contains("retryCount=1"));
+        }
 
-        assertThat(response.jobType())
-                .isEqualTo(JobType.BACKUP);
+        @Test
+        void claimBackupJobCreatesAgentTask() {
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
 
-        assertThat(response.status())
-                .isEqualTo(JobStatus.RUNNING);
+                when(jobRepository
+                                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
+                                                eq(JobStatus.QUEUED), any(LocalDateTime.class)))
+                                                                .thenReturn(List.of(job));
 
-        assertThat(response.targetDatabaseId())
-                .isEqualTo(1L);
+                OperationWorkerService service = new OperationWorkerService(jobRepository,
+                                auditRecorderPort, agentTaskService);
 
-        assertThat(response.leaseOwner())
-                .isEqualTo("worker-1");
+                ClaimJobResponse response = service.claimJob("worker-1");
 
-        assertThat(response.leaseUntil())
-                .isNotNull();
+                assertThat(response.claimed()).isTrue();
 
-        assertThat(job.getStatus())
-                .isEqualTo(JobStatus.RUNNING);
+                assertThat(response.status()).isEqualTo(JobStatus.RUNNING);
 
-        assertThat(job.getLeaseOwner())
-                .isEqualTo("worker-1");
+                verify(agentTaskService).createBackupTaskForOperationJob(nullable(Long.class),
+                                eq(1L));
 
-        assertThat(job.getLeaseUntil())
-                .isNotNull();
-        
-        verify(auditRecorderPort)
-            .record(
-                eq("worker-1"),
-                eq("JOB_CLAIMED"),
-                eq("OPERATION_JOB"),
-                any(),
-                eq("SUCCESS"),
-                contains("Job claimed")
-            );
-    }
-
-    @Test
-    void succeedJobChangesRunningJobToSucceeded() {
-        OperationJob job =
-                OperationJob.create(
-                        JobType.BACKUP,
-                        1L,
-                        "local-user",
-                        "idem-001"
-                );
-
-        job.start(
-                "worker-1",
-                LocalDateTime.now().plusSeconds(60)
-        );
-
-        when(jobRepository.findById(1L))
-                .thenReturn(Optional.of(job));
-
-        OperationWorkerService service =
-                new OperationWorkerService(
-                    jobRepository,
-                    auditRecorderPort
-                );
-
-        OperationJobResponse response =
-                service.succeedJob(
-                        "worker-1",
-                        1L,
-                        new SucceedJobRequest("backup completed")
-                );
-
-        assertThat(response.status())
-                .isEqualTo(JobStatus.SUCCEEDED);
-
-        assertThat(response.resultCode())
-                .isEqualTo("SUCCESS");
-
-        assertThat(response.resultMessage())
-                .isEqualTo("backup completed");
-
-        assertThat(job.getStatus())
-                .isEqualTo(JobStatus.SUCCEEDED);
-        
-        verify(auditRecorderPort)
-                .record(
-                        eq("worker-1"),
-                        eq("JOB_SUCCEEDED"),
-                        eq("OPERATION_JOB"),
-                        any(),
-                        eq("SUCCESS"),
-                        eq("backup completed")
-                );
-    }
-
-    @Test
-    void failJobChangesRunningJobToFailed() {
-        OperationJob job =
-                OperationJob.create(
-                        JobType.BACKUP,
-                        1L,
-                        "local-user",
-                        "idem-001"
-                );
-
-        job.start(
-                "worker-1",
-                LocalDateTime.now().plusSeconds(60)
-        );
-
-        when(jobRepository.findById(1L))
-                .thenReturn(Optional.of(job));
-
-        OperationWorkerService service =
-                new OperationWorkerService(
-                    jobRepository,
-                    auditRecorderPort
-                );
-
-        OperationJobResponse response =
-                service.failJob(
-                        "worker-1",
-                        1L,
-                        new FailJobRequest(
-                                "BACKUP_FAILED",
-                                "mysqldump failed",
-                                false
-                        )
-                );
-
-        assertThat(response.status())
-                .isEqualTo(JobStatus.FAILED);
-
-        assertThat(response.resultCode())
-                .isEqualTo("BACKUP_FAILED");
-
-        assertThat(response.resultMessage())
-                .isEqualTo("mysqldump failed");
-
-        assertThat(job.getStatus())
-                .isEqualTo(JobStatus.FAILED);
-        
-        verify(auditRecorderPort)
-            .record(
-                eq("worker-1"),
-                eq("JOB_FAILED"),
-                eq("OPERATION_JOB"),
-                any(),
-                eq("FAILED"),
-                eq("mysqldump failed")
-            );
-    }
-
-    @Test
-    void succeedJobThrowsExceptionWhenWorkerDoesNotOwnJob() {
-        OperationJob job =
-                OperationJob.create(
-                        JobType.BACKUP,
-                        1L,
-                        "local-user",
-                        "idem-001"
-                );
-
-        job.start(
-                "worker-1",
-                LocalDateTime.now().plusSeconds(60)
-        );
-
-        when(jobRepository.findById(1L))
-                .thenReturn(Optional.of(job));
-
-        OperationWorkerService service =
-                new OperationWorkerService(
-                    jobRepository,
-                    auditRecorderPort
-                );
-
-        assertThrows(
-                IllegalStateException.class,
-                () -> service.succeedJob(
-                        "worker-2",
-                        1L,
-                        new SucceedJobRequest("backup completed")
-                )
-        );
-    }
-
-    @Test
-    void failJobThrowsExceptionWhenJobIsNotRunning() {
-        OperationJob job =
-                OperationJob.create(
-                        JobType.BACKUP,
-                        1L,
-                        "local-user",
-                        "idem-001"
-                );
-
-        when(jobRepository.findById(1L))
-                .thenReturn(Optional.of(job));
-
-        OperationWorkerService service =
-                new OperationWorkerService(
-                    jobRepository,
-                    auditRecorderPort
-                );
-
-        assertThrows(
-                IllegalStateException.class,
-                () -> service.failJob(
-                        "worker-1",
-                        1L,
-                        new FailJobRequest(
-                                "BACKUP_FAILED",
-                                "mysqldump failed",
-                                false
-                        )
-                )
-        );
-    }
-
-    @Test
-    void failJobKeepsFailedWhenRetryableIsFalse() {
-        OperationJob job =
-                OperationJob.create(
-                        JobType.BACKUP,
-                        1L,
-                        "local-user",
-                        "idem-001"
-                );
-
-        job.start(
-                "worker-1",
-                LocalDateTime.now().plusSeconds(60)
-        );
-
-        when(jobRepository.findById(1L))
-                .thenReturn(Optional.of(job));
-
-        OperationWorkerService service =
-                new OperationWorkerService(
-                    jobRepository,
-                    auditRecorderPort
-                );
-
-        OperationJobResponse response =
-                service.failJob(
-                        "worker-1",
-                        1L,
-                        new FailJobRequest(
-                                "BACKUP_FAILED",
-                                "mysqldump failed",
-                                false
-                        )
-                );
-
-        assertThat(response.status())
-                .isEqualTo(JobStatus.FAILED);
-
-        assertThat(response.retryCount())
-                .isZero();
-
-        assertThat(response.resultCode())
-                .isEqualTo("BACKUP_FAILED");
-    }
-
-    @Test
-    void failJobRetriesWhenRetryableIsTrue() {
-        OperationJob job =
-                OperationJob.create(
-                        JobType.BACKUP,
-                        1L,
-                        "local-user",
-                        "idem-001"
-                );
-
-        job.start(
-                "worker-1",
-                LocalDateTime.now().plusSeconds(60)
-        );
-
-        when(jobRepository.findById(1L))
-                .thenReturn(Optional.of(job));
-
-        OperationWorkerService service =
-                new OperationWorkerService(
-                        jobRepository,
-                        auditRecorderPort
-                );
-
-        OperationJobResponse response =
-                service.failJob(
-                        "worker-1",
-                        1L,
-                        new FailJobRequest(
-                                "BACKUP_FAILED",
-                                "temporary error",
-                                true
-                        )
-                );
-
-        assertThat(response.status())
-                .isEqualTo(JobStatus.QUEUED);
-
-        assertThat(response.retryCount())
-                .isEqualTo(1);
-
-        assertThat(response.availableAt())
-                .isNotNull();
-
-        assertThat(response.leaseOwner())
-                .isNull();
-
-        assertThat(response.leaseUntil())
-                .isNull();
-
-        verify(auditRecorderPort)
-                .record(
-                        eq("worker-1"),
-                        eq("JOB_FAILED"),
-                        eq("OPERATION_JOB"),
-                        any(),
-                        eq("FAILED"),
-                        eq("temporary error")
-                );
-
-        verify(auditRecorderPort)
-                .record(
-                        eq("worker-1"),
-                        eq("JOB_RETRIED"),
-                        eq("OPERATION_JOB"),
-                        any(),
-                        eq("SUCCESS"),
-                        contains("retryCount=1")
-                );
-    }
+                verify(auditRecorderPort).record(eq("worker-1"), eq("AGENT_TASK_CREATED"),
+                                eq("OPERATION_JOB"), nullable(String.class), eq("SUCCESS"),
+                                contains("Backup agent task created"));
+        }
 }
