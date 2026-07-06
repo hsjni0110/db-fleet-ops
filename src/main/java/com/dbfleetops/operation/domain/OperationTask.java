@@ -1,19 +1,12 @@
-package com.dbfleetops.agent.domain;
+package com.dbfleetops.operation.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "agent_task")
-public class AgentTask {
+@Table(name = "operation_task")
+public class OperationTask {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,10 +17,10 @@ public class AgentTask {
     private Long operationJobId;
 
     @Enumerated(EnumType.STRING)
-    private AgentTaskType taskType;
+    private OperationTaskType taskType;
 
     @Enumerated(EnumType.STRING)
-    private AgentTaskStatus status;
+    private OperationTaskStatus status;
 
     @Column(length = 2000)
     private String parametersJson;
@@ -48,74 +41,61 @@ public class AgentTask {
 
     private LocalDateTime updatedAt;
 
-    protected AgentTask() {}
+    protected OperationTask() {}
 
-    private AgentTask(Long agentId, Long operationJobId, AgentTaskType taskType,
+    private OperationTask(Long agentId, Long operationJobId, OperationTaskType taskType,
             String parametersJson) {
         this.agentId = agentId;
         this.operationJobId = operationJobId;
         this.taskType = taskType;
         this.parametersJson = parametersJson;
-        this.status = AgentTaskStatus.QUEUED;
+        this.status = OperationTaskStatus.QUEUED;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
 
-    public static AgentTask create(Long agentId, AgentTaskType taskType, String parametersJson) {
-        return new AgentTask(agentId, null, taskType, parametersJson);
+    public static OperationTask create(Long agentId, OperationTaskType taskType,
+            String parametersJson) {
+        return new OperationTask(agentId, null, taskType, parametersJson);
     }
 
-    public static AgentTask createForOperationJob(Long agentId, Long operationJobId,
-            AgentTaskType taskType, String parametersJson) {
-        return new AgentTask(agentId, operationJobId, taskType, parametersJson);
+    public static OperationTask createForJob(Long agentId, Long operationJobId,
+            OperationTaskType taskType, String parametersJson) {
+        return new OperationTask(agentId, operationJobId, taskType, parametersJson);
     }
 
     public void start() {
-        if (status != AgentTaskStatus.QUEUED) {
+        if (status != OperationTaskStatus.QUEUED) {
             throw new IllegalStateException(
                     "Only QUEUED task can be started. currentStatus=" + status);
         }
 
-        this.status = AgentTaskStatus.RUNNING;
+        this.status = OperationTaskStatus.RUNNING;
         this.startedAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
 
     public void complete(String resultPayloadJson) {
-        if (status != AgentTaskStatus.RUNNING) {
+        if (status != OperationTaskStatus.RUNNING) {
             throw new IllegalStateException(
                     "Only RUNNING task can be completed. currentStatus=" + status);
         }
 
-        this.status = AgentTaskStatus.SUCCEEDED;
+        this.status = OperationTaskStatus.SUCCEEDED;
         this.resultPayloadJson = resultPayloadJson;
         this.completedAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
 
     public void fail(String errorCode, String errorMessage) {
-        if (status != AgentTaskStatus.RUNNING) {
+        if (status != OperationTaskStatus.RUNNING) {
             throw new IllegalStateException(
                     "Only RUNNING task can be failed. currentStatus=" + status);
         }
 
-        this.status = AgentTaskStatus.FAILED;
+        this.status = OperationTaskStatus.FAILED;
         this.errorCode = errorCode;
         this.errorMessage = errorMessage;
-        this.completedAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    public void cancel() {
-        if (status == AgentTaskStatus.SUCCEEDED) {
-            throw new IllegalStateException("SUCCEEDED task cannot be cancelled.");
-        }
-
-        if (status == AgentTaskStatus.FAILED) {
-            throw new IllegalStateException("FAILED task cannot be cancelled.");
-        }
-
-        this.status = AgentTaskStatus.CANCELLED;
         this.completedAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
@@ -132,11 +112,11 @@ public class AgentTask {
         return operationJobId;
     }
 
-    public AgentTaskType getTaskType() {
+    public OperationTaskType getTaskType() {
         return taskType;
     }
 
-    public AgentTaskStatus getStatus() {
+    public OperationTaskStatus getStatus() {
         return status;
     }
 

@@ -1,6 +1,5 @@
 package com.dbfleetops.operation.application;
 
-import com.dbfleetops.agent.application.AgentTaskService;
 import com.dbfleetops.audit.port.AuditRecorderPort;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
@@ -26,7 +25,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.nullable;
 
 @ExtendWith(MockitoExtension.class)
 class OperationWorkerServiceTest {
@@ -37,9 +35,6 @@ class OperationWorkerServiceTest {
         @Mock
         private AuditRecorderPort auditRecorderPort;
 
-        @Mock
-        private AgentTaskService agentTaskService;
-
         @Test
         void claimJobReturnsEmptyWhenNoQueuedJobExists() {
                 when(jobRepository
@@ -47,8 +42,8 @@ class OperationWorkerServiceTest {
                                                 eq(JobStatus.QUEUED), any(LocalDateTime.class)))
                                                                 .thenReturn(List.of());
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, agentTaskService);
+                OperationWorkerService service =
+                                new OperationWorkerService(jobRepository, auditRecorderPort);
 
                 ClaimJobResponse response = service.claimJob("worker-1");
 
@@ -67,8 +62,8 @@ class OperationWorkerServiceTest {
                                                 eq(JobStatus.QUEUED), any(LocalDateTime.class)))
                                                                 .thenReturn(List.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, agentTaskService);
+                OperationWorkerService service =
+                                new OperationWorkerService(jobRepository, auditRecorderPort);
 
                 ClaimJobResponse response = service.claimJob("worker-1");
 
@@ -103,8 +98,8 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, agentTaskService);
+                OperationWorkerService service =
+                                new OperationWorkerService(jobRepository, auditRecorderPort);
 
                 OperationJobResponse response = service.succeedJob("worker-1", 1L,
                                 new SucceedJobRequest("backup completed"));
@@ -130,8 +125,8 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, agentTaskService);
+                OperationWorkerService service =
+                                new OperationWorkerService(jobRepository, auditRecorderPort);
 
                 OperationJobResponse response = service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false));
@@ -157,8 +152,8 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, agentTaskService);
+                OperationWorkerService service =
+                                new OperationWorkerService(jobRepository, auditRecorderPort);
 
                 assertThrows(IllegalStateException.class, () -> service.succeedJob("worker-2", 1L,
                                 new SucceedJobRequest("backup completed")));
@@ -171,8 +166,8 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, agentTaskService);
+                OperationWorkerService service =
+                                new OperationWorkerService(jobRepository, auditRecorderPort);
 
                 assertThrows(IllegalStateException.class, () -> service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false)));
@@ -187,8 +182,8 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, agentTaskService);
+                OperationWorkerService service =
+                                new OperationWorkerService(jobRepository, auditRecorderPort);
 
                 OperationJobResponse response = service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false));
@@ -209,10 +204,8 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, agentTaskService
-
-                );
+                OperationWorkerService service =
+                                new OperationWorkerService(jobRepository, auditRecorderPort);
 
                 OperationJobResponse response = service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "temporary error", true));
@@ -233,32 +226,5 @@ class OperationWorkerServiceTest {
                 verify(auditRecorderPort).record(eq("worker-1"), eq("JOB_RETRIED"),
                                 eq("OPERATION_JOB"), any(), eq("SUCCESS"),
                                 contains("retryCount=1"));
-        }
-
-        @Test
-        void claimBackupJobCreatesAgentTask() {
-                OperationJob job =
-                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
-
-                when(jobRepository
-                                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
-                                                eq(JobStatus.QUEUED), any(LocalDateTime.class)))
-                                                                .thenReturn(List.of(job));
-
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, agentTaskService);
-
-                ClaimJobResponse response = service.claimJob("worker-1");
-
-                assertThat(response.claimed()).isTrue();
-
-                assertThat(response.status()).isEqualTo(JobStatus.RUNNING);
-
-                verify(agentTaskService).createBackupTaskForOperationJob(nullable(Long.class),
-                                eq(1L));
-
-                verify(auditRecorderPort).record(eq("worker-1"), eq("AGENT_TASK_CREATED"),
-                                eq("OPERATION_JOB"), nullable(String.class), eq("SUCCESS"),
-                                contains("Backup agent task created"));
         }
 }

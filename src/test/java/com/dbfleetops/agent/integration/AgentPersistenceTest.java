@@ -2,11 +2,7 @@ package com.dbfleetops.agent.integration;
 
 import com.dbfleetops.agent.domain.Agent;
 import com.dbfleetops.agent.domain.AgentStatus;
-import com.dbfleetops.agent.domain.AgentTask;
-import com.dbfleetops.agent.domain.AgentTaskStatus;
-import com.dbfleetops.agent.domain.AgentTaskType;
 import com.dbfleetops.agent.infra.AgentRepository;
-import com.dbfleetops.agent.infra.AgentTaskRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -21,8 +17,6 @@ class AgentPersistenceTest {
         @Autowired
         private AgentRepository agentRepository;
 
-        @Autowired
-        private AgentTaskRepository taskRepository;
 
         @Test
         void saveAndFindAgent() {
@@ -84,24 +78,5 @@ class AgentPersistenceTest {
                 Agent foundAgent = agentRepository.findById(savedAgent.getId()).orElseThrow();
 
                 assertThat(foundAgent.getStatus()).isEqualTo(AgentStatus.DISABLED);
-        }
-
-        @Test
-        void operationJobIdIsPersisted() {
-                AgentTask task = AgentTask.createForOperationJob(1L, 100L,
-                                AgentTaskType.MYSQL_LOGICAL_BACKUP,
-                                "{\"databaseName\":\"orders\"}");
-
-                AgentTask savedTask = taskRepository.save(task);
-
-                AgentTask foundTask = taskRepository.findById(savedTask.getId()).orElseThrow();
-
-                assertThat(foundTask.getAgentId()).isEqualTo(1L);
-
-                assertThat(foundTask.getOperationJobId()).isEqualTo(100L);
-
-                assertThat(foundTask.getTaskType()).isEqualTo(AgentTaskType.MYSQL_LOGICAL_BACKUP);
-
-                assertThat(foundTask.getStatus()).isEqualTo(AgentTaskStatus.QUEUED);
         }
 }

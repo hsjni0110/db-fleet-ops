@@ -1,10 +1,7 @@
 package com.dbfleetops.operation.application;
 
-import com.dbfleetops.agent.application.AgentTaskService;
-import com.dbfleetops.agent.domain.AgentTask;
 import com.dbfleetops.audit.port.AuditRecorderPort;
 import com.dbfleetops.operation.domain.JobStatus;
-import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.dto.ClaimJobResponse;
 import com.dbfleetops.operation.dto.FailJobRequest;
@@ -16,52 +13,40 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
 
 @Service
 public class OperationWorkerService {
 
         private static final long LEASE_SECONDS = 60L;
+        private static final long RETRY_DELAY_SECONDS = 30L;
 
         private final OperationJobRepository jobRepository;
         private final AuditRecorderPort auditRecorderPort;
-        private final AgentTaskService agentTaskService;
 
         public OperationWorkerService(OperationJobRepository jobRepository,
-                        AuditRecorderPort auditRecorderPort, AgentTaskService agentTaskService) {
+                        AuditRecorderPort auditRecorderPort) {
                 this.jobRepository = jobRepository;
                 this.auditRecorderPort = auditRecorderPort;
-                this.agentTaskService = agentTaskService;
         }
 
         @Transactional
         public ClaimJobResponse claimJob(String workerId) {
-                LocalDateTime now = LocalDateTime.now();
-
-                List<OperationJob> candidates = jobRepository
+                List<OperationJob> jobs = jobRepository
                                 .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
-                                                JobStatus.QUEUED, now);
+                                                JobStatus.QUEUED, LocalDateTime.now());
 
-                if (candidates.isEmpty()) {
+                if (jobs.isEmpty()) {
                         return ClaimJobResponse.empty();
                 }
 
-                OperationJob job = candidates.getFirst();
+                OperationJob job = jobs.getFirst();
 
-                job.start(workerId, now.plusSeconds(LEASE_SECONDS));
+                job.start(workerId, LocalDateTime.now().plusSeconds(LEASE_SECONDS));
 
                 auditRecorderPort.record(workerId, "JOB_CLAIMED", "OPERATION_JOB",
                                 String.valueOf(job.getId()), "SUCCESS",
                                 "Job claimed by worker. leaseUntil=" + job.getLeaseUntil());
 
-                if (job.getJobType() == JobType.BACKUP) {
-                        agentTaskService.createBackupTaskForOperationJob(job.getId(),
-                                        job.getTargetDatabaseId());
-
-                        auditRecorderPort.record(workerId, "AGENT_TASK_CREATED", "OPERATION_JOB",
-                                        String.valueOf(job.getId()), "SUCCESS",
-                                        "Backup agent task created.");
-                }
                 return ClaimJobResponse.claimed(job);
         }
 
@@ -88,7 +73,7 @@ public class OperationWorkerService {
                                 String.valueOf(job.getId()), "FAILED", request.resultMessage());
 
                 if (request.retryable() && job.getRetryCount() < job.getMaxRetryCount()) {
-                        job.retry(LocalDateTime.now().plusSeconds(30));
+                        job.retry(LocalDateTime.now().plusSeconds(RETRY_DELAY_SECONDS));
 
                         auditRecorderPort.record(workerId, "JOB_RETRIED", "OPERATION_JOB",
                                         String.valueOf(job.getId()), "SUCCESS",
@@ -104,17 +89,16 @@ public class OperationWorkerService {
                                                 "Operation job not found. jobId=" + jobId));
 
                 if (job.getStatus() != JobStatus.RUNNING) {
-                        throw new IllegalStateException(
-                                        "Only RUNNING job can be completed. currentStatus="
-                                                        + job.getStatus());
+                        throw new IllegalStateException("Job is not running. jobId=" + jobId
+                                        + ", status=" + job.getStatus());
                 }
 
-                if (!Objects.equals(job.getLeaseOwner(), workerId)) {
-                        throw new IllegalStateException("Worker does not own this job. workerId="
-                                        + workerId + ", leaseOwner=" + job.getLeaseOwner());
+                if (!workerId.equals(job.getLeaseOwner())) {
+                        throw new IllegalStateException("Job is not owned by worker. jobId=" + jobId
+                                        + ", workerId=" + workerId + ", leaseOwner="
+                                        + job.getLeaseOwner());
                 }
 
                 return job;
         }
 }
-

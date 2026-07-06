@@ -1,18 +1,18 @@
-package com.dbfleetops.agent.application;
+package com.dbfleetops.operation.application;
 
 import com.dbfleetops.agent.domain.Agent;
 import com.dbfleetops.agent.domain.AgentStatus;
-import com.dbfleetops.agent.domain.AgentTask;
-import com.dbfleetops.agent.domain.AgentTaskStatus;
-import com.dbfleetops.agent.domain.AgentTaskType;
-import com.dbfleetops.agent.dto.AgentTaskResponse;
-import com.dbfleetops.agent.dto.CompleteAgentTaskRequest;
-import com.dbfleetops.agent.dto.CreateAgentTaskRequest;
-import com.dbfleetops.agent.dto.FailAgentTaskRequest;
-import com.dbfleetops.agent.dto.NextAgentTaskResponse;
-import com.dbfleetops.agent.dto.StartAgentTaskRequest;
 import com.dbfleetops.agent.infra.AgentRepository;
-import com.dbfleetops.agent.infra.AgentTaskRepository;
+import com.dbfleetops.operation.domain.OperationTask;
+import com.dbfleetops.operation.domain.OperationTaskStatus;
+import com.dbfleetops.operation.domain.OperationTaskType;
+import com.dbfleetops.operation.dto.CompleteOperationTaskRequest;
+import com.dbfleetops.operation.dto.CreateOperationTaskRequest;
+import com.dbfleetops.operation.dto.FailOperationTaskRequest;
+import com.dbfleetops.operation.dto.NextOperationTaskResponse;
+import com.dbfleetops.operation.dto.OperationTaskResponse;
+import com.dbfleetops.operation.dto.StartOperationTaskRequest;
+import com.dbfleetops.operation.infra.OperationTaskRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -27,13 +27,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class AgentTaskServiceTest {
+class OperationTaskServiceTest {
 
         @Mock
         private AgentRepository agentRepository;
 
         @Mock
-        private AgentTaskRepository taskRepository;
+        private OperationTaskRepository taskRepository;
 
         @Test
         void createTaskCreatesQueuedTask() {
@@ -41,62 +41,68 @@ class AgentTaskServiceTest {
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
-                when(taskRepository.save(any(AgentTask.class)))
+                when(taskRepository.save(any(OperationTask.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-                AgentTaskService service = new AgentTaskService(agentRepository, taskRepository);
+                OperationTaskService service =
+                                new OperationTaskService(agentRepository, taskRepository);
 
-                var response = service.createTask(new CreateAgentTaskRequest(1L,
-                                AgentTaskType.COLLECT_LINUX_STATUS, "{}"));
+                var response = service.createTask(new CreateOperationTaskRequest(1L, null,
+                                OperationTaskType.COLLECT_LINUX_STATUS, "{}"));
 
-                assertThat(response.taskType()).isEqualTo(AgentTaskType.COLLECT_LINUX_STATUS);
+                assertThat(response.taskType()).isEqualTo(OperationTaskType.COLLECT_LINUX_STATUS);
 
-                assertThat(response.status()).isEqualTo(AgentTaskStatus.QUEUED);
+                assertThat(response.status()).isEqualTo(OperationTaskStatus.QUEUED);
         }
 
         @Test
         void nextTaskReturnsQueuedTask() {
                 Agent agent = newAgent();
 
-                AgentTask task = AgentTask.create(1L, AgentTaskType.COLLECT_LINUX_STATUS, "{}");
+                OperationTask task = OperationTask.create(1L,
+                                OperationTaskType.COLLECT_LINUX_STATUS, "{}");
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
                 when(taskRepository.findTop1ByAgentIdAndStatusOrderByCreatedAtAsc(1L,
-                                AgentTaskStatus.QUEUED)).thenReturn(List.of(task));
+                                OperationTaskStatus.QUEUED)).thenReturn(List.of(task));
 
-                AgentTaskService service = new AgentTaskService(agentRepository, taskRepository);
+                OperationTaskService service =
+                                new OperationTaskService(agentRepository, taskRepository);
 
-                NextAgentTaskResponse response = service.nextTask(1L, "agent-token-001");
+                NextOperationTaskResponse response = service.nextTask(1L, "agent-token-001");
 
                 assertThat(response.hasTask()).isTrue();
 
-                assertThat(response.taskType()).isEqualTo(AgentTaskType.COLLECT_LINUX_STATUS);
+                assertThat(response.taskType()).isEqualTo(OperationTaskType.COLLECT_LINUX_STATUS);
         }
 
         @Test
         void startTaskChangesQueuedTaskToRunning() {
                 Agent agent = newAgent();
 
-                AgentTask task = AgentTask.create(1L, AgentTaskType.COLLECT_LINUX_STATUS, "{}");
+                OperationTask task = OperationTask.create(1L,
+                                OperationTaskType.COLLECT_LINUX_STATUS, "{}");
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
                 when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
-                AgentTaskService service = new AgentTaskService(agentRepository, taskRepository);
+                OperationTaskService service =
+                                new OperationTaskService(agentRepository, taskRepository);
 
                 var response = service.startTask(1L, 10L,
-                                new StartAgentTaskRequest("agent-token-001"));
+                                new StartOperationTaskRequest("agent-token-001"));
 
-                assertThat(response.status()).isEqualTo(AgentTaskStatus.RUNNING);
+                assertThat(response.status()).isEqualTo(OperationTaskStatus.RUNNING);
         }
 
         @Test
         void completeTaskChangesRunningTaskToSucceeded() {
                 Agent agent = newAgent();
 
-                AgentTask task = AgentTask.create(1L, AgentTaskType.COLLECT_LINUX_STATUS, "{}");
+                OperationTask task = OperationTask.create(1L,
+                                OperationTaskType.COLLECT_LINUX_STATUS, "{}");
 
                 task.start();
 
@@ -104,12 +110,13 @@ class AgentTaskServiceTest {
 
                 when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
-                AgentTaskService service = new AgentTaskService(agentRepository, taskRepository);
+                OperationTaskService service =
+                                new OperationTaskService(agentRepository, taskRepository);
 
-                var response = service.completeTask(1L, 10L, new CompleteAgentTaskRequest(
+                var response = service.completeTask(1L, 10L, new CompleteOperationTaskRequest(
                                 "agent-token-001", "{\"cpuUsagePercent\":12.5}"));
 
-                assertThat(response.status()).isEqualTo(AgentTaskStatus.SUCCEEDED);
+                assertThat(response.status()).isEqualTo(OperationTaskStatus.SUCCEEDED);
 
                 assertThat(response.resultPayloadJson()).isEqualTo("{\"cpuUsagePercent\":12.5}");
         }
@@ -118,7 +125,8 @@ class AgentTaskServiceTest {
         void failTaskChangesRunningTaskToFailed() {
                 Agent agent = newAgent();
 
-                AgentTask task = AgentTask.create(1L, AgentTaskType.COLLECT_LINUX_STATUS, "{}");
+                OperationTask task = OperationTask.create(1L,
+                                OperationTaskType.COLLECT_LINUX_STATUS, "{}");
 
                 task.start();
 
@@ -126,12 +134,15 @@ class AgentTaskServiceTest {
 
                 when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
-                AgentTaskService service = new AgentTaskService(agentRepository, taskRepository);
+                OperationTaskService service =
+                                new OperationTaskService(agentRepository, taskRepository);
 
-                var response = service.failTask(1L, 10L, new FailAgentTaskRequest("agent-token-001",
-                                "LINUX_STATUS_FAILED", "failed to read /proc/stat"));
+                var response = service.failTask(1L, 10L,
+                                new FailOperationTaskRequest("agent-token-001",
+                                                "LINUX_STATUS_FAILED",
+                                                "failed to read /proc/stat"));
 
-                assertThat(response.status()).isEqualTo(AgentTaskStatus.FAILED);
+                assertThat(response.status()).isEqualTo(OperationTaskStatus.FAILED);
 
                 assertThat(response.errorCode()).isEqualTo("LINUX_STATUS_FAILED");
         }
@@ -142,7 +153,8 @@ class AgentTaskServiceTest {
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
-                AgentTaskService service = new AgentTaskService(agentRepository, taskRepository);
+                OperationTaskService service =
+                                new OperationTaskService(agentRepository, taskRepository);
 
                 assertThrows(IllegalArgumentException.class,
                                 () -> service.nextTask(1L, "wrong-token"));
@@ -161,18 +173,19 @@ class AgentTaskServiceTest {
                                 .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
                                                 .thenReturn(Optional.of(agent));
 
-                when(taskRepository.save(any(AgentTask.class)))
+                when(taskRepository.save(any(OperationTask.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-                AgentTaskService service = new AgentTaskService(agentRepository, taskRepository);
+                OperationTaskService service =
+                                new OperationTaskService(agentRepository, taskRepository);
 
-                AgentTaskResponse response = service.createBackupTaskForOperationJob(100L, 1L);
+                OperationTaskResponse response = service.createBackupTaskForOperationJob(100L, 1L);
 
                 assertThat(response.operationJobId()).isEqualTo(100L);
 
-                assertThat(response.taskType()).isEqualTo(AgentTaskType.MYSQL_LOGICAL_BACKUP);
+                assertThat(response.taskType()).isEqualTo(OperationTaskType.MYSQL_LOGICAL_BACKUP);
 
-                assertThat(response.status()).isEqualTo(AgentTaskStatus.QUEUED);
+                assertThat(response.status()).isEqualTo(OperationTaskStatus.QUEUED);
 
                 assertThat(response.parametersJson()).contains("\"operationJobId\": 100",
                                 "\"databaseId\": 1", "\"backupType\": \"LOGICAL\"");
@@ -184,7 +197,8 @@ class AgentTaskServiceTest {
                                 .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
                                                 .thenReturn(Optional.empty());
 
-                AgentTaskService service = new AgentTaskService(agentRepository, taskRepository);
+                OperationTaskService service =
+                                new OperationTaskService(agentRepository, taskRepository);
 
                 assertThrows(IllegalStateException.class,
                                 () -> service.createBackupTaskForOperationJob(100L, 1L));

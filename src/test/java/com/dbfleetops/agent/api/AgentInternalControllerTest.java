@@ -1,12 +1,10 @@
 package com.dbfleetops.agent.api;
 
 import com.dbfleetops.agent.application.AgentService;
-import com.dbfleetops.agent.application.AgentTaskService;
 import com.dbfleetops.agent.domain.AgentStatus;
-import com.dbfleetops.agent.domain.AgentTaskType;
 import com.dbfleetops.agent.dto.AgentHeartbeatResponse;
-import com.dbfleetops.agent.dto.NextAgentTaskResponse;
 import com.dbfleetops.agent.dto.RegisterAgentResponse;
+import com.dbfleetops.operation.application.OperationTaskService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -19,7 +17,6 @@ import java.time.LocalDateTime;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -33,7 +30,7 @@ class AgentInternalControllerTest {
         private AgentService agentService;
 
         @MockitoBean
-        private AgentTaskService agentTaskService;
+        private OperationTaskService agentTaskService;
 
         @Test
         void registerReturnsAgentIdAndToken() throws Exception {
@@ -78,18 +75,5 @@ class AgentInternalControllerTest {
                                 .andExpect(jsonPath("$.agentId").value(1))
                                 .andExpect(jsonPath("$.status").value("ONLINE"))
                                 .andExpect(jsonPath("$.lastHeartbeatAt").exists());
-        }
-
-        @Test
-        void nextTaskReturnsQueuedTask() throws Exception {
-                when(agentTaskService.nextTask(eq(1L), eq("agent-token-001")))
-                                .thenReturn(new NextAgentTaskResponse(true, 10L,
-                                                AgentTaskType.COLLECT_LINUX_STATUS, "{}"));
-
-                mockMvc.perform(get("/internal/v1/agents/1/tasks/next").param("agentToken",
-                                "agent-token-001")).andExpect(status().isOk())
-                                .andExpect(jsonPath("$.hasTask").value(true))
-                                .andExpect(jsonPath("$.taskId").value(10))
-                                .andExpect(jsonPath("$.taskType").value("COLLECT_LINUX_STATUS"));
         }
 }
