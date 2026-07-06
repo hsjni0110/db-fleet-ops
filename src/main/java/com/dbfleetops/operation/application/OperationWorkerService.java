@@ -2,6 +2,7 @@ package com.dbfleetops.operation.application;
 
 import com.dbfleetops.audit.port.AuditRecorderPort;
 import com.dbfleetops.operation.domain.JobStatus;
+import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.dto.ClaimJobResponse;
 import com.dbfleetops.operation.dto.FailJobRequest;
@@ -22,11 +23,14 @@ public class OperationWorkerService {
 
         private final OperationJobRepository jobRepository;
         private final AuditRecorderPort auditRecorderPort;
+        private final OperationTaskService operationTaskService;
 
         public OperationWorkerService(OperationJobRepository jobRepository,
-                        AuditRecorderPort auditRecorderPort) {
+                        AuditRecorderPort auditRecorderPort,
+                        OperationTaskService operationTaskService) {
                 this.jobRepository = jobRepository;
                 this.auditRecorderPort = auditRecorderPort;
+                this.operationTaskService = operationTaskService;
         }
 
         @Transactional
@@ -46,6 +50,15 @@ public class OperationWorkerService {
                 auditRecorderPort.record(workerId, "JOB_CLAIMED", "OPERATION_JOB",
                                 String.valueOf(job.getId()), "SUCCESS",
                                 "Job claimed by worker. leaseUntil=" + job.getLeaseUntil());
+
+                if (job.getJobType() == JobType.BACKUP) {
+                        operationTaskService.createBackupTaskForOperationJob(job.getId(),
+                                        job.getTargetDatabaseId());
+
+                        auditRecorderPort.record(workerId, "OPERATION_TASK_CREATED",
+                                        "OPERATION_JOB", String.valueOf(job.getId()), "SUCCESS",
+                                        "Backup operation task created.");
+                }
 
                 return ClaimJobResponse.claimed(job);
         }
