@@ -62,11 +62,11 @@ func main() {
 		log.Fatalf("failed to prepare agent identity: %v", err)
 	}
 
-	if err := service.SendHeartbeat(ctx); err != nil {
-		log.Fatalf("failed to send heartbeat: %v", err)
-	}
-
-	if err := service.PollAndHandleTask(ctx); err != nil {
-		log.Fatalf("failed to handle task: %v", err)
+	if err := service.Run(
+		ctx,
+		cfg.HeartbeatInterval(),
+		cfg.PollInterval(),
+	); err != nil {
+		log.Fatalf("agent runtime failed: %v", err)
 	}
 }

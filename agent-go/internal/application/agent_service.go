@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"log"
+	"time"
 
 	"db-fleetops-agent/internal/domain"
 	"db-fleetops-agent/internal/port"
@@ -240,5 +241,43 @@ func NewStaticAgentInfo(
 		OSName:       osName,
 		Architecture: architecture,
 		AgentVersion: agentVersion,
+	}
+}
+
+func (s *AgentService) Run(
+	ctx context.Context,
+	heartbeatInterval time.Duration,
+	pollInterval time.Duration,
+) error {
+	heartbeatTicker := time.NewTicker(heartbeatInterval)
+	pollTicker := time.NewTicker(pollInterval)
+
+	defer heartbeatTicker.Stop()
+	defer pollTicker.Stop()
+
+	if err := s.SendHeartbeat(ctx); err != nil {
+		return err
+	}
+
+	if err := s.PollAndHandleTask(ctx); err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Print("agent_runtime_stopped")
+			return nil
+
+		case <-heartbeatTicker.C:
+			if err := s.SendHeartbeat(ctx); err != nil {
+				log.Printf("heartbeat_failed error=%v", err)
+			}
+
+		case <-pollTicker.C:
+			if err := s.PollAndHandleTask(ctx); err != nil {
+				log.Printf("task_polling_failed error=%v", err)
+			}
+		}
 	}
 }

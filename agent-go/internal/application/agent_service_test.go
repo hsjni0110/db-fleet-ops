@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"testing"
+	"time"
 
 	"db-fleetops-agent/internal/domain"
 	"db-fleetops-agent/internal/port"
@@ -416,5 +417,55 @@ func TestPollAndHandleTaskDoesNothingWhenTaskIsEmpty(t *testing.T) {
 
 	if taskPort.startCalled {
 		t.Fatal("expected StartTask not to be called")
+	}
+}
+
+func TestRunStopsWhenContextIsCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	taskPort := &fakeTaskPort{
+		task: nil,
+	}
+
+	service := NewAgentService(
+		&fakeRegistrationPort{},
+		&fakeHeartbeatPort{},
+		taskPort,
+		&fakeLinuxInfoPort{
+			agentInfo: domain.AgentInfo{
+				AgentName:    "local-agent",
+				Hostname:     "localhost",
+				IPAddress:    "127.0.0.1",
+				OSName:       "Linux",
+				Architecture: "amd64",
+				AgentVersion: "0.1.0",
+			},
+		},
+		&fakeDispatcher{},
+		&fakeStateStorePort{},
+		&fakeIdentityPort{},
+	)
+
+	done := make(chan error, 1)
+
+	go func() {
+		done <- service.Run(
+			ctx,
+			10*time.Millisecond,
+			10*time.Millisecond,
+		)
+	}()
+
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+	case <-time.After(1 * time.Second):
+		t.Fatal("expected runtime loop to stop")
 	}
 }
