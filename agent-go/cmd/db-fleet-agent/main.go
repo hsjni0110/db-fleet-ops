@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"db-fleetops-agent/internal/application"
 	"db-fleetops-agent/internal/config"
@@ -13,6 +16,15 @@ import (
 )
 
 func main() {
+	ctx, stop :=
+		signal.NotifyContext(
+			context.Background(),
+			os.Interrupt,
+			syscall.SIGTERM,
+		)
+
+	defer stop()
+
 	cfg := config.Load()
 
 	controlPlaneClient :=
@@ -46,27 +58,36 @@ func main() {
 			},
 		)
 
-	service := application.NewAgentService(
-		controlPlaneClient,
-		controlPlaneClient,
-		controlPlaneClient,
-		linuxInfoCollector,
-		dispatcher,
-		stateStore,
-		controlPlaneClient,
-	)
-
-	ctx := context.Background()
+	service :=
+		application.NewAgentService(
+			controlPlaneClient,
+			controlPlaneClient,
+			controlPlaneClient,
+			linuxInfoCollector,
+			dispatcher,
+			stateStore,
+			controlPlaneClient,
+		)
 
 	if err := service.RegisterIfNeeded(ctx); err != nil {
-		log.Fatalf("failed to prepare agent identity: %v", err)
+		log.Fatalf(
+			"failed to prepare agent identity: %v",
+			err,
+		)
 	}
+
+	log.Print("agent_runtime_started")
 
 	if err := service.Run(
 		ctx,
 		cfg.HeartbeatInterval(),
 		cfg.PollInterval(),
 	); err != nil {
-		log.Fatalf("agent runtime failed: %v", err)
+		log.Fatalf(
+			"agent runtime failed: %v",
+			err,
+		)
 	}
+
+	log.Print("agent_runtime_exited")
 }
