@@ -105,6 +105,42 @@ func (f *fakeDispatcher) Dispatch(
 	return f.resultPayload, nil
 }
 
+type fakeStateStorePort struct {
+	state domain.AgentState
+	saved bool
+}
+
+func (f *fakeStateStorePort) Load(
+	ctx context.Context,
+) (domain.AgentState, error) {
+	return f.state, nil
+}
+
+func (f *fakeStateStorePort) Save(
+	ctx context.Context,
+	state domain.AgentState,
+) error {
+	f.saved = true
+	f.state = state
+
+	return nil
+}
+
+type fakeIdentityPort struct {
+	called     bool
+	agentID    int64
+	agentToken string
+}
+
+func (f *fakeIdentityPort) SetAgentIdentity(
+	agentID int64,
+	agentToken string,
+) {
+	f.called = true
+	f.agentID = agentID
+	f.agentToken = agentToken
+}
+
 func TestRegisterCollectsAgentInfoAndRegistersAgent(t *testing.T) {
 	expectedInfo := domain.AgentInfo{
 		AgentName:    "local-agent",
@@ -117,11 +153,13 @@ func TestRegisterCollectsAgentInfoAndRegistersAgent(t *testing.T) {
 
 	registrationPort := &fakeRegistrationPort{}
 	heartbeatPort := &fakeHeartbeatPort{}
+	taskPort := &fakeTaskPort{}
 	linuxInfoPort := &fakeLinuxInfoPort{
 		agentInfo: expectedInfo,
 	}
-	taskPort := &fakeTaskPort{}
 	dispatcher := &fakeDispatcher{}
+	stateStore := &fakeStateStorePort{}
+	identityPort := &fakeIdentityPort{}
 
 	service := NewAgentService(
 		registrationPort,
@@ -129,6 +167,8 @@ func TestRegisterCollectsAgentInfoAndRegistersAgent(t *testing.T) {
 		taskPort,
 		linuxInfoPort,
 		dispatcher,
+		stateStore,
+		identityPort,
 	)
 
 	err := service.Register(context.Background())
@@ -139,6 +179,117 @@ func TestRegisterCollectsAgentInfoAndRegistersAgent(t *testing.T) {
 
 	if !registrationPort.called {
 		t.Fatal("expected registration port to be called")
+	}
+}
+
+func TestRegisterIfNeededReusesExistingState(t *testing.T) {
+	registrationPort := &fakeRegistrationPort{}
+	heartbeatPort := &fakeHeartbeatPort{}
+	taskPort := &fakeTaskPort{}
+	linuxInfoPort := &fakeLinuxInfoPort{}
+	dispatcher := &fakeDispatcher{}
+	stateStore := &fakeStateStorePort{
+		state: domain.AgentState{
+			AgentID:    10,
+			AgentToken: "agent-token-existing",
+		},
+	}
+	identityPort := &fakeIdentityPort{}
+
+	service := NewAgentService(
+		registrationPort,
+		heartbeatPort,
+		taskPort,
+		linuxInfoPort,
+		dispatcher,
+		stateStore,
+		identityPort,
+	)
+
+	err := service.RegisterIfNeeded(context.Background())
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if registrationPort.called {
+		t.Fatal("expected registration port not to be called")
+	}
+
+	if !identityPort.called {
+		t.Fatal("expected identity port to be called")
+	}
+
+	if identityPort.agentID != 10 {
+		t.Fatalf("expected agentID 10, got %d", identityPort.agentID)
+	}
+
+	if identityPort.agentToken != "agent-token-existing" {
+		t.Fatalf(
+			"expected existing token, got %s",
+			identityPort.agentToken,
+		)
+	}
+}
+
+func TestRegisterIfNeededRegistersAndSavesStateWhenStateIsEmpty(t *testing.T) {
+	registrationPort := &fakeRegistrationPort{}
+	heartbeatPort := &fakeHeartbeatPort{}
+	taskPort := &fakeTaskPort{}
+	linuxInfoPort := &fakeLinuxInfoPort{
+		agentInfo: domain.AgentInfo{
+			AgentName:    "local-agent",
+			Hostname:     "localhost",
+			IPAddress:    "127.0.0.1",
+			OSName:       "Linux",
+			Architecture: "amd64",
+			AgentVersion: "0.1.0",
+		},
+	}
+	dispatcher := &fakeDispatcher{}
+	stateStore := &fakeStateStorePort{}
+	identityPort := &fakeIdentityPort{}
+
+	service := NewAgentService(
+		registrationPort,
+		heartbeatPort,
+		taskPort,
+		linuxInfoPort,
+		dispatcher,
+		stateStore,
+		identityPort,
+	)
+
+	err := service.RegisterIfNeeded(context.Background())
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if !registrationPort.called {
+		t.Fatal("expected registration port to be called")
+	}
+
+	if !stateStore.saved {
+		t.Fatal("expected state store to save state")
+	}
+
+	if stateStore.state.AgentID != 1 {
+		t.Fatalf(
+			"expected saved agentID 1, got %d",
+			stateStore.state.AgentID,
+		)
+	}
+
+	if stateStore.state.AgentToken != "agent-token-001" {
+		t.Fatalf(
+			"expected saved token agent-token-001, got %s",
+			stateStore.state.AgentToken,
+		)
+	}
+
+	if !identityPort.called {
+		t.Fatal("expected identity port to be called")
 	}
 }
 
@@ -154,11 +305,13 @@ func TestSendHeartbeatCollectsAgentInfoAndSendsHeartbeat(t *testing.T) {
 
 	registrationPort := &fakeRegistrationPort{}
 	heartbeatPort := &fakeHeartbeatPort{}
+	taskPort := &fakeTaskPort{}
 	linuxInfoPort := &fakeLinuxInfoPort{
 		agentInfo: expectedInfo,
 	}
-	taskPort := &fakeTaskPort{}
 	dispatcher := &fakeDispatcher{}
+	stateStore := &fakeStateStorePort{}
+	identityPort := &fakeIdentityPort{}
 
 	service := NewAgentService(
 		registrationPort,
@@ -166,6 +319,8 @@ func TestSendHeartbeatCollectsAgentInfoAndSendsHeartbeat(t *testing.T) {
 		taskPort,
 		linuxInfoPort,
 		dispatcher,
+		stateStore,
+		identityPort,
 	)
 
 	err := service.SendHeartbeat(context.Background())
@@ -204,6 +359,8 @@ func TestPollAndHandleTaskCompletesTask(t *testing.T) {
 		&fakeDispatcher{
 			resultPayload: "{\"cpuUsagePercent\":12.5}",
 		},
+		&fakeStateStorePort{},
+		&fakeIdentityPort{},
 	)
 
 	err := service.PollAndHandleTask(context.Background())
@@ -243,6 +400,8 @@ func TestPollAndHandleTaskDoesNothingWhenTaskIsEmpty(t *testing.T) {
 		taskPort,
 		&fakeLinuxInfoPort{},
 		&fakeDispatcher{},
+		&fakeStateStorePort{},
+		&fakeIdentityPort{},
 	)
 
 	err := service.PollAndHandleTask(context.Background())

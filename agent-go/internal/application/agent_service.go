@@ -21,6 +21,8 @@ type AgentService struct {
 	taskPort        port.TaskPort
 	linuxInfoPort   port.LinuxInfoPort
 	taskDispatcher  TaskDispatcher
+	stateStorePort port.AgentStateStorePort
+	identityPort   port.AgentIdentityPort
 }
 
 func NewAgentService(
@@ -29,6 +31,8 @@ func NewAgentService(
 	taskPort port.TaskPort,
 	linuxInfoPort port.LinuxInfoPort,
 	taskDispatcher TaskDispatcher,
+	stateStorePort port.AgentStateStorePort,
+	identityPort port.AgentIdentityPort,
 ) *AgentService {
 	return &AgentService{
 		registrationPort: registrationPort,
@@ -36,6 +40,8 @@ func NewAgentService(
 		taskPort:        taskPort,
 		linuxInfoPort:   linuxInfoPort,
 		taskDispatcher:  taskDispatcher,
+		stateStorePort:  stateStorePort,
+		identityPort:    identityPort,
 	}
 }
 
@@ -59,6 +65,70 @@ func (s *AgentService) Register(
 
 	log.Printf(
 		"agent_registered agentId=%d status=%s",
+		result.AgentID,
+		result.Status,
+	)
+
+	return nil
+}
+
+func (s *AgentService) RegisterIfNeeded(
+	ctx context.Context,
+) error {
+	state, err := s.stateStorePort.Load(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	if !state.IsEmpty() {
+		s.identityPort.SetAgentIdentity(
+			state.AgentID,
+			state.AgentToken,
+		)
+
+		log.Printf(
+			"agent_identity_loaded agentId=%d",
+			state.AgentID,
+		)
+
+		return nil
+	}
+
+	agentInfo, err := s.linuxInfoPort.CollectAgentInfo(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	result, err := s.registrationPort.RegisterAgent(
+		ctx,
+		agentInfo,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	newState := domain.AgentState{
+		AgentID:    result.AgentID,
+		AgentToken: result.AgentToken,
+	}
+
+	if err := s.stateStorePort.Save(
+		ctx,
+		newState,
+	); err != nil {
+		return err
+	}
+
+	s.identityPort.SetAgentIdentity(
+		result.AgentID,
+		result.AgentToken,
+	)
+
+	log.Printf(
+		"agent_registered_and_state_saved agentId=%d status=%s",
 		result.AgentID,
 		result.Status,
 	)

@@ -335,3 +335,11 @@ func (c *ControlPlaneClient) getJSON(
 
 	return json.NewDecoder(response.Body).Decode(responseBody)
 }
+
+func (c *ControlPlaneClient) SetAgentIdentity(
+	agentID int64,
+	agentToken string,
+) {
+	c.agentID = agentID
+	c.agentToken = agentToken
+}

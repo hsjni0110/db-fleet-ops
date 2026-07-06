@@ -4,12 +4,12 @@ import (
 	"context"
 	"log"
 
-	agenthttp "db-fleetops-agent/internal/infra/http"
-	agentlinux "db-fleetops-agent/internal/infra/linux"
-	"db-fleetops-agent/internal/task"
-
 	"db-fleetops-agent/internal/application"
 	"db-fleetops-agent/internal/config"
+	agenthttp "db-fleetops-agent/internal/infra/http"
+	agentlinux "db-fleetops-agent/internal/infra/linux"
+	agentstate "db-fleetops-agent/internal/infra/state"
+	"db-fleetops-agent/internal/task"
 )
 
 func main() {
@@ -18,6 +18,11 @@ func main() {
 	controlPlaneClient :=
 		agenthttp.NewControlPlaneClient(
 			cfg.ControlPlaneURL,
+		)
+
+	stateStore :=
+		agentstate.NewFileAgentStateStore(
+			"./agent-state.json",
 		)
 
 	linuxInfoCollector :=
@@ -47,12 +52,14 @@ func main() {
 		controlPlaneClient,
 		linuxInfoCollector,
 		dispatcher,
+		stateStore,
+		controlPlaneClient,
 	)
 
 	ctx := context.Background()
 
-	if err := service.Register(ctx); err != nil {
-		log.Fatalf("failed to register agent: %v", err)
+	if err := service.RegisterIfNeeded(ctx); err != nil {
+		log.Fatalf("failed to prepare agent identity: %v", err)
 	}
 
 	if err := service.SendHeartbeat(ctx); err != nil {
