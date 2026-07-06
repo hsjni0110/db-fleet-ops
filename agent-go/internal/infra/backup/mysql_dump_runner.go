@@ -96,28 +96,24 @@ func (r *MySQLDumpRunner) Run(
 	if commandError := command.Run(); commandError != nil {
 		return MySQLDumpResult{}, commandError
 	}
-
-	checksum, err :=
-		checksumSHA256(backupFile)
-
-	if err != nil {
-		return MySQLDumpResult{}, err
-	}
-
-	fileInfo, err :=
-		os.Stat(backupFile)
+	
+	verificationResult, err :=
+		VerifyBackupOrError(
+			ctx,
+			backupFile,
+		)
 
 	if err != nil {
 		return MySQLDumpResult{}, err
 	}
 
 	return MySQLDumpResult{
-		Status:         "CREATED",
+		Status:         "VERIFIED",
 		BackupFile:     backupFile,
-		FileSizeBytes:  fileInfo.Size(),
-		ChecksumSHA256: checksum,
+		FileSizeBytes:  verificationResult.FileSizeBytes,
+		ChecksumSHA256: verificationResult.ChecksumSHA256,
 		CreatedAt:      time.Now().Format(time.RFC3339),
-		Message:        "mysql logical backup completed",
+		Message:        verificationResult.Message,
 	}, nil
 }
 

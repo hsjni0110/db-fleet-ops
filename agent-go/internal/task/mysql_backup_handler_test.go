@@ -22,7 +22,7 @@ func (f *fakeMySQLBackupRunner) Run(
 	f.request = request
 
 	return backup.MySQLDumpResult{
-		Status:         "CREATED",
+		Status:         "VERIFIED",
 		BackupFile:     "/tmp/db-fleetops-backups/orders-20260706-120000.sql",
 		FileSizeBytes:  1024,
 		ChecksumSHA256: "checksum-001",
@@ -94,7 +94,7 @@ func TestMySQLBackupHandlerRunsBackupAndReturnsResult(t *testing.T) {
 		t.Fatal("expected password to be passed to runner")
 	}
 
-	if !strings.Contains(result, `"status":"CREATED"`) {
+	if !strings.Contains(result, `"status":"VERIFIED"`) {
 		t.Fatalf("expected CREATED status, got %s", result)
 	}
 
