@@ -8,6 +8,7 @@ import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.dto.CreateConfigurationCheckJobRequest;
 import com.dbfleetops.operation.dto.OperationJobResponse;
 import com.dbfleetops.operation.infra.OperationJobRepository;
+import com.dbfleetops.policy.application.ConfigurationApplyValidationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -25,8 +26,11 @@ class OperationJobServiceConfigurationCheckTest {
 
     private final AuditRecorderPort auditRecorderPort = mock(AuditRecorderPort.class);
 
-    private final OperationJobService service =
-            new OperationJobService(databaseRepository, jobRepository, auditRecorderPort);
+    private final ConfigurationApplyValidationService configurationApplyValidationService =
+            mock(ConfigurationApplyValidationService.class);
+
+    private final OperationJobService service = new OperationJobService(databaseRepository,
+            jobRepository, auditRecorderPort, configurationApplyValidationService);
 
     @Test
     void createConfigurationCheckJobCreatesQueuedJob() {

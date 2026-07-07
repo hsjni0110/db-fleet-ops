@@ -10,6 +10,7 @@ import com.dbfleetops.operation.dto.CreateConfigurationApplyJobRequest;
 import com.dbfleetops.operation.dto.CreateConfigurationCheckJobRequest;
 import com.dbfleetops.operation.dto.OperationJobResponse;
 import com.dbfleetops.operation.infra.OperationJobRepository;
+import com.dbfleetops.policy.application.ConfigurationApplyValidationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,12 +20,15 @@ public class OperationJobService {
         private final ManagedDatabaseRepository databaseRepository;
         private final OperationJobRepository jobRepository;
         private final AuditRecorderPort auditRecorderPort;
+        private final ConfigurationApplyValidationService applyValidationService;
 
         public OperationJobService(ManagedDatabaseRepository databaseRepository,
-                        OperationJobRepository jobRepository, AuditRecorderPort auditRecorderPort) {
+                        OperationJobRepository jobRepository, AuditRecorderPort auditRecorderPort,
+                        ConfigurationApplyValidationService applyValidationService) {
                 this.databaseRepository = databaseRepository;
                 this.jobRepository = jobRepository;
                 this.auditRecorderPort = auditRecorderPort;
+                this.applyValidationService = applyValidationService;
         }
 
         @Transactional
@@ -76,10 +80,17 @@ public class OperationJobService {
                                         .findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(
                                                         databaseId, JobType.CONFIGURATION_APPLY,
                                                         idempotencyKey)
-                                        .map(OperationJobResponse::from)
-                                        .orElseGet(() -> createAndSaveConfigurationApplyJob(
-                                                        database.getId(), idempotencyKey, request));
+                                        .map(OperationJobResponse::from).orElseGet(() -> {
+                                                applyValidationService.validate(database.getId(),
+                                                                request);
+
+                                                return createAndSaveConfigurationApplyJob(
+                                                                database.getId(), idempotencyKey,
+                                                                request);
+                                        });
                 }
+
+                applyValidationService.validate(database.getId(), request);
 
                 return createAndSaveConfigurationApplyJob(database.getId(), null, request);
         }
@@ -148,6 +159,7 @@ public class OperationJobService {
                 auditRecorderPort.record(request.requestedBy(), "JOB_CREATED", "OPERATION_JOB",
                                 String.valueOf(savedJob.getId()), "SUCCESS",
                                 "Configuration apply job created. databaseId=" + databaseId
+                                                + ", profileId=" + request.profileId()
                                                 + ", parameterCount="
                                                 + request.parameters().size());
 
@@ -171,6 +183,10 @@ public class OperationJobService {
         private void validateConfigurationApplyRequest(CreateConfigurationApplyJobRequest request) {
                 if (request == null) {
                         throw new IllegalArgumentException("request is required.");
+                }
+
+                if (request.profileId() == null) {
+                        throw new IllegalArgumentException("profileId is required.");
                 }
 
                 if (request.requestedBy() == null || request.requestedBy().isBlank()) {
@@ -222,9 +238,11 @@ public class OperationJobService {
                                 .reduce((left, right) -> left + "," + right).orElse("");
 
                 return """
-                                {"reason":"%s","requestedBy":"%s","parameters":[%s]}
-                                """.formatted(safe(request.reason()), safe(request.requestedBy()),
-                                parameterPayload).trim();
+                                {"profileId":%d,"reason":"%s","requestedBy":"%s","parameters":[%s]}
+                                """
+                                .formatted(request.profileId(), safe(request.reason()),
+                                                safe(request.requestedBy()), parameterPayload)
+                                .trim();
         }
 
         private String safe(String value) {

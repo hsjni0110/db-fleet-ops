@@ -10,6 +10,7 @@ import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.dto.CreateBackupJobRequest;
 import com.dbfleetops.operation.dto.OperationJobResponse;
 import com.dbfleetops.operation.infra.OperationJobRepository;
+import com.dbfleetops.policy.application.ConfigurationApplyValidationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -27,223 +28,126 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class OperationJobServiceTest {
 
-    @Mock
-    private ManagedDatabaseRepository databaseRepository;
+        @Mock
+        private ManagedDatabaseRepository databaseRepository;
 
-    @Mock
-    private OperationJobRepository jobRepository;
+        @Mock
+        private OperationJobRepository jobRepository;
 
-    @Mock
-    private AuditRecorderPort auditRecorderPort;
+        @Mock
+        private AuditRecorderPort auditRecorderPort;
 
-    @Test
-    void createBackupJobCreatesQueuedJob() {
-        ManagedDatabase database =
-                newDatabase();
+        @Mock
+        private ConfigurationApplyValidationService configurationApplyValidationService;
 
-        CreateBackupJobRequest request =
-                new CreateBackupJobRequest(
-                        "manual backup test",
-                        "local-user"
-                );
+        @Test
+        void createBackupJobCreatesQueuedJob() {
+                ManagedDatabase database = newDatabase();
 
-        OperationJob savedJob =
-                OperationJob.create(
-                        JobType.BACKUP,
-                        1L,
-                        "local-user",
-                        "idem-001",
-                        "{\"reason\":\"manual backup test\"}"
-                );
+                CreateBackupJobRequest request =
+                                new CreateBackupJobRequest("manual backup test", "local-user");
 
-        when(databaseRepository.findById(1L))
-                .thenReturn(Optional.of(database));
+                OperationJob savedJob = OperationJob.create(JobType.BACKUP, 1L, "local-user",
+                                "idem-001", "{\"reason\":\"manual backup test\"}");
 
-        when(jobRepository.findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(
-                1L,
-                JobType.BACKUP,
-                "idem-001"
-        )).thenReturn(Optional.empty());
+                when(databaseRepository.findById(1L)).thenReturn(Optional.of(database));
 
-        when(jobRepository.save(any(OperationJob.class)))
-                .thenReturn(savedJob);
+                when(jobRepository.findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(1L,
+                                JobType.BACKUP, "idem-001")).thenReturn(Optional.empty());
 
-        OperationJobService service =
-                new OperationJobService(
-                        databaseRepository,
-                        jobRepository,
-                        auditRecorderPort
-                );
+                when(jobRepository.save(any(OperationJob.class))).thenReturn(savedJob);
 
-        OperationJobResponse response =
-                service.createBackupJob(
-                        1L,
-                        "idem-001",
-                        request
-                );
+                OperationJobService service = new OperationJobService(databaseRepository,
+                                jobRepository, auditRecorderPort,
+                                configurationApplyValidationService);
 
-        assertThat(response.jobType())
-                .isEqualTo(JobType.BACKUP);
+                OperationJobResponse response = service.createBackupJob(1L, "idem-001", request);
 
-        assertThat(response.status())
-                .isEqualTo(JobStatus.QUEUED);
+                assertThat(response.jobType()).isEqualTo(JobType.BACKUP);
 
-        assertThat(response.targetDatabaseId())
-                .isEqualTo(1L);
+                assertThat(response.status()).isEqualTo(JobStatus.QUEUED);
 
-        assertThat(response.requestedBy())
-                .isEqualTo("local-user");
+                assertThat(response.targetDatabaseId()).isEqualTo(1L);
 
-        verify(jobRepository)
-                .save(any(OperationJob.class));
+                assertThat(response.requestedBy()).isEqualTo("local-user");
 
-        verify(auditRecorderPort)
-                .record(
-                        eq("local-user"),
-                        eq("JOB_CREATED"),
-                        eq("OPERATION_JOB"),
-                        any(),
-                        eq("SUCCESS"),
-                        contains("Backup job created")
-                );
-    }
+                verify(jobRepository).save(any(OperationJob.class));
 
-    @Test
-    void createBackupJobReturnsExistingJobWhenIdempotencyKeyAlreadyExists() {
-        ManagedDatabase database =
-                newDatabase();
+                verify(auditRecorderPort).record(eq("local-user"), eq("JOB_CREATED"),
+                                eq("OPERATION_JOB"), any(), eq("SUCCESS"),
+                                contains("Backup job created"));
+        }
 
-        OperationJob existingJob =
-                OperationJob.create(
-                        JobType.BACKUP,
-                        1L,
-                        "local-user",
-                        "idem-001",
-                        "{\"reason\":\"manual backup test\"}"
-                );
+        @Test
+        void createBackupJobReturnsExistingJobWhenIdempotencyKeyAlreadyExists() {
+                ManagedDatabase database = newDatabase();
 
-        CreateBackupJobRequest request =
-                new CreateBackupJobRequest(
-                        "manual backup test",
-                        "local-user"
-                );
+                OperationJob existingJob = OperationJob.create(JobType.BACKUP, 1L, "local-user",
+                                "idem-001", "{\"reason\":\"manual backup test\"}");
 
-        when(databaseRepository.findById(1L))
-                .thenReturn(Optional.of(database));
+                CreateBackupJobRequest request =
+                                new CreateBackupJobRequest("manual backup test", "local-user");
 
-        when(jobRepository.findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(
-                1L,
-                JobType.BACKUP,
-                "idem-001"
-        )).thenReturn(Optional.of(existingJob));
+                when(databaseRepository.findById(1L)).thenReturn(Optional.of(database));
 
-        OperationJobService service =
-                new OperationJobService(
-                        databaseRepository,
-                        jobRepository,
-                        auditRecorderPort
-                );
+                when(jobRepository.findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(1L,
+                                JobType.BACKUP, "idem-001")).thenReturn(Optional.of(existingJob));
 
-        OperationJobResponse response =
-                service.createBackupJob(
-                        1L,
-                        "idem-001",
-                        request
-                );
+                OperationJobService service = new OperationJobService(databaseRepository,
+                                jobRepository, auditRecorderPort,
+                                configurationApplyValidationService);
 
-        assertThat(response.jobType())
-                .isEqualTo(JobType.BACKUP);
+                OperationJobResponse response = service.createBackupJob(1L, "idem-001", request);
 
-        assertThat(response.status())
-                .isEqualTo(JobStatus.QUEUED);
+                assertThat(response.jobType()).isEqualTo(JobType.BACKUP);
 
-        verify(jobRepository, never())
-                .save(any(OperationJob.class));
+                assertThat(response.status()).isEqualTo(JobStatus.QUEUED);
 
-        verify(auditRecorderPort, never())
-                .record(
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any()
-                );
-    }
+                verify(jobRepository, never()).save(any(OperationJob.class));
 
-    @Test
-    void createBackupJobThrowsExceptionWhenDatabaseIsInactive() {
-        ManagedDatabase database =
-                newDatabase();
+                verify(auditRecorderPort, never()).record(any(), any(), any(), any(), any(), any());
+        }
 
-        database.deactivate();
+        @Test
+        void createBackupJobThrowsExceptionWhenDatabaseIsInactive() {
+                ManagedDatabase database = newDatabase();
 
-        when(databaseRepository.findById(1L))
-                .thenReturn(Optional.of(database));
+                database.deactivate();
 
-        OperationJobService service =
-                new OperationJobService(
-                        databaseRepository,
-                        jobRepository,
-                        auditRecorderPort
-                );
+                when(databaseRepository.findById(1L)).thenReturn(Optional.of(database));
 
-        assertThrows(
-                IllegalStateException.class,
-                () -> service.createBackupJob(
-                        1L,
-                        "idem-001",
-                        new CreateBackupJobRequest(
-                                "manual backup test",
-                                "local-user"
-                        )
-                )
-        );
+                OperationJobService service = new OperationJobService(databaseRepository,
+                                jobRepository, auditRecorderPort,
+                                configurationApplyValidationService);
 
-        verifyNoInteractions(jobRepository);
-    }
+                assertThrows(IllegalStateException.class, () -> service.createBackupJob(1L,
+                                "idem-001",
+                                new CreateBackupJobRequest("manual backup test", "local-user")));
 
-    @Test
-    void getJobReturnsJobResponse() {
-        OperationJob job =
-                OperationJob.create(
-                        JobType.BACKUP,
-                        1L,
-                        "local-user",
-                        "idem-001"
-                );
+                verifyNoInteractions(jobRepository);
+        }
 
-        when(jobRepository.findById(10L))
-                .thenReturn(Optional.of(job));
+        @Test
+        void getJobReturnsJobResponse() {
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
 
-        OperationJobService service =
-                new OperationJobService(
-                        databaseRepository,
-                        jobRepository,
-                        auditRecorderPort
-                );
+                when(jobRepository.findById(10L)).thenReturn(Optional.of(job));
 
-        OperationJobResponse response =
-                service.getJob(10L);
+                OperationJobService service = new OperationJobService(databaseRepository,
+                                jobRepository, auditRecorderPort,
+                                configurationApplyValidationService);
 
-        assertThat(response.jobType())
-                .isEqualTo(JobType.BACKUP);
+                OperationJobResponse response = service.getJob(10L);
 
-        assertThat(response.status())
-                .isEqualTo(JobStatus.QUEUED);
-    }
+                assertThat(response.jobType()).isEqualTo(JobType.BACKUP);
 
-    private ManagedDatabase newDatabase() {
-        return new ManagedDatabase(
-                "order-mysql",
-                "localhost",
-                3306,
-                "orders",
-                DatabaseEngine.MYSQL,
-                "LOCAL",
-                "order-service",
-                "platform-team",
-                "test database"
-        );
-    }
+                assertThat(response.status()).isEqualTo(JobStatus.QUEUED);
+        }
+
+        private ManagedDatabase newDatabase() {
+                return new ManagedDatabase("order-mysql", "localhost", 3306, "orders",
+                                DatabaseEngine.MYSQL, "LOCAL", "order-service", "platform-team",
+                                "test database");
+        }
 }

@@ -14,5 +14,8 @@ public interface ConfigurationProfileParameterRepository
     Optional<ConfigurationProfileParameter> findByProfileIdAndParameterName(Long profileId,
             String parameterName);
 
+    Optional<ConfigurationProfileParameter> findFirstByParameterNameIgnoreCaseOrderByIdDesc(
+            String parameterName);
+
     boolean existsByProfileIdAndParameterName(Long profileId, String parameterName);
 }
