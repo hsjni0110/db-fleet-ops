@@ -96,4 +96,14 @@ public class ConfigurationDriftService {
 
         return ConfigurationDriftStatus.NON_COMPLIANT;
     }
+
+    @Transactional(readOnly = true)
+    public List<ConfigurationDriftResponse> getDriftsByDatabaseId(Long databaseId) {
+        if (databaseId == null) {
+            throw new IllegalArgumentException("databaseId is required.");
+        }
+
+        return driftRepository.findTop10ByDatabaseIdOrderByCheckedAtDesc(databaseId).stream()
+                .map(ConfigurationDriftResponse::from).toList();
+    }
 }
