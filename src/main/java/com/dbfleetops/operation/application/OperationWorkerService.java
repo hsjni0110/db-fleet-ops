@@ -9,6 +9,7 @@ import com.dbfleetops.operation.dto.FailJobRequest;
 import com.dbfleetops.operation.dto.OperationJobResponse;
 import com.dbfleetops.operation.dto.SucceedJobRequest;
 import com.dbfleetops.operation.infra.OperationJobRepository;
+import com.dbfleetops.policy.dto.ConfigurationDriftResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,13 +25,16 @@ public class OperationWorkerService {
         private final OperationJobRepository jobRepository;
         private final AuditRecorderPort auditRecorderPort;
         private final OperationTaskService operationTaskService;
+        private final ConfigurationCheckJobExecutor configurationCheckJobExecutor;
 
         public OperationWorkerService(OperationJobRepository jobRepository,
                         AuditRecorderPort auditRecorderPort,
-                        OperationTaskService operationTaskService) {
+                        OperationTaskService operationTaskService,
+                        ConfigurationCheckJobExecutor configurationCheckJobExecutor) {
                 this.jobRepository = jobRepository;
                 this.auditRecorderPort = auditRecorderPort;
                 this.operationTaskService = operationTaskService;
+                this.configurationCheckJobExecutor = configurationCheckJobExecutor;
         }
 
         @Transactional
@@ -52,12 +56,11 @@ public class OperationWorkerService {
                                 "Job claimed by worker. leaseUntil=" + job.getLeaseUntil());
 
                 if (job.getJobType() == JobType.BACKUP) {
-                        operationTaskService.createBackupTaskForOperationJob(job.getId(),
-                                        job.getTargetDatabaseId());
+                        createBackupOperationTask(workerId, job);
+                }
 
-                        auditRecorderPort.record(workerId, "OPERATION_TASK_CREATED",
-                                        "OPERATION_JOB", String.valueOf(job.getId()), "SUCCESS",
-                                        "Backup operation task created.");
+                if (job.getJobType() == JobType.CONFIGURATION_CHECK) {
+                        executeConfigurationCheckJob(workerId, job);
                 }
 
                 return ClaimJobResponse.claimed(job);
@@ -80,20 +83,60 @@ public class OperationWorkerService {
         public OperationJobResponse failJob(String workerId, Long jobId, FailJobRequest request) {
                 OperationJob job = getRunningJobOwnedByWorker(workerId, jobId);
 
-                job.fail(request.resultCode(), request.resultMessage());
+                failAndRetryIfNeeded(workerId, job, request.resultCode(), request.resultMessage(),
+                                request.retryable());
+
+                return OperationJobResponse.from(job);
+        }
+
+        private void createBackupOperationTask(String workerId, OperationJob job) {
+                operationTaskService.createBackupTaskForOperationJob(job.getId(),
+                                job.getTargetDatabaseId());
+
+                auditRecorderPort.record(workerId, "OPERATION_TASK_CREATED", "OPERATION_JOB",
+                                String.valueOf(job.getId()), "SUCCESS",
+                                "Backup operation task created.");
+        }
+
+        private void executeConfigurationCheckJob(String workerId, OperationJob job) {
+                try {
+                        ConfigurationDriftResponse driftResponse =
+                                        configurationCheckJobExecutor.execute(job);
+
+                        String resultMessage = "Configuration check completed. driftId="
+                                        + driftResponse.driftId() + ", status="
+                                        + driftResponse.status();
+
+                        job.succeed(resultMessage);
+
+                        auditRecorderPort.record(workerId, "CONFIGURATION_CHECK_COMPLETED",
+                                        "OPERATION_JOB", String.valueOf(job.getId()), "SUCCESS",
+                                        resultMessage);
+                } catch (Exception exception) {
+                        String resultCode = exception.getClass().getSimpleName();
+
+                        String resultMessage =
+                                        exception.getMessage() != null ? exception.getMessage()
+                                                        : "Configuration check failed.";
+
+                        failAndRetryIfNeeded(workerId, job, resultCode, resultMessage, true);
+                }
+        }
+
+        private void failAndRetryIfNeeded(String workerId, OperationJob job, String resultCode,
+                        String resultMessage, boolean retryable) {
+                job.fail(resultCode, resultMessage);
 
                 auditRecorderPort.record(workerId, "JOB_FAILED", "OPERATION_JOB",
-                                String.valueOf(job.getId()), "FAILED", request.resultMessage());
+                                String.valueOf(job.getId()), "FAILED", resultMessage);
 
-                if (request.retryable() && job.getRetryCount() < job.getMaxRetryCount()) {
+                if (retryable && job.getRetryCount() < job.getMaxRetryCount()) {
                         job.retry(LocalDateTime.now().plusSeconds(RETRY_DELAY_SECONDS));
 
                         auditRecorderPort.record(workerId, "JOB_RETRIED", "OPERATION_JOB",
                                         String.valueOf(job.getId()), "SUCCESS",
                                         "Job re-queued. retryCount=" + job.getRetryCount());
                 }
-
-                return OperationJobResponse.from(job);
         }
 
         private OperationJob getRunningJobOwnedByWorker(String workerId, Long jobId) {

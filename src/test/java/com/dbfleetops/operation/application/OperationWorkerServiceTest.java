@@ -39,6 +39,9 @@ class OperationWorkerServiceTest {
         @Mock
         private OperationTaskService operationTaskService;
 
+        @Mock
+        private ConfigurationCheckJobExecutor configurationCheckJobExecutor;
+
         @Test
         void claimJobReturnsEmptyWhenNoQueuedJobExists() {
                 when(jobRepository
@@ -47,7 +50,8 @@ class OperationWorkerServiceTest {
                                                                 .thenReturn(List.of());
 
                 OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService);
+                                auditRecorderPort, operationTaskService,
+                                configurationCheckJobExecutor);
 
                 ClaimJobResponse response = service.claimJob("worker-1");
 
@@ -67,7 +71,8 @@ class OperationWorkerServiceTest {
                                                                 .thenReturn(List.of(job));
 
                 OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService);
+                                auditRecorderPort, operationTaskService,
+                                configurationCheckJobExecutor);
 
                 ClaimJobResponse response = service.claimJob("worker-1");
 
@@ -103,7 +108,8 @@ class OperationWorkerServiceTest {
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
                 OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService);
+                                auditRecorderPort, operationTaskService,
+                                configurationCheckJobExecutor);
 
                 OperationJobResponse response = service.succeedJob("worker-1", 1L,
                                 new SucceedJobRequest("backup completed"));
@@ -130,7 +136,8 @@ class OperationWorkerServiceTest {
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
                 OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService);
+                                auditRecorderPort, operationTaskService,
+                                configurationCheckJobExecutor);
 
                 OperationJobResponse response = service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false));
@@ -157,7 +164,8 @@ class OperationWorkerServiceTest {
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
                 OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService);
+                                auditRecorderPort, operationTaskService,
+                                configurationCheckJobExecutor);
 
                 assertThrows(IllegalStateException.class, () -> service.succeedJob("worker-2", 1L,
                                 new SucceedJobRequest("backup completed")));
@@ -171,7 +179,8 @@ class OperationWorkerServiceTest {
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
                 OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService);
+                                auditRecorderPort, operationTaskService,
+                                configurationCheckJobExecutor);
 
                 assertThrows(IllegalStateException.class, () -> service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false)));
@@ -187,7 +196,8 @@ class OperationWorkerServiceTest {
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
                 OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService);
+                                auditRecorderPort, operationTaskService,
+                                configurationCheckJobExecutor);
 
                 OperationJobResponse response = service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false));
@@ -209,7 +219,8 @@ class OperationWorkerServiceTest {
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
                 OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService);
+                                auditRecorderPort, operationTaskService,
+                                configurationCheckJobExecutor);
 
                 OperationJobResponse response = service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "temporary error", true));
@@ -243,7 +254,8 @@ class OperationWorkerServiceTest {
                                                                 .thenReturn(List.of(job));
 
                 OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService);
+                                auditRecorderPort, operationTaskService,
+                                configurationCheckJobExecutor);
 
                 ClaimJobResponse response = service.claimJob("worker-1");
 

@@ -49,6 +49,9 @@ class BackupJobOperationTaskFlowTest {
     @Mock
     private AgentHostMetricRepository agentHostMetricRepository;
 
+    @Mock
+    private ConfigurationCheckJobExecutor configurationCheckJobExecutor;
+
     @Test
     void backupJobClaimCreatesTaskAndTaskCompleteSucceedsJob() {
         OperationJob job = OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
@@ -79,8 +82,8 @@ class BackupJobOperationTaskFlowTest {
         OperationTaskService taskService = new OperationTaskService(agentRepository, taskRepository,
                 jobRepository, agentHostMetricRepository);
 
-        OperationWorkerService workerService =
-                new OperationWorkerService(jobRepository, auditRecorderPort, taskService);
+        OperationWorkerService workerService = new OperationWorkerService(jobRepository,
+                auditRecorderPort, taskService, configurationCheckJobExecutor);
 
         ClaimJobResponse claimResponse = workerService.claimJob("worker-1");
 
