@@ -6,6 +6,7 @@ import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.dto.CreateBackupJobRequest;
+import com.dbfleetops.operation.dto.CreateConfigurationCheckJobRequest;
 import com.dbfleetops.operation.dto.OperationJobResponse;
 import com.dbfleetops.operation.infra.OperationJobRepository;
 import org.springframework.stereotype.Service;
@@ -14,121 +15,140 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OperationJobService {
 
-    private final ManagedDatabaseRepository databaseRepository;
-    private final OperationJobRepository jobRepository;
-    private final AuditRecorderPort auditRecorderPort;
+        private final ManagedDatabaseRepository databaseRepository;
+        private final OperationJobRepository jobRepository;
+        private final AuditRecorderPort auditRecorderPort;
 
-    public OperationJobService(
-            ManagedDatabaseRepository databaseRepository,
-            OperationJobRepository jobRepository,
-            AuditRecorderPort auditRecorderPort
-    ) {
-        this.databaseRepository = databaseRepository;
-        this.jobRepository = jobRepository;
-        this.auditRecorderPort = auditRecorderPort;
-    }
-
-    @Transactional
-    public OperationJobResponse createBackupJob(
-            Long databaseId,
-            String idempotencyKey,
-            CreateBackupJobRequest request
-    ) {
-        ManagedDatabase database =
-                databaseRepository.findById(databaseId)
-                        .orElseThrow(() -> new IllegalArgumentException(
-                                "Database not found. databaseId=" + databaseId
-                        ));
-
-        if (!database.isActive()) {
-            throw new IllegalStateException(
-                    "Inactive database cannot create operation job. databaseId="
-                            + databaseId
-            );
+        public OperationJobService(ManagedDatabaseRepository databaseRepository,
+                        OperationJobRepository jobRepository, AuditRecorderPort auditRecorderPort) {
+                this.databaseRepository = databaseRepository;
+                this.jobRepository = jobRepository;
+                this.auditRecorderPort = auditRecorderPort;
         }
 
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            return jobRepository
-                    .findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(
-                            databaseId,
-                            JobType.BACKUP,
-                            idempotencyKey
-                    )
-                    .map(OperationJobResponse::from)
-                    .orElseGet(() -> createAndSaveBackupJob(
-                            databaseId,
-                            idempotencyKey,
-                            request
-                    ));
+        @Transactional
+        public OperationJobResponse createBackupJob(Long databaseId, String idempotencyKey,
+                        CreateBackupJobRequest request) {
+                ManagedDatabase database = getActiveDatabaseOrThrow(databaseId);
+
+                if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                        return jobRepository
+                                        .findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(
+                                                        databaseId, JobType.BACKUP, idempotencyKey)
+                                        .map(OperationJobResponse::from)
+                                        .orElseGet(() -> createAndSaveBackupJob(database.getId(),
+                                                        idempotencyKey, request));
+                }
+
+                return createAndSaveBackupJob(database.getId(), null, request);
         }
 
-        return createAndSaveBackupJob(
-                databaseId,
-                null,
-                request
-        );
-    }
+        @Transactional
+        public OperationJobResponse createConfigurationCheckJob(Long databaseId,
+                        String idempotencyKey, CreateConfigurationCheckJobRequest request) {
+                validateConfigurationCheckRequest(request);
 
-    @Transactional(readOnly = true)
-    public OperationJobResponse getJob(
-            Long jobId
-    ) {
-        OperationJob job =
-                jobRepository.findById(jobId)
-                        .orElseThrow(() -> new IllegalArgumentException(
-                                "Operation job not found. jobId=" + jobId
-                        ));
+                ManagedDatabase database = getActiveDatabaseOrThrow(databaseId);
 
-        return OperationJobResponse.from(job);
-    }
+                if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                        return jobRepository
+                                        .findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(
+                                                        databaseId, JobType.CONFIGURATION_CHECK,
+                                                        idempotencyKey)
+                                        .map(OperationJobResponse::from)
+                                        .orElseGet(() -> createAndSaveConfigurationCheckJob(
+                                                        database.getId(), idempotencyKey, request));
+                }
 
-    private OperationJobResponse createAndSaveBackupJob(
-            Long databaseId,
-            String idempotencyKey,
-            CreateBackupJobRequest request
-    ) {
-        OperationJob job =
-                OperationJob.create(
-                        JobType.BACKUP,
-                        databaseId,
-                        request.requestedBy(),
-                        idempotencyKey,
-                        toPayload(request)
-                );
-
-        OperationJob savedJob =
-                jobRepository.save(job);
-        
-        auditRecorderPort.record(
-                request.requestedBy(),
-                "JOB_CREATED",
-                "OPERATION_JOB",
-                String.valueOf(savedJob.getId()),
-                "SUCCESS",
-                "Backup job created. databaseId=" + databaseId
-        );
-
-        return OperationJobResponse.from(savedJob);
-    }
-
-    private String toPayload(
-            CreateBackupJobRequest request
-    ) {
-        return """
-                {"reason":"%s","requestedBy":"%s"}
-                """.formatted(
-                safe(request.reason()),
-                safe(request.requestedBy())
-        ).trim();
-    }
-
-    private String safe(
-            String value
-    ) {
-        if (value == null) {
-            return "";
+                return createAndSaveConfigurationCheckJob(database.getId(), null, request);
         }
 
-        return value.replace("\"", "\\\"");
-    }
+        @Transactional(readOnly = true)
+        public OperationJobResponse getJob(Long jobId) {
+                OperationJob job = jobRepository.findById(jobId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Operation job not found. jobId=" + jobId));
+
+                return OperationJobResponse.from(job);
+        }
+
+        private ManagedDatabase getActiveDatabaseOrThrow(Long databaseId) {
+                ManagedDatabase database = databaseRepository.findById(databaseId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Database not found. databaseId=" + databaseId));
+
+                if (!database.isActive()) {
+                        throw new IllegalStateException(
+                                        "Inactive database cannot create operation job. databaseId="
+                                                        + databaseId);
+                }
+
+                return database;
+        }
+
+        private OperationJobResponse createAndSaveBackupJob(Long databaseId, String idempotencyKey,
+                        CreateBackupJobRequest request) {
+                OperationJob job = OperationJob.create(JobType.BACKUP, databaseId,
+                                request.requestedBy(), idempotencyKey, toBackupPayload(request));
+
+                OperationJob savedJob = jobRepository.save(job);
+
+                auditRecorderPort.record(request.requestedBy(), "JOB_CREATED", "OPERATION_JOB",
+                                String.valueOf(savedJob.getId()), "SUCCESS",
+                                "Backup job created. databaseId=" + databaseId);
+
+                return OperationJobResponse.from(savedJob);
+        }
+
+        private OperationJobResponse createAndSaveConfigurationCheckJob(Long databaseId,
+                        String idempotencyKey, CreateConfigurationCheckJobRequest request) {
+                OperationJob job = OperationJob.create(JobType.CONFIGURATION_CHECK, databaseId,
+                                request.requestedBy(), idempotencyKey,
+                                toConfigurationCheckPayload(request));
+
+                OperationJob savedJob = jobRepository.save(job);
+
+                auditRecorderPort.record(request.requestedBy(), "JOB_CREATED", "OPERATION_JOB",
+                                String.valueOf(savedJob.getId()), "SUCCESS",
+                                "Configuration check job created. databaseId=" + databaseId
+                                                + ", profileId=" + request.profileId());
+
+                return OperationJobResponse.from(savedJob);
+        }
+
+        private void validateConfigurationCheckRequest(CreateConfigurationCheckJobRequest request) {
+                if (request == null) {
+                        throw new IllegalArgumentException("request is required.");
+                }
+
+                if (request.profileId() == null) {
+                        throw new IllegalArgumentException("profileId is required.");
+                }
+
+                if (request.requestedBy() == null || request.requestedBy().isBlank()) {
+                        throw new IllegalArgumentException("requestedBy is required.");
+                }
+        }
+
+        private String toBackupPayload(CreateBackupJobRequest request) {
+                return """
+                                {"reason":"%s","requestedBy":"%s"}
+                                """.formatted(safe(request.reason()), safe(request.requestedBy()))
+                                .trim();
+        }
+
+        private String toConfigurationCheckPayload(CreateConfigurationCheckJobRequest request) {
+                return """
+                                {"profileId":%d,"reason":"%s","requestedBy":"%s"}
+                                """.formatted(request.profileId(), safe(request.reason()),
+                                safe(request.requestedBy())).trim();
+        }
+
+        private String safe(String value) {
+                if (value == null) {
+                        return "";
+                }
+
+                return value.replace("\"", "\\\"");
+        }
 }
