@@ -6,6 +6,7 @@ import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.dto.CreateBackupJobRequest;
+import com.dbfleetops.operation.dto.CreateConfigurationApplyJobRequest;
 import com.dbfleetops.operation.dto.CreateConfigurationCheckJobRequest;
 import com.dbfleetops.operation.dto.OperationJobResponse;
 import com.dbfleetops.operation.infra.OperationJobRepository;
@@ -63,6 +64,26 @@ public class OperationJobService {
                 return createAndSaveConfigurationCheckJob(database.getId(), null, request);
         }
 
+        @Transactional
+        public OperationJobResponse createConfigurationApplyJob(Long databaseId,
+                        String idempotencyKey, CreateConfigurationApplyJobRequest request) {
+                validateConfigurationApplyRequest(request);
+
+                ManagedDatabase database = getActiveDatabaseOrThrow(databaseId);
+
+                if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                        return jobRepository
+                                        .findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(
+                                                        databaseId, JobType.CONFIGURATION_APPLY,
+                                                        idempotencyKey)
+                                        .map(OperationJobResponse::from)
+                                        .orElseGet(() -> createAndSaveConfigurationApplyJob(
+                                                        database.getId(), idempotencyKey, request));
+                }
+
+                return createAndSaveConfigurationApplyJob(database.getId(), null, request);
+        }
+
         @Transactional(readOnly = true)
         public OperationJobResponse getJob(Long jobId) {
                 OperationJob job = jobRepository.findById(jobId)
@@ -116,6 +137,23 @@ public class OperationJobService {
                 return OperationJobResponse.from(savedJob);
         }
 
+        private OperationJobResponse createAndSaveConfigurationApplyJob(Long databaseId,
+                        String idempotencyKey, CreateConfigurationApplyJobRequest request) {
+                OperationJob job = OperationJob.create(JobType.CONFIGURATION_APPLY, databaseId,
+                                request.requestedBy(), idempotencyKey,
+                                toConfigurationApplyPayload(request));
+
+                OperationJob savedJob = jobRepository.save(job);
+
+                auditRecorderPort.record(request.requestedBy(), "JOB_CREATED", "OPERATION_JOB",
+                                String.valueOf(savedJob.getId()), "SUCCESS",
+                                "Configuration apply job created. databaseId=" + databaseId
+                                                + ", parameterCount="
+                                                + request.parameters().size());
+
+                return OperationJobResponse.from(savedJob);
+        }
+
         private void validateConfigurationCheckRequest(CreateConfigurationCheckJobRequest request) {
                 if (request == null) {
                         throw new IllegalArgumentException("request is required.");
@@ -130,6 +168,35 @@ public class OperationJobService {
                 }
         }
 
+        private void validateConfigurationApplyRequest(CreateConfigurationApplyJobRequest request) {
+                if (request == null) {
+                        throw new IllegalArgumentException("request is required.");
+                }
+
+                if (request.requestedBy() == null || request.requestedBy().isBlank()) {
+                        throw new IllegalArgumentException("requestedBy is required.");
+                }
+
+                if (request.parameters() == null || request.parameters().isEmpty()) {
+                        throw new IllegalArgumentException("parameters is required.");
+                }
+
+                request.parameters().forEach(parameter -> {
+                        if (parameter == null) {
+                                throw new IllegalArgumentException("parameter is required.");
+                        }
+
+                        if (parameter.parameterName() == null
+                                        || parameter.parameterName().isBlank()) {
+                                throw new IllegalArgumentException("parameterName is required.");
+                        }
+
+                        if (parameter.targetValue() == null || parameter.targetValue().isBlank()) {
+                                throw new IllegalArgumentException("targetValue is required.");
+                        }
+                });
+        }
+
         private String toBackupPayload(CreateBackupJobRequest request) {
                 return """
                                 {"reason":"%s","requestedBy":"%s"}
@@ -142,6 +209,22 @@ public class OperationJobService {
                                 {"profileId":%d,"reason":"%s","requestedBy":"%s"}
                                 """.formatted(request.profileId(), safe(request.reason()),
                                 safe(request.requestedBy())).trim();
+        }
+
+        private String toConfigurationApplyPayload(CreateConfigurationApplyJobRequest request) {
+                String parameterPayload = request.parameters().stream()
+                                .map(parameter -> """
+                                                {"parameterName":"%s","targetValue":"%s"}
+                                                """
+                                                .formatted(safe(parameter.parameterName()),
+                                                                safe(parameter.targetValue()))
+                                                .trim())
+                                .reduce((left, right) -> left + "," + right).orElse("");
+
+                return """
+                                {"reason":"%s","requestedBy":"%s","parameters":[%s]}
+                                """.formatted(safe(request.reason()), safe(request.requestedBy()),
+                                parameterPayload).trim();
         }
 
         private String safe(String value) {
