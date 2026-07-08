@@ -5,6 +5,7 @@ import com.dbfleetops.agent.domain.AgentStatus;
 import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
 import com.dbfleetops.audit.port.AuditRecorderPort;
+import com.dbfleetops.backup.application.BackupRestoreVerificationResultRecorder;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.domain.OperationJob;
@@ -53,6 +54,9 @@ class BackupJobOperationTaskFlowTest {
     @Mock
     private ConfigurationCheckJobExecutor configurationCheckJobExecutor;
 
+    @Mock
+    private BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder;
+
     @Test
     void backupJobClaimCreatesTaskAndTaskCompleteSucceedsJob() {
         OperationJob job = OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
@@ -84,7 +88,8 @@ class BackupJobOperationTaskFlowTest {
                 new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
 
         OperationTaskService taskService = new OperationTaskService(agentRepository, taskRepository,
-                jobRepository, agentHostMetricRepository, restoreVerifyTaskPayloadFactory);
+                jobRepository, agentHostMetricRepository, restoreVerifyTaskPayloadFactory,
+                backupRestoreVerificationResultRecorder);
 
         OperationWorkerService workerService = new OperationWorkerService(jobRepository,
                 auditRecorderPort, taskService, configurationCheckJobExecutor);
@@ -148,7 +153,8 @@ class BackupJobOperationTaskFlowTest {
                 new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
 
         OperationTaskService taskService = new OperationTaskService(agentRepository, taskRepository,
-                jobRepository, agentHostMetricRepository, restoreVerifyTaskPayloadFactory);
+                jobRepository, agentHostMetricRepository, restoreVerifyTaskPayloadFactory,
+                backupRestoreVerificationResultRecorder);
 
         taskService.failTask(1L, 10L, new FailOperationTaskRequest("agent-token-001",
                 "BACKUP_FAILED", "mysqldump failed"));

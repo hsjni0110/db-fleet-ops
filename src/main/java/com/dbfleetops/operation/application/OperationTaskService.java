@@ -5,6 +5,7 @@ import com.dbfleetops.agent.domain.AgentHostMetric;
 import com.dbfleetops.agent.domain.AgentStatus;
 import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
+import com.dbfleetops.backup.application.BackupRestoreVerificationResultRecorder;
 import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.domain.OperationTask;
 import com.dbfleetops.operation.domain.OperationTaskStatus;
@@ -13,6 +14,7 @@ import com.dbfleetops.operation.dto.CompleteOperationTaskRequest;
 import com.dbfleetops.operation.dto.CreateOperationTaskRequest;
 import com.dbfleetops.operation.dto.FailOperationTaskRequest;
 import com.dbfleetops.operation.dto.MysqlBackupTaskPayload;
+import com.dbfleetops.operation.dto.MysqlRestoreVerifyTaskResultPayload;
 import com.dbfleetops.operation.dto.NextOperationTaskResponse;
 import com.dbfleetops.operation.dto.OperationTaskResponse;
 import com.dbfleetops.operation.dto.StartOperationTaskRequest;
@@ -31,17 +33,20 @@ public class OperationTaskService {
     private final OperationJobRepository jobRepository;
     private final AgentHostMetricRepository agentHostMetricRepository;
     private final RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory;
+    private final BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public OperationTaskService(AgentRepository agentRepository,
             OperationTaskRepository taskRepository, OperationJobRepository jobRepository,
             AgentHostMetricRepository agentHostMetricRepository,
-            RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory) {
+            RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory,
+            BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder) {
         this.agentRepository = agentRepository;
         this.taskRepository = taskRepository;
         this.jobRepository = jobRepository;
         this.agentHostMetricRepository = agentHostMetricRepository;
         this.restoreVerifyTaskPayloadFactory = restoreVerifyTaskPayloadFactory;
+        this.backupRestoreVerificationResultRecorder = backupRestoreVerificationResultRecorder;
     }
 
     @Transactional
@@ -111,12 +116,7 @@ public class OperationTaskService {
         }
 
         if (task.getTaskType() == OperationTaskType.MYSQL_RESTORE_VERIFY) {
-            /*
-             * 다음 커밋에서 BackupRestoreVerification 저장을 붙일 예정임.
-             *
-             * 현재 커밋에서는 MYSQL_RESTORE_VERIFY Task가 성공하면 Backup Job을 성공 처리하는 최소 흐름만 둠.
-             */
-            job.succeed(request.resultPayloadJson());
+            handleRestoreVerifyTaskCompleted(task, request.resultPayloadJson(), job);
 
             return OperationTaskResponse.from(task);
         }
@@ -263,5 +263,28 @@ public class OperationTaskService {
         return jobRepository.findById(task.getOperationJobId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Operation job not found. operationJobId=" + task.getOperationJobId()));
+    }
+
+    private void handleRestoreVerifyTaskCompleted(OperationTask restoreVerifyTask,
+            String resultPayloadJson, OperationJob job) {
+        MysqlRestoreVerifyTaskResultPayload resultPayload = backupRestoreVerificationResultRecorder
+                .record(restoreVerifyTask, resultPayloadJson);
+
+        if (resultPayload.isVerified()) {
+            job.succeed(resultPayloadJson);
+
+            return;
+        }
+
+        String errorCode = resultPayload.errorCode() == null || resultPayload.errorCode().isBlank()
+                ? "RESTORE_VERIFY_FAILED"
+                : resultPayload.errorCode();
+
+        String errorMessage =
+                resultPayload.errorMessage() == null || resultPayload.errorMessage().isBlank()
+                        ? resultPayloadJson
+                        : resultPayload.errorMessage();
+
+        job.fail(errorCode, errorMessage);
     }
 }

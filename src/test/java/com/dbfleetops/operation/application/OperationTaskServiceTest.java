@@ -5,6 +5,7 @@ import com.dbfleetops.agent.domain.AgentHostMetric;
 import com.dbfleetops.agent.domain.AgentStatus;
 import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
+import com.dbfleetops.backup.application.BackupRestoreVerificationResultRecorder;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.domain.OperationJob;
@@ -14,6 +15,7 @@ import com.dbfleetops.operation.domain.OperationTaskType;
 import com.dbfleetops.operation.dto.CompleteOperationTaskRequest;
 import com.dbfleetops.operation.dto.CreateOperationTaskRequest;
 import com.dbfleetops.operation.dto.FailOperationTaskRequest;
+import com.dbfleetops.operation.dto.MysqlRestoreVerifyTaskResultPayload;
 import com.dbfleetops.operation.dto.NextOperationTaskResponse;
 import com.dbfleetops.operation.dto.OperationTaskResponse;
 import com.dbfleetops.operation.dto.StartOperationTaskRequest;
@@ -49,12 +51,16 @@ class OperationTaskServiceTest {
         @Mock
         private AgentHostMetricRepository agentHostMetricRepository;
 
+        @Mock
+        private BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder;
+
         private OperationTaskService newService() {
                 RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory =
                                 new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
 
                 return new OperationTaskService(agentRepository, taskRepository, jobRepository,
-                                agentHostMetricRepository, restoreVerifyTaskPayloadFactory);
+                                agentHostMetricRepository, restoreVerifyTaskPayloadFactory,
+                                backupRestoreVerificationResultRecorder);
         }
 
         @Test
@@ -398,6 +404,122 @@ class OperationTaskServiceTest {
                                                 """));
 
                 verify(agentHostMetricRepository).save(any(AgentHostMetric.class));
+        }
+
+        @Test
+        void completeRestoreVerifyTaskSucceedsLinkedBackupJobWhenVerified() {
+                Agent agent = newAgent();
+
+                OperationTask task = OperationTask.createForJob(1L, 100L,
+                                OperationTaskType.MYSQL_RESTORE_VERIFY, "{}");
+
+                task.start();
+
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", java.time.LocalDateTime.now().plusSeconds(60));
+
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+
+                when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
+
+                when(backupRestoreVerificationResultRecorder.record(any(OperationTask.class),
+                                any())).thenReturn(new MysqlRestoreVerifyTaskResultPayload(
+                                                "VERIFIED", 100L, 1L, 200L, "orders",
+                                                "/tmp/orders.sql", "restore_verify_orders_100", 2,
+                                                2, 10L, "2026-07-08T13:00:00+09:00",
+                                                "2026-07-08T13:01:00+09:00", List.of(),
+                                                "restore verification completed", null, null));
+
+                OperationTaskService service = newService();
+
+                service.completeTask(1L, 10L, new CompleteOperationTaskRequest("agent-token-001",
+                                """
+                                                {
+                                                  "status": "VERIFIED",
+                                                  "operationJobId": 100,
+                                                  "databaseId": 1,
+                                                  "backupTaskId": 200,
+                                                  "sourceDatabaseName": "orders",
+                                                  "backupFile": "/tmp/orders.sql",
+                                                  "temporaryDatabaseName": "restore_verify_orders_100",
+                                                  "restoredTableCount": 2,
+                                                  "checkedTableCount": 2,
+                                                  "totalRowCount": 10,
+                                                  "items": [],
+                                                  "message": "restore verification completed"
+                                                }
+                                                """));
+
+                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
+
+                assertThat(job.getStatus()).isEqualTo(JobStatus.SUCCEEDED);
+
+                assertThat(job.getResultCode()).isEqualTo("SUCCESS");
+        }
+
+        @Test
+        void completeRestoreVerifyTaskFailsLinkedBackupJobWhenRestoreVerifyFailed() {
+                Agent agent = newAgent();
+
+                OperationTask task = OperationTask.createForJob(1L, 100L,
+                                OperationTaskType.MYSQL_RESTORE_VERIFY, "{}");
+
+                task.start();
+
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", java.time.LocalDateTime.now().plusSeconds(60));
+
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+
+                when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
+
+                when(backupRestoreVerificationResultRecorder.record(any(OperationTask.class),
+                                any())).thenReturn(new MysqlRestoreVerifyTaskResultPayload("FAILED",
+                                                100L, 1L, 200L, "orders", "/tmp/orders.sql",
+                                                "restore_verify_orders_100", 1, 1, 0L,
+                                                "2026-07-08T13:00:00+09:00",
+                                                "2026-07-08T13:01:00+09:00", List.of(),
+                                                "restore verification failed",
+                                                "RESTORE_VERIFY_FAILED",
+                                                "expected table is missing"));
+
+                OperationTaskService service = newService();
+
+                service.completeTask(1L, 10L, new CompleteOperationTaskRequest("agent-token-001",
+                                """
+                                                {
+                                                  "status": "FAILED",
+                                                  "operationJobId": 100,
+                                                  "databaseId": 1,
+                                                  "backupTaskId": 200,
+                                                  "sourceDatabaseName": "orders",
+                                                  "backupFile": "/tmp/orders.sql",
+                                                  "temporaryDatabaseName": "restore_verify_orders_100",
+                                                  "restoredTableCount": 1,
+                                                  "checkedTableCount": 1,
+                                                  "totalRowCount": 0,
+                                                  "items": [],
+                                                  "message": "restore verification failed",
+                                                  "errorCode": "RESTORE_VERIFY_FAILED",
+                                                  "errorMessage": "expected table is missing"
+                                                }
+                                                """));
+
+                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
+
+                assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
+
+                assertThat(job.getResultCode()).isEqualTo("RESTORE_VERIFY_FAILED");
+
+                assertThat(job.getResultMessage()).isEqualTo("expected table is missing");
         }
 
         private Agent newAgent() {
