@@ -20,6 +20,15 @@ type MySQLRestoreRequest struct {
 	Cleanup               bool
 }
 
+type MySQLRestoreCleanupRequest struct {
+	Host                  string
+	Port                  int
+	Username              string
+	Password              string
+	BackupFile            string
+	TemporaryDatabaseName string
+}
+
 type MySQLRestoreResult struct {
 	Status                string `json:"status"`
 	BackupFile            string `json:"backupFile"`
@@ -97,7 +106,14 @@ func (r *MySQLRestoreRunner) Run(
 		time.Now()
 
 	defaultsFile, err :=
-		createDefaultsFile(request)
+		createDefaultsFile(
+			mysqlDefaultsFileRequest{
+				Host:     request.Host,
+				Port:     request.Port,
+				Username: request.Username,
+				Password: request.Password,
+			},
+		)
 
 	if err != nil {
 		return MySQLRestoreResult{}, err
@@ -173,6 +189,37 @@ func (r *MySQLRestoreRunner) Run(
 		CompletedAt:           time.Now().Format(time.RFC3339),
 		Message:               "mysql backup restored to temporary database",
 	}, nil
+}
+
+func (r *MySQLRestoreRunner) Cleanup(
+	ctx context.Context,
+	request MySQLRestoreCleanupRequest,
+) error {
+	if err := validateMySQLRestoreCleanupRequest(request); err != nil {
+		return err
+	}
+
+	defaultsFile, err :=
+		createDefaultsFile(
+			mysqlDefaultsFileRequest{
+				Host:     request.Host,
+				Port:     request.Port,
+				Username: request.Username,
+				Password: request.Password,
+			},
+		)
+
+	if err != nil {
+		return err
+	}
+
+	defer os.Remove(defaultsFile)
+
+	return r.dropTemporaryDatabase(
+		ctx,
+		defaultsFile,
+		request.TemporaryDatabaseName,
+	)
 }
 
 func (r *MySQLRestoreRunner) createTemporaryDatabase(
@@ -292,8 +339,15 @@ func (r *MySQLRestoreRunner) dropTemporaryDatabase(
 	return nil
 }
 
+type mysqlDefaultsFileRequest struct {
+	Host     string
+	Port     int
+	Username string
+	Password string
+}
+
 func createDefaultsFile(
-	request MySQLRestoreRequest,
+	request mysqlDefaultsFileRequest,
 ) (string, error) {
 	tempFile, err :=
 		os.CreateTemp(
@@ -385,6 +439,35 @@ func validateMySQLRestoreRequest(
 		return fmt.Errorf(
 			"backupFile is empty: %s",
 			request.BackupFile,
+		)
+	}
+
+	return nil
+}
+
+func validateMySQLRestoreCleanupRequest(
+	request MySQLRestoreCleanupRequest,
+) error {
+	if request.Host == "" {
+		return fmt.Errorf("host is required")
+	}
+
+	if request.Port <= 0 {
+		return fmt.Errorf("port is required")
+	}
+
+	if request.Username == "" {
+		return fmt.Errorf("username is required")
+	}
+
+	if request.TemporaryDatabaseName == "" {
+		return fmt.Errorf("temporaryDatabaseName is required")
+	}
+
+	if !isSafeDatabaseName(request.TemporaryDatabaseName) {
+		return fmt.Errorf(
+			"temporaryDatabaseName contains unsafe characters: %s",
+			request.TemporaryDatabaseName,
 		)
 	}
 

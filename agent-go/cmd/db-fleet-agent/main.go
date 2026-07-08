@@ -55,6 +55,7 @@ func main() {
 				task.NewMySQLBackupHandler(
 					"/tmp/db-fleetops-backups",
 				),
+				task.NewMySQLRestoreVerifyHandler(),
 			},
 		)
 
