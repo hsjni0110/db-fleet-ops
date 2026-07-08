@@ -35,6 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class OperationTaskServiceTest {
@@ -525,5 +527,182 @@ class OperationTaskServiceTest {
         private Agent newAgent() {
                 return Agent.register("local-agent", "localhost", "127.0.0.1", "Linux", "0.1.0",
                                 "agent-token-001");
+        }
+
+        @Test
+        void completeBackupTaskSucceedsLinkedJobWhenVerifyAfterBackupFalse() {
+                Agent agent = newAgent();
+
+                OperationTask task = OperationTask.createForJob(1L, 100L,
+                                OperationTaskType.MYSQL_LOGICAL_BACKUP, """
+                                                {
+                                                  "operationJobId": 100,
+                                                  "databaseId": 1,
+                                                  "backupType": "LOGICAL",
+                                                  "compression": true,
+                                                  "verifyAfterBackup": false
+                                                }
+                                                """);
+
+                task.start();
+
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", java.time.LocalDateTime.now().plusSeconds(60));
+
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+                when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
+
+                OperationTaskService service = newService();
+
+                service.completeTask(1L, 10L, new CompleteOperationTaskRequest("agent-token-001",
+                                """
+                                                {
+                                                  "status": "VERIFIED",
+                                                  "backupFile": "/tmp/db-fleetops-backups/orders.sql",
+                                                  "fileSizeBytes": 12345,
+                                                  "checksumSha256": "abc123",
+                                                  "createdAt": "2026-07-08T14:00:00+09:00",
+                                                  "message": "backup artifact verified"
+                                                }
+                                                """));
+
+                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
+
+                assertThat(job.getStatus()).isEqualTo(JobStatus.SUCCEEDED);
+
+                assertThat(job.getResultCode()).isEqualTo("SUCCESS");
+
+                assertThat(job.getResultMessage()).contains("\"status\": \"VERIFIED\"");
+
+                verify(taskRepository, never()).save(any(OperationTask.class));
+
+                verify(backupRestoreVerificationResultRecorder, never())
+                                .record(any(OperationTask.class), any());
+        }
+
+        @Test
+        void completeRestoreVerifyTaskFailsLinkedBackupJobWhenFailed() {
+                Agent agent = newAgent();
+
+                OperationTask restoreVerifyTask = OperationTask.createForJob(1L, 100L,
+                                OperationTaskType.MYSQL_RESTORE_VERIFY, "{}");
+
+                restoreVerifyTask.start();
+
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", java.time.LocalDateTime.now().plusSeconds(60));
+
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(restoreVerifyTask));
+                when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
+
+                when(backupRestoreVerificationResultRecorder.record(any(OperationTask.class),
+                                any())).thenReturn(new MysqlRestoreVerifyTaskResultPayload("FAILED",
+                                                100L, 1L, 200L, "orders",
+                                                "/tmp/db-fleetops-backups/orders.sql",
+                                                "restore_verify_orders_100", 1, 1, 12000L,
+                                                "2026-07-08T14:00:00+09:00",
+                                                "2026-07-08T14:01:00+09:00", List.of(),
+                                                "restore verification failed",
+                                                "RESTORE_VERIFY_FAILED",
+                                                "one or more restored table checks failed"));
+
+                OperationTaskService service = newService();
+
+                service.completeTask(1L, 10L, new CompleteOperationTaskRequest("agent-token-001",
+                                """
+                                                {
+                                                  "status": "FAILED",
+                                                  "operationJobId": 100,
+                                                  "databaseId": 1,
+                                                  "backupTaskId": 200,
+                                                  "sourceDatabaseName": "orders",
+                                                  "backupFile": "/tmp/db-fleetops-backups/orders.sql",
+                                                  "temporaryDatabaseName": "restore_verify_orders_100",
+                                                  "restoredTableCount": 1,
+                                                  "checkedTableCount": 1,
+                                                  "totalRowCount": 12000,
+                                                  "items": [],
+                                                  "message": "restore verification failed",
+                                                  "errorCode": "RESTORE_VERIFY_FAILED",
+                                                  "errorMessage": "one or more restored table checks failed"
+                                                }
+                                                """));
+
+                assertThat(restoreVerifyTask.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
+
+                assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
+
+                assertThat(job.getResultCode()).isEqualTo("RESTORE_VERIFY_FAILED");
+
+                assertThat(job.getResultMessage())
+                                .isEqualTo("one or more restored table checks failed");
+
+                verify(backupRestoreVerificationResultRecorder).record(eq(restoreVerifyTask),
+                                any());
+        }
+
+        @Test
+        void completeRestoreVerifyTaskFailsLinkedBackupJobWhenCleanupFailed() {
+                Agent agent = newAgent();
+
+                OperationTask restoreVerifyTask = OperationTask.createForJob(1L, 100L,
+                                OperationTaskType.MYSQL_RESTORE_VERIFY, "{}");
+
+                restoreVerifyTask.start();
+
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+
+                job.start("worker-1", java.time.LocalDateTime.now().plusSeconds(60));
+
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(restoreVerifyTask));
+                when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
+
+                when(backupRestoreVerificationResultRecorder.record(any(OperationTask.class),
+                                any())).thenReturn(new MysqlRestoreVerifyTaskResultPayload(
+                                                "CLEANUP_FAILED", 100L, 1L, 200L, "orders",
+                                                "/tmp/db-fleetops-backups/orders.sql",
+                                                "restore_verify_orders_100", 2, 2, 38512L,
+                                                "2026-07-08T14:00:00+09:00",
+                                                "2026-07-08T14:01:00+09:00", List.of(),
+                                                "restore verification completed but cleanup failed",
+                                                "CLEANUP_FAILED", "drop database failed"));
+
+                OperationTaskService service = newService();
+
+                service.completeTask(1L, 10L, new CompleteOperationTaskRequest("agent-token-001",
+                                """
+                                                {
+                                                  "status": "CLEANUP_FAILED",
+                                                  "operationJobId": 100,
+                                                  "databaseId": 1,
+                                                  "backupTaskId": 200,
+                                                  "sourceDatabaseName": "orders",
+                                                  "backupFile": "/tmp/db-fleetops-backups/orders.sql",
+                                                  "temporaryDatabaseName": "restore_verify_orders_100",
+                                                  "restoredTableCount": 2,
+                                                  "checkedTableCount": 2,
+                                                  "totalRowCount": 38512,
+                                                  "items": [],
+                                                  "message": "restore verification completed but cleanup failed",
+                                                  "errorCode": "CLEANUP_FAILED",
+                                                  "errorMessage": "drop database failed"
+                                                }
+                                                """));
+
+                assertThat(restoreVerifyTask.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
+
+                assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
+
+                assertThat(job.getResultCode()).isEqualTo("CLEANUP_FAILED");
+
+                assertThat(job.getResultMessage()).isEqualTo("drop database failed");
         }
 }
