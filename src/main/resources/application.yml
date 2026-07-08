@@ -42,3 +42,31 @@ logging:
       [requestId=%X{requestId:-none}]
       %logger{36}
       - %msg%n
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+  prometheus:
+    metrics:
+      export:
+        enabled: true

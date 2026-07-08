@@ -12,7 +12,6 @@ spring:
       hibernate:
         dialect: ${DB_FLEETOPS_HIBERNATE_DIALECT:org.hibernate.dialect.MySQLDialect}
     show-sql: false
-
 logging:
   level:
     org.hibernate.SQL: info

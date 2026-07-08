@@ -9,4 +9,6 @@ import java.util.Optional;
 public interface AgentRepository extends JpaRepository<Agent, Long> {
 
     Optional<Agent> findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus status);
+
+    long countByStatus(AgentStatus status);
 }

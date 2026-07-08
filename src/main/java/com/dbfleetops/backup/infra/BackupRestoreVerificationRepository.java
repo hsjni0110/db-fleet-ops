@@ -20,4 +20,6 @@ public interface BackupRestoreVerificationRepository
 
     List<BackupRestoreVerification> findByDatabaseIdAndStatusOrderByCreatedAtDesc(Long databaseId,
             BackupRestoreVerificationStatus status);
+
+    long countByStatus(BackupRestoreVerificationStatus status);
 }

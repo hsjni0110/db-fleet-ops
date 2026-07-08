@@ -11,14 +11,11 @@ import java.util.Optional;
 
 public interface OperationJobRepository extends JpaRepository<OperationJob, Long> {
 
-    Optional<OperationJob> findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(
-            Long targetDatabaseId,
-            JobType jobType,
-            String idempotencyKey
-    );
+        Optional<OperationJob> findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(
+                        Long targetDatabaseId, JobType jobType, String idempotencyKey);
 
-    List<OperationJob> findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
-            JobStatus status,
-            LocalDateTime now
-    );
+        List<OperationJob> findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
+                        JobStatus status, LocalDateTime now);
+
+        long countByStatus(JobStatus status);
 }
