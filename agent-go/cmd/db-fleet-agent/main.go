@@ -34,7 +34,7 @@ func main() {
 
 	stateStore :=
 		agentstate.NewFileAgentStateStore(
-			"./agent-state.json",
+			cfg.AgentStateFile,
 		)
 
 	linuxInfoCollector :=
@@ -53,7 +53,7 @@ func main() {
 					linuxStatusCollector,
 				),
 				task.NewMySQLBackupHandler(
-					"/tmp/db-fleetops-backups",
+					cfg.BackupDirectory,
 				),
 				task.NewMySQLRestoreVerifyHandler(),
 			},

@@ -12,6 +12,8 @@ type Config struct {
 	AgentToken               string
 	AgentName                string
 	AgentVersion             string
+	AgentStateFile           string
+	BackupDirectory          string
 	HeartbeatIntervalSeconds int
 	PollIntervalSeconds      int
 }
@@ -23,6 +25,8 @@ func Load() Config {
 		AgentToken:               getEnv("AGENT_TOKEN", ""),
 		AgentName:                getEnv("AGENT_NAME", "local-agent"),
 		AgentVersion:             getEnv("AGENT_VERSION", "0.1.0"),
+		AgentStateFile:           getEnv("AGENT_STATE_FILE", "./agent-state.json"),
+		BackupDirectory:          getEnv("BACKUP_DIRECTORY", "/tmp/db-fleetops-backups"),
 		HeartbeatIntervalSeconds: getEnvInt("HEARTBEAT_INTERVAL_SECONDS", 10),
 		PollIntervalSeconds:      getEnvInt("POLL_INTERVAL_SECONDS", 5),
 	}
