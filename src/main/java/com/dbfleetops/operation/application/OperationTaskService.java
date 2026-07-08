@@ -9,7 +9,13 @@ import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.domain.OperationTask;
 import com.dbfleetops.operation.domain.OperationTaskStatus;
 import com.dbfleetops.operation.domain.OperationTaskType;
-import com.dbfleetops.operation.dto.*;
+import com.dbfleetops.operation.dto.CompleteOperationTaskRequest;
+import com.dbfleetops.operation.dto.CreateOperationTaskRequest;
+import com.dbfleetops.operation.dto.FailOperationTaskRequest;
+import com.dbfleetops.operation.dto.MysqlBackupTaskPayload;
+import com.dbfleetops.operation.dto.NextOperationTaskResponse;
+import com.dbfleetops.operation.dto.OperationTaskResponse;
+import com.dbfleetops.operation.dto.StartOperationTaskRequest;
 import com.dbfleetops.operation.infra.OperationJobRepository;
 import com.dbfleetops.operation.infra.OperationTaskRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,15 +30,18 @@ public class OperationTaskService {
     private final OperationTaskRepository taskRepository;
     private final OperationJobRepository jobRepository;
     private final AgentHostMetricRepository agentHostMetricRepository;
+    private final RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public OperationTaskService(AgentRepository agentRepository,
             OperationTaskRepository taskRepository, OperationJobRepository jobRepository,
-            AgentHostMetricRepository agentHostMetricRepository) {
+            AgentHostMetricRepository agentHostMetricRepository,
+            RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory) {
         this.agentRepository = agentRepository;
         this.taskRepository = taskRepository;
         this.jobRepository = jobRepository;
         this.agentHostMetricRepository = agentHostMetricRepository;
+        this.restoreVerifyTaskPayloadFactory = restoreVerifyTaskPayloadFactory;
     }
 
     @Transactional
@@ -91,11 +100,61 @@ public class OperationTaskService {
 
         OperationJob job = getLinkedOperationJob(task);
 
-        if (job != null) {
-            job.succeed(request.resultPayloadJson());
+        if (job == null) {
+            return OperationTaskResponse.from(task);
         }
 
+        if (task.getTaskType() == OperationTaskType.MYSQL_LOGICAL_BACKUP) {
+            handleLogicalBackupTaskCompleted(task, request.resultPayloadJson(), job);
+
+            return OperationTaskResponse.from(task);
+        }
+
+        if (task.getTaskType() == OperationTaskType.MYSQL_RESTORE_VERIFY) {
+            /*
+             * 다음 커밋에서 BackupRestoreVerification 저장을 붙일 예정임.
+             *
+             * 현재 커밋에서는 MYSQL_RESTORE_VERIFY Task가 성공하면 Backup Job을 성공 처리하는 최소 흐름만 둠.
+             */
+            job.succeed(request.resultPayloadJson());
+
+            return OperationTaskResponse.from(task);
+        }
+
+        job.succeed(request.resultPayloadJson());
+
         return OperationTaskResponse.from(task);
+    }
+
+    private void handleLogicalBackupTaskCompleted(OperationTask backupTask,
+            String resultPayloadJson, OperationJob job) {
+        MysqlBackupTaskPayload backupTaskPayload = restoreVerifyTaskPayloadFactory
+                .parseBackupTaskPayload(backupTask.getParametersJson());
+
+        if (!backupTaskPayload.shouldVerifyAfterBackup()) {
+            job.succeed(resultPayloadJson);
+
+            return;
+        }
+
+        String restoreVerifyTaskPayloadJson = restoreVerifyTaskPayloadFactory
+                .createRestoreVerifyTaskPayloadJson(backupTask.getOperationJobId(),
+                        backupTask.getId(), backupTask.getParametersJson(), resultPayloadJson);
+
+        OperationTask restoreVerifyTask =
+                OperationTask.createForJob(backupTask.getAgentId(), backupTask.getOperationJobId(),
+                        OperationTaskType.MYSQL_RESTORE_VERIFY, restoreVerifyTaskPayloadJson);
+
+        taskRepository.save(restoreVerifyTask);
+
+        /*
+         * 중요: 여기서 OperationJob을 성공 처리하지 않는다.
+         *
+         * 기존: MYSQL_LOGICAL_BACKUP 성공 -> OperationJob SUCCEEDED
+         *
+         * 변경: MYSQL_LOGICAL_BACKUP 성공 -> MYSQL_RESTORE_VERIFY Task 생성 -> OperationJob은 RUNNING 유지
+         * -> MYSQL_RESTORE_VERIFY 성공 시 OperationJob SUCCEEDED
+         */
     }
 
     private void persistLinuxStatusMetricIfNeeded(OperationTask task, String resultPayloadJson) {
@@ -166,12 +225,25 @@ public class OperationTaskService {
                         .orElseThrow(() -> new IllegalStateException(
                                 "No ONLINE agent available for backup task."));
 
+        /*
+         * 현재 이 메서드는 databaseId만 받아서 Task를 생성하고 있음.
+         *
+         * 하지만 Go Agent의 MYSQL_LOGICAL_BACKUP handler는 실제로 아래 값이 필요함.
+         *
+         * - databaseName - host - port - username - password
+         *
+         * 따라서 이 메서드는 다음 커밋에서 ManagedDatabase / Credential을 조회하도록 확장하는 것이 맞음.
+         *
+         * 지금은 기존 흐름을 깨지 않기 위해 verifyAfterBackup=false로 둠. verifyAfterBackup=true를 사용하려면
+         * parametersJson에 복원 검증에 필요한 접속 정보가 모두 들어가 있어야 함.
+         */
         String parametersJson = """
                 {
                   "operationJobId": %d,
                   "databaseId": %d,
                   "backupType": "LOGICAL",
-                  "compression": true
+                  "compression": true,
+                  "verifyAfterBackup": false
                 }
                 """.formatted(operationJobId, databaseId);
 

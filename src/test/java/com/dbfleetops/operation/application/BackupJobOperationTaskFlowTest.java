@@ -16,6 +16,7 @@ import com.dbfleetops.operation.dto.CompleteOperationTaskRequest;
 import com.dbfleetops.operation.dto.FailOperationTaskRequest;
 import com.dbfleetops.operation.infra.OperationJobRepository;
 import com.dbfleetops.operation.infra.OperationTaskRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -79,8 +80,11 @@ class BackupJobOperationTaskFlowTest {
             return task;
         });
 
+        RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory =
+                new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
+
         OperationTaskService taskService = new OperationTaskService(agentRepository, taskRepository,
-                jobRepository, agentHostMetricRepository);
+                jobRepository, agentHostMetricRepository, restoreVerifyTaskPayloadFactory);
 
         OperationWorkerService workerService = new OperationWorkerService(jobRepository,
                 auditRecorderPort, taskService, configurationCheckJobExecutor);
@@ -140,8 +144,11 @@ class BackupJobOperationTaskFlowTest {
 
         when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
 
+        RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory =
+                new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
+
         OperationTaskService taskService = new OperationTaskService(agentRepository, taskRepository,
-                jobRepository, agentHostMetricRepository);
+                jobRepository, agentHostMetricRepository, restoreVerifyTaskPayloadFactory);
 
         taskService.failTask(1L, 10L, new FailOperationTaskRequest("agent-token-001",
                 "BACKUP_FAILED", "mysqldump failed"));
