@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -41,6 +42,18 @@ func (r *MySQLDumpRunner) Run(
 	ctx context.Context,
 	request MySQLDumpRequest,
 ) (MySQLDumpResult, error) {
+	if request.Host == "" {
+		return MySQLDumpResult{}, fmt.Errorf("host is required")
+	}
+
+	if request.Port <= 0 {
+		return MySQLDumpResult{}, fmt.Errorf("port is required")
+	}
+
+	if request.Username == "" {
+		return MySQLDumpResult{}, fmt.Errorf("username is required")
+	}
+
 	if request.DatabaseName == "" {
 		return MySQLDumpResult{}, fmt.Errorf("databaseName is required")
 	}
@@ -49,7 +62,10 @@ func (r *MySQLDumpRunner) Run(
 		return MySQLDumpResult{}, fmt.Errorf("backupDirectory is required")
 	}
 
-	if err := os.MkdirAll(request.BackupDirectory, 0700); err != nil {
+	if err := os.MkdirAll(
+		request.BackupDirectory,
+		0700,
+	); err != nil {
 		return MySQLDumpResult{}, err
 	}
 
@@ -59,7 +75,7 @@ func (r *MySQLDumpRunner) Run(
 	backupFile :=
 		filepath.Join(
 			request.BackupDirectory,
-			request.DatabaseName+"-"+timestamp+".sql",
+			sanitizeFileName(request.DatabaseName)+"-"+timestamp+".sql",
 		)
 
 	defaultsFile, err :=
@@ -87,7 +103,10 @@ func (r *MySQLDumpRunner) Run(
 			"--defaults-extra-file="+defaultsFile,
 			"--single-transaction",
 			"--quick",
-			"--databases",
+			"--routines",
+			"--triggers",
+			"--events",
+			"--set-gtid-purged=OFF",
 			request.DatabaseName,
 		)
 
@@ -96,7 +115,7 @@ func (r *MySQLDumpRunner) Run(
 	if commandError := command.Run(); commandError != nil {
 		return MySQLDumpResult{}, commandError
 	}
-	
+
 	verificationResult, err :=
 		VerifyBackupOrError(
 			ctx,
@@ -176,4 +195,43 @@ func checksumSHA256(
 		sha256.Sum256(fileBytes)
 
 	return hex.EncodeToString(sum[:]), nil
+}
+
+func sanitizeFileName(
+	value string,
+) string {
+	var builder strings.Builder
+
+	for _, r := range value {
+		if r >= 'a' && r <= 'z' {
+			builder.WriteRune(r)
+			continue
+		}
+
+		if r >= 'A' && r <= 'Z' {
+			builder.WriteRune(r)
+			continue
+		}
+
+		if r >= '0' && r <= '9' {
+			builder.WriteRune(r)
+			continue
+		}
+
+		if r == '_' || r == '-' {
+			builder.WriteRune(r)
+			continue
+		}
+
+		builder.WriteRune('_')
+	}
+
+	result :=
+		builder.String()
+
+	if result == "" {
+		return "database"
+	}
+
+	return result
 }
