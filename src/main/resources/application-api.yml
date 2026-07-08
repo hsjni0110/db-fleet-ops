@@ -1,0 +1,7 @@
+db-fleetops:
+  worker:
+    enabled: false
+
+spring:
+  main:
+    web-application-type: servlet

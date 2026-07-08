@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: ${DB_FLEETOPS_DATASOURCE_URL:jdbc:mysql://metadata-mysql:3306/db_fleetops?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul}
+    driver-class-name: ${DB_FLEETOPS_DATASOURCE_DRIVER:com.mysql.cj.jdbc.Driver}
+    username: ${DB_FLEETOPS_DATASOURCE_USERNAME:dbfleet}
+    password: ${DB_FLEETOPS_DATASOURCE_PASSWORD:dbfleetpw}
+
+  jpa:
+    hibernate:
+      ddl-auto: ${DB_FLEETOPS_JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        dialect: ${DB_FLEETOPS_HIBERNATE_DIALECT:org.hibernate.dialect.MySQLDialect}
+    show-sql: false
+
+logging:
+  level:
+    org.hibernate.SQL: info
+    org.hibernate.orm.jdbc.bind: warn

@@ -58,14 +58,13 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
-      SPRING_DATASOURCE_URL: jdbc:mysql://metadata-mysql:3306/${METADATA_MYSQL_DATABASE:-db_fleetops}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
-      SPRING_DATASOURCE_USERNAME: ${METADATA_MYSQL_USERNAME:-dbfleet}
-      SPRING_DATASOURCE_PASSWORD: ${METADATA_MYSQL_PASSWORD:-dbfleetpw}
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
-      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQLDialect
-      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker,api}
+      DB_FLEETOPS_DATASOURCE_URL: jdbc:mysql://metadata-mysql:3306/${METADATA_MYSQL_DATABASE:-db_fleetops}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      DB_FLEETOPS_DATASOURCE_DRIVER: com.mysql.cj.jdbc.Driver
+      DB_FLEETOPS_DATASOURCE_USERNAME: ${METADATA_MYSQL_USERNAME:-dbfleet}
+      DB_FLEETOPS_DATASOURCE_PASSWORD: ${METADATA_MYSQL_PASSWORD:-dbfleetpw}
+      DB_FLEETOPS_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect
+      DB_FLEETOPS_JPA_DDL_AUTO: update
       JAVA_OPTS: ${API_JAVA_OPTS:--Xms256m -Xmx512m}
       TZ: Asia/Seoul
     ports:
@@ -84,13 +83,12 @@ services:
       dockerfile: Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: ${WORKER_SPRING_PROFILES_ACTIVE:-docker,worker}
-      SPRING_DATASOURCE_URL: jdbc:mysql://metadata-mysql:3306/${METADATA_MYSQL_DATABASE:-db_fleetops}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
-      SPRING_DATASOURCE_USERNAME: ${METADATA_MYSQL_USERNAME:-dbfleet}
-      SPRING_DATASOURCE_PASSWORD: ${METADATA_MYSQL_PASSWORD:-dbfleetpw}
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
-      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQLDialect
-      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      DB_FLEETOPS_DATASOURCE_URL: jdbc:mysql://metadata-mysql:3306/${METADATA_MYSQL_DATABASE:-db_fleetops}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      DB_FLEETOPS_DATASOURCE_DRIVER: com.mysql.cj.jdbc.Driver
+      DB_FLEETOPS_DATASOURCE_USERNAME: ${METADATA_MYSQL_USERNAME:-dbfleet}
+      DB_FLEETOPS_DATASOURCE_PASSWORD: ${METADATA_MYSQL_PASSWORD:-dbfleetpw}
+      DB_FLEETOPS_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect
+      DB_FLEETOPS_JPA_DDL_AUTO: update
       JAVA_OPTS: ${WORKER_JAVA_OPTS:--Xms256m -Xmx512m}
       TZ: Asia/Seoul
     ports:

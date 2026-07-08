@@ -1,0 +1,10 @@
+db-fleetops:
+  worker:
+    enabled: true
+
+spring:
+  main:
+    web-application-type: servlet
+
+server:
+  port: ${SERVER_PORT:8080}
