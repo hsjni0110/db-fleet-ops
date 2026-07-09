@@ -1,12 +1,20 @@
 import { http } from "./http";
 import type {
-  CreateBackupJobRequest,
+  BackupJobRequest,
   OperationJobResponse,
 } from "../types";
 
+export async function getOperationJob(
+  jobId: number | string,
+): Promise<OperationJobResponse> {
+  const response = await http.get<OperationJobResponse>(`/api/v1/jobs/${jobId}`);
+
+  return response.data;
+}
+
 export async function createBackupJob(
   databaseId: number,
-  request: CreateBackupJobRequest,
+  request: BackupJobRequest,
   idempotencyKey?: string,
 ): Promise<OperationJobResponse> {
   const response = await http.post<OperationJobResponse>(
@@ -19,16 +27,6 @@ export async function createBackupJob(
           }
         : undefined,
     },
-  );
-
-  return response.data;
-}
-
-export async function getOperationJob(
-  jobId: number,
-): Promise<OperationJobResponse> {
-  const response = await http.get<OperationJobResponse>(
-    `/api/v1/jobs/${jobId}`,
   );
 
   return response.data;

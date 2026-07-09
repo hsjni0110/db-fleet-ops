@@ -1,10 +1,8 @@
-import type { DateTimeString, Nullable } from "./common";
-
 export type OperationJobType =
   | "BACKUP"
   | "CONFIGURATION_CHECK"
   | "CONFIGURATION_APPLY"
-  | string;
+  | "RESTART";
 
 export type OperationJobStatus =
   | "QUEUED"
@@ -18,7 +16,7 @@ export type OperationTaskType =
   | "COLLECT_LINUX_STATUS"
   | "MYSQL_LOGICAL_BACKUP"
   | "MYSQL_RESTORE_VERIFY"
-  | string;
+  | "CONFIGURATION_CHECK";
 
 export type OperationTaskStatus =
   | "QUEUED"
@@ -26,11 +24,6 @@ export type OperationTaskStatus =
   | "SUCCEEDED"
   | "FAILED"
   | "CANCELLED";
-
-export interface CreateBackupJobRequest {
-  reason: string;
-  requestedBy: string;
-}
 
 export interface OperationJobResponse {
   jobId: number;
@@ -40,39 +33,23 @@ export interface OperationJobResponse {
   requestedBy: string;
   retryCount: number;
   maxRetryCount: number;
-  leaseOwner: Nullable<string>;
-  leaseUntil: Nullable<DateTimeString>;
-  availableAt: Nullable<DateTimeString>;
-  startedAt: Nullable<DateTimeString>;
-  finishedAt: Nullable<DateTimeString>;
-  resultCode: Nullable<string>;
-  resultMessage: Nullable<string>;
-  createdAt: DateTimeString;
-  idempotencyKey?: Nullable<string>;
-  requestPayload?: Nullable<string>;
+  leaseOwner?: string | null;
+  leaseUntil?: string | null;
+  availableAt?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  resultCode?: string | null;
+  resultMessage?: string | null;
+  createdAt: string;
 }
 
-export interface OperationTaskResponse {
-  taskId: number;
-  agentId: number;
-  operationJobId: Nullable<number>;
-  taskType: OperationTaskType;
-  status: OperationTaskStatus;
-  parametersJson: Nullable<string>;
-  resultPayloadJson: Nullable<string>;
-  errorCode: Nullable<string>;
-  errorMessage: Nullable<string>;
-  startedAt: Nullable<DateTimeString>;
-  completedAt: Nullable<DateTimeString>;
-  createdAt: DateTimeString;
+export interface BackupJobRequest {
+  reason: string;
+  requestedBy: string;
 }
 
-export interface ClaimJobResponse {
-  claimed: boolean;
-  jobId: Nullable<number>;
-  jobType: Nullable<OperationJobType>;
-  status: Nullable<OperationJobStatus>;
-  targetDatabaseId: Nullable<number>;
-  leaseOwner: Nullable<string>;
-  leaseUntil: Nullable<DateTimeString>;
+export interface ConfigurationCheckJobRequest {
+  profileId: number;
+  requestedBy: string;
+  reason: string;
 }

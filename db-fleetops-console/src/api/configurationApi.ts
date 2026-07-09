@@ -10,6 +10,7 @@ import type {
   CreateConfigurationCheckJobRequest,
   CreateConfigurationProfileRequest,
   DatabaseEngine,
+  OperationJobResponse,
 } from "../types";
 
 export async function createConfigurationProfile(
@@ -94,8 +95,8 @@ export async function createConfigurationCheckJob(
   databaseId: number,
   request: CreateConfigurationCheckJobRequest,
   idempotencyKey?: string,
-): Promise<unknown> {
-  const response = await http.post(
+): Promise<OperationJobResponse> {
+  const response = await http.post<OperationJobResponse>(
     `/api/v1/database-instances/${databaseId}/operations/configuration-checks`,
     request,
     {
