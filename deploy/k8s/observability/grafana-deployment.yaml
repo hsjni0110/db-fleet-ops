@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: db-fleetops
+  labels:
+    app: grafana
+    component: observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+      component: observability
+  template:
+    metadata:
+      labels:
+        app: grafana
+        component: observability
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.1.4
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: "admin"
+
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"
+
+            - name: TZ
+              value: "Asia/Seoul"
+
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          volumeMounts:
+            - name: grafana-datasource
+              mountPath: /etc/grafana/provisioning/datasources/prometheus.yml
+              subPath: datasource-prometheus.yml
+
+            - name: grafana-dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards/dashboard-provider.yml
+              subPath: dashboard-provider.yml
+
+            - name: grafana-dashboard
+              mountPath: /var/lib/grafana/dashboards/db-fleetops-overview.json
+              subPath: db-fleetops-overview.json
+
+            - name: grafana-data
+              mountPath: /var/lib/grafana
+
+      volumes:
+        - name: grafana-datasource
+          configMap:
+            name: grafana-provisioning
+
+        - name: grafana-dashboard-provider
+          configMap:
+            name: grafana-provisioning
+
+        - name: grafana-dashboard
+          configMap:
+            name: grafana-provisioning
+
+        - name: grafana-data
+          emptyDir: {}
