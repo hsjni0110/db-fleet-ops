@@ -49,7 +49,7 @@ const registerForm = reactive<CreateDatabaseInstanceRequest>({
   environment: "LOCAL",
   serviceName: "target-mysql",
   owner: "platform-team",
-  description: "Docker Compose target MySQL managed by DB FleetOps",
+  description: "",
   username: "root",
   password: "",
 });
@@ -66,7 +66,7 @@ function resetRegisterForm() {
   registerForm.environment = "LOCAL";
   registerForm.serviceName = "target-mysql";
   registerForm.owner = "platform-team";
-  registerForm.description = "Docker Compose target MySQL managed by DB FleetOps";
+  registerForm.description = "";
   registerForm.username = "root";
   registerForm.password = "";
 }
@@ -456,145 +456,122 @@ onMounted(() => {
     <el-dialog
       v-model="registerDialogVisible"
       title="Add Existing Database"
-      width="760px"
+      width="720px"
+      class="database-register-dialog"
       destroy-on-close
     >
-      <el-alert
-        type="warning"
-        show-icon
-        :closable="false"
-        class="page-alert"
-      >
-        <template #title>기존 DB 등록 안내</template>
-        <p>
-          이 화면은 실제 데이터베이스를 새로 생성하지 않습니다.
-          이미 존재하고 접속 가능한 DB를 DB FleetOps의 관리 대상으로 추가합니다.
-        </p>
-        <p class="muted-text">
-          백엔드가 Docker Compose로 실행 중이면 Host에는 target-mysql을 입력하고,
-          로컬 bootRun으로 실행 중이면 localhost 또는 127.0.0.1을 입력합니다.
-        </p>
-      </el-alert>
+      <div class="dialog-scroll-body">
+        <el-alert
+          type="warning"
+          show-icon
+          :closable="false"
+          class="page-alert"
+        >
+          <template #title>기존 DB 등록 안내</template>
+          <p>
+            이 화면은 실제 데이터베이스를 새로 생성하지 않습니다.
+            이미 존재하고 접속 가능한 DB를 DB FleetOps의 관리 대상으로 추가합니다.
+          </p>
+        </el-alert>
 
-      <el-form
-        label-position="top"
-        class="register-form"
-        @submit.prevent
-      >
-        <div class="form-grid">
-          <el-form-item label="Name" required>
-            <el-input
-              v-model="registerForm.name"
-              placeholder="예: target-mysql 또는 order-mysql"
-            />
-          </el-form-item>
+        <el-form
+          label-position="top"
+          class="register-form"
+          @submit.prevent
+        >
+          <div class="form-grid">
+            <el-form-item label="Name" required>
+              <el-input
+                v-model="registerForm.name"
+                placeholder="예: target-mysql 또는 order-mysql"
+              />
+            </el-form-item>
 
-          <el-form-item label="Engine" required>
-            <el-select
-              v-model="registerForm.engine"
-              class="full-width"
-              @change="handleEngineChange"
-            >
-              <el-option label="MYSQL" value="MYSQL" />
-              <el-option label="POSTGRESQL" value="POSTGRESQL" disabled />
-            </el-select>
-          </el-form-item>
+            <el-form-item label="Engine" required>
+              <el-select
+                v-model="registerForm.engine"
+                class="full-width"
+                @change="handleEngineChange"
+              >
+                <el-option label="MYSQL" value="MYSQL" />
+                <el-option label="POSTGRESQL" value="POSTGRESQL" disabled />
+              </el-select>
+            </el-form-item>
 
-          <el-form-item label="Host" required>
-            <el-input
-              v-model="registerForm.host"
-              placeholder="Docker Compose: target-mysql / bootRun: localhost"
-            />
-          </el-form-item>
+            <el-form-item label="Host" required>
+              <el-input
+                v-model="registerForm.host"
+                placeholder="예: target-mysql, localhost, 127.0.0.1"
+              />
+            </el-form-item>
 
-          <el-form-item label="Port" required>
-            <el-input-number
-              v-model="registerForm.port"
-              class="full-width"
-              :min="1"
-              :max="65535"
-            />
-          </el-form-item>
+            <el-form-item label="Port" required>
+              <el-input-number
+                v-model="registerForm.port"
+                class="full-width"
+                :min="1"
+                :max="65535"
+              />
+            </el-form-item>
 
-          <el-form-item label="Database Name" required>
-            <el-input
-              v-model="registerForm.databaseName"
-              placeholder="예: orders"
-            />
-          </el-form-item>
+            <el-form-item label="Database Name" required>
+              <el-input
+                v-model="registerForm.databaseName"
+                placeholder="예: orders"
+              />
+            </el-form-item>
 
-          <el-form-item label="Environment" required>
-            <el-select v-model="registerForm.environment" class="full-width">
-              <el-option label="LOCAL" value="LOCAL" />
-              <el-option label="DEV" value="DEV" />
-              <el-option label="STAGING" value="STAGING" />
-              <el-option label="PRODUCTION" value="PRODUCTION" />
-            </el-select>
-          </el-form-item>
+            <el-form-item label="Environment" required>
+              <el-select v-model="registerForm.environment" class="full-width">
+                <el-option label="LOCAL" value="LOCAL" />
+                <el-option label="DEV" value="DEV" />
+                <el-option label="STAGING" value="STAGING" />
+                <el-option label="PRODUCTION" value="PRODUCTION" />
+              </el-select>
+            </el-form-item>
 
-          <el-form-item label="Service Name">
-            <el-input
-              v-model="registerForm.serviceName"
-              placeholder="예: target-mysql 또는 order-service"
-            />
-          </el-form-item>
+            <el-form-item label="Service Name">
+              <el-input
+                v-model="registerForm.serviceName"
+                placeholder="예: order-service"
+              />
+            </el-form-item>
 
-          <el-form-item label="Owner">
-            <el-input
-              v-model="registerForm.owner"
-              placeholder="예: platform-team"
-            />
-          </el-form-item>
+            <el-form-item label="Owner">
+              <el-input
+                v-model="registerForm.owner"
+                placeholder="예: platform-team"
+              />
+            </el-form-item>
 
-          <el-form-item label="Username" required>
-            <el-input
-              v-model="registerForm.username"
-              placeholder="예: root"
-              autocomplete="off"
-            />
-          </el-form-item>
+            <el-form-item label="Username" required>
+              <el-input
+                v-model="registerForm.username"
+                placeholder="예: root"
+                autocomplete="off"
+              />
+            </el-form-item>
 
-          <el-form-item label="Password" required>
-            <el-input
-              v-model="registerForm.password"
-              type="password"
-              placeholder="target-mysql의 MYSQL_ROOT_PASSWORD 값"
-              show-password
-              autocomplete="new-password"
-            />
-          </el-form-item>
-        </div>
-
-        <el-form-item label="Description">
-          <el-input
-            v-model="registerForm.description"
-            type="textarea"
-            :rows="3"
-            placeholder="예: Docker Compose target MySQL managed by DB FleetOps"
-          />
-        </el-form-item>
-      </el-form>
-
-      <div class="registration-help">
-        <strong>입력 예시</strong>
-
-        <div class="help-grid">
-          <div>
-            <span>Docker Compose API 기준</span>
-            <code>name = target-mysql</code>
-            <code>host = target-mysql</code>
-            <code>port = 3306</code>
-            <code>databaseName = orders</code>
+            <el-form-item label="Password" required>
+              <el-input
+                v-model="registerForm.password"
+                type="password"
+                placeholder="DB 접속 비밀번호"
+                show-password
+                autocomplete="new-password"
+              />
+            </el-form-item>
           </div>
 
-          <div>
-            <span>Local bootRun API 기준</span>
-            <code>name = target-mysql-local</code>
-            <code>host = localhost</code>
-            <code>port = 3306</code>
-            <code>databaseName = orders</code>
-          </div>
-        </div>
+          <el-form-item label="Description">
+            <el-input
+              v-model="registerForm.description"
+              type="textarea"
+              :rows="3"
+              placeholder="예: Managed database for order service"
+            />
+          </el-form-item>
+        </el-form>
       </div>
 
       <template #footer>

@@ -381,3 +381,27 @@ a {
   flex-direction: column;
   gap: 18px;
 }
+
+.database-register-dialog .el-dialog__body {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.dialog-scroll-body {
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.dialog-scroll-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dialog-scroll-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+.dialog-scroll-body::-webkit-scrollbar-track {
+  background: transparent;
+}
