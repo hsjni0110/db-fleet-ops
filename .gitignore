@@ -40,3 +40,5 @@ out/
 .env.test      
 
 phase/
+
+DS_Store
