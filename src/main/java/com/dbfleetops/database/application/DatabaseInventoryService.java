@@ -18,36 +18,28 @@ public class DatabaseInventoryService {
 
     private final ManagedDatabaseRepository databaseRepository;
     private final DatabaseCredentialRepository credentialRepository;
+    private final DatabaseConnectionValidator connectionValidator;
 
-    public DatabaseInventoryService(
-        ManagedDatabaseRepository managedDatabaseRepository,
-        DatabaseCredentialRepository databaseCredentialRepository
-    ) {
+    public DatabaseInventoryService(ManagedDatabaseRepository managedDatabaseRepository,
+            DatabaseCredentialRepository databaseCredentialRepository,
+            DatabaseConnectionValidator connectionValidator) {
         this.databaseRepository = managedDatabaseRepository;
         this.credentialRepository = databaseCredentialRepository;
+        this.connectionValidator = connectionValidator;
     }
 
     @Transactional
     public DatabaseResponse create(DatabaseCreateRequest request) {
-        ManagedDatabase database = new ManagedDatabase(
-                request.name(),
-                request.host(),
-                request.port(),
-                request.databaseName(),
-                request.engine(),
-                request.environment(),
-                request.serviceName(),
-                request.owner(),
-                request.description()
-        );
+        connectionValidator.validate(request);
+
+        ManagedDatabase database = new ManagedDatabase(request.name(), request.host(),
+                request.port(), request.databaseName(), request.engine(), request.environment(),
+                request.serviceName(), request.owner(), request.description());
 
         ManagedDatabase savedDatabase = databaseRepository.save(database);
 
-        DatabaseCredential credential = new DatabaseCredential(
-                savedDatabase.getId(),
-                request.username(),
-                request.password()
-        );
+        DatabaseCredential credential = new DatabaseCredential(savedDatabase.getId(),
+                request.username(), request.password());
 
         credentialRepository.save(credential);
         return DatabaseResponse.from(savedDatabase);
@@ -55,10 +47,7 @@ public class DatabaseInventoryService {
 
     @Transactional(readOnly = true)
     public List<DatabaseResponse> findAll() {
-        return databaseRepository.findAll()
-                .stream()
-                .map(DatabaseResponse::from)
-                .toList();
+        return databaseRepository.findAll().stream().map(DatabaseResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
@@ -68,21 +57,16 @@ public class DatabaseInventoryService {
 
     @Transactional
     public DatabaseResponse update(Long databaseId, DatabaseUpdateRequest request) {
+        connectionValidator.validate(request);
+
         ManagedDatabase database = getDatabase(databaseId);
-        database.update(
-                request.name(),
-                request.host(),
-                request.port(),
-                request.databaseName(),
-                request.engine(),
-                request.environment(),
-                request.serviceName(),
-                request.owner(),
-                request.description()
-        );
+        database.update(request.name(), request.host(), request.port(), request.databaseName(),
+                request.engine(), request.environment(), request.serviceName(), request.owner(),
+                request.description());
 
         DatabaseCredential credential = credentialRepository.findByDatabaseId(databaseId)
-                .orElseThrow(() -> new IllegalArgumentException("Credential not found. databaseId=" + databaseId));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Credential not found. databaseId=" + databaseId));
 
         credential.update(request.username(), request.password());
 
@@ -96,7 +80,7 @@ public class DatabaseInventoryService {
     }
 
     private ManagedDatabase getDatabase(Long databaseId) {
-        return databaseRepository.findById(databaseId)
-                .orElseThrow(() -> new IllegalArgumentException("Database not found. databaseId=" + databaseId));
+        return databaseRepository.findById(databaseId).orElseThrow(
+                () -> new IllegalArgumentException("Database not found. databaseId=" + databaseId));
     }
 }
