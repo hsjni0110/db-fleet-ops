@@ -227,3 +227,63 @@ a {
   justify-content: center;
   background: #f8fafc;
 }
+
+.card-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card-subtitle {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-alert {
+  margin-bottom: 16px;
+}
+
+.console-table {
+  width: 100%;
+}
+
+.table-primary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.table-primary-cell strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.table-primary-cell small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.health-result-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.muted-text {
+  color: #94a3b8;
+  font-size: 13px;
+}

@@ -58,6 +58,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
+      DB_FLEETOPS_CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000"
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker,api}
       DB_FLEETOPS_DATASOURCE_URL: jdbc:mysql://metadata-mysql:3306/${METADATA_MYSQL_DATABASE:-db_fleetops}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
       DB_FLEETOPS_DATASOURCE_DRIVER: com.mysql.cj.jdbc.Driver

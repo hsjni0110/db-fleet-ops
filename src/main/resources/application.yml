@@ -32,6 +32,8 @@ db-fleetops:
     password: ${DB_TARGET_PASSWORD}
     connect-timeout: ${DB_CONNECT_TIMEOUT:2s}
     socket-timeout: ${DB_SOCKET_TIMEOUT:2s}
+  cors:
+    allowed-origins: ${DB_FLEETOPS_CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
 logging:
   pattern:

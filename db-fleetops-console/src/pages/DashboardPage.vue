@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span>Dashboard Overview</span>
-          <el-tag type="primary">Phase 12</el-tag>
+          <el-tag type="primary">Operations Console</el-tag>
         </div>
       </template>
 
