@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-fleetops-config
+  namespace: db-fleetops
+data:
+  TZ: "Asia/Seoul"
+
+  SPRING_PROFILES_ACTIVE_API: "docker,api"
+  SPRING_PROFILES_ACTIVE_WORKER: "docker,worker"
+
+  SERVER_PORT: "8080"
+
+  DB_FLEETOPS_DATASOURCE_URL: "jdbc:mysql://metadata-mysql:3306/db_fleetops?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul"
+  DB_FLEETOPS_DATASOURCE_DRIVER: "com.mysql.cj.jdbc.Driver"
+  DB_FLEETOPS_DATASOURCE_USERNAME: "dbfleet"
+  DB_FLEETOPS_HIBERNATE_DIALECT: "org.hibernate.dialect.MySQLDialect"
+  DB_FLEETOPS_JPA_DDL_AUTO: "update"
+
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,metrics,prometheus"
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+  MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: "always"
+  MANAGEMENT_PROMETHEUS_METRICS_EXPORT_ENABLED: "true"
+
+  API_JAVA_OPTS: "-Xms256m -Xmx512m"
+  WORKER_JAVA_OPTS: "-Xms256m -Xmx512m"
