@@ -153,10 +153,32 @@ services:
     networks:
       - db-fleetops-net
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: db-fleetops-prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    depends_on:
+      db-fleetops-api:
+        condition: service_healthy
+      db-fleetops-worker:
+        condition: service_healthy
+    networks:
+      - db-fleetops-net
+
 volumes:
   metadata-mysql-data:
   target-mysql-data:
   agent-data:
+  prometheus-data:
 
 networks:
   db-fleetops-net:
