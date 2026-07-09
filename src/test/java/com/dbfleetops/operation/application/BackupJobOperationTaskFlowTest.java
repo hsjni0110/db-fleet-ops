@@ -17,6 +17,7 @@ import com.dbfleetops.operation.dto.CompleteOperationTaskRequest;
 import com.dbfleetops.operation.dto.FailOperationTaskRequest;
 import com.dbfleetops.operation.infra.OperationJobRepository;
 import com.dbfleetops.operation.infra.OperationTaskRepository;
+import com.dbfleetops.worker.application.WorkerShutdownState;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,140 +37,150 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class BackupJobOperationTaskFlowTest {
 
-    @Mock
-    private OperationJobRepository jobRepository;
+        @Mock
+        private OperationJobRepository jobRepository;
 
-    @Mock
-    private OperationTaskRepository taskRepository;
+        @Mock
+        private OperationTaskRepository taskRepository;
 
-    @Mock
-    private AgentRepository agentRepository;
+        @Mock
+        private AgentRepository agentRepository;
 
-    @Mock
-    private AuditRecorderPort auditRecorderPort;
+        @Mock
+        private AuditRecorderPort auditRecorderPort;
 
-    @Mock
-    private AgentHostMetricRepository agentHostMetricRepository;
+        @Mock
+        private AgentHostMetricRepository agentHostMetricRepository;
 
-    @Mock
-    private ConfigurationCheckJobExecutor configurationCheckJobExecutor;
+        @Mock
+        private ConfigurationCheckJobExecutor configurationCheckJobExecutor;
 
-    @Mock
-    private BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder;
+        @Mock
+        private BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder;
 
-    @Test
-    void backupJobClaimCreatesTaskAndTaskCompleteSucceedsJob() {
-        OperationJob job = OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+        @Mock
+        private WorkerShutdownState workerShutdownState;
 
-        ReflectionTestUtils.setField(job, "id", 100L);
+        @Test
+        void backupJobClaimCreatesTaskAndTaskCompleteSucceedsJob() {
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
 
-        Agent agent = newAgent();
+                ReflectionTestUtils.setField(job, "id", 100L);
 
-        ReflectionTestUtils.setField(agent, "id", 1L);
+                Agent agent = newAgent();
 
-        AtomicReference<OperationTask> savedTask = new AtomicReference<>();
+                ReflectionTestUtils.setField(agent, "id", 1L);
 
-        when(jobRepository
-                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
-                        eq(JobStatus.QUEUED), any(LocalDateTime.class))).thenReturn(List.of(job));
+                AtomicReference<OperationTask> savedTask = new AtomicReference<>();
 
-        when(agentRepository.findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
-                .thenReturn(Optional.of(agent));
+                when(jobRepository
+                                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
+                                                eq(JobStatus.QUEUED), any(LocalDateTime.class)))
+                                                                .thenReturn(List.of(job));
 
-        when(taskRepository.save(any(OperationTask.class))).thenAnswer(invocation -> {
-            OperationTask task = invocation.getArgument(0);
+                when(agentRepository
+                                .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
+                                                .thenReturn(Optional.of(agent));
 
-            savedTask.set(task);
+                when(taskRepository.save(any(OperationTask.class))).thenAnswer(invocation -> {
+                        OperationTask task = invocation.getArgument(0);
 
-            return task;
-        });
+                        savedTask.set(task);
 
-        RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory =
-                new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
+                        return task;
+                });
 
-        OperationTaskService taskService = new OperationTaskService(agentRepository, taskRepository,
-                jobRepository, agentHostMetricRepository, restoreVerifyTaskPayloadFactory,
-                backupRestoreVerificationResultRecorder);
+                RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory =
+                                new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
 
-        OperationWorkerService workerService = new OperationWorkerService(jobRepository,
-                auditRecorderPort, taskService, configurationCheckJobExecutor);
+                OperationTaskService taskService = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository, agentHostMetricRepository,
+                                restoreVerifyTaskPayloadFactory,
+                                backupRestoreVerificationResultRecorder);
 
-        ClaimJobResponse claimResponse = workerService.claimJob("worker-1");
+                OperationWorkerService workerService = new OperationWorkerService(jobRepository,
+                                auditRecorderPort, taskService, configurationCheckJobExecutor,
+                                workerShutdownState);
 
-        assertThat(claimResponse.claimed()).isTrue();
+                ClaimJobResponse claimResponse = workerService.claimJob("worker-1");
 
-        assertThat(job.getStatus()).isEqualTo(JobStatus.RUNNING);
+                assertThat(claimResponse.claimed()).isTrue();
 
-        OperationTask task = savedTask.get();
+                assertThat(job.getStatus()).isEqualTo(JobStatus.RUNNING);
 
-        assertThat(task).isNotNull();
+                OperationTask task = savedTask.get();
 
-        assertThat(task.getTaskType()).isEqualTo(OperationTaskType.MYSQL_LOGICAL_BACKUP);
+                assertThat(task).isNotNull();
 
-        assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.QUEUED);
+                assertThat(task.getTaskType()).isEqualTo(OperationTaskType.MYSQL_LOGICAL_BACKUP);
 
-        assertThat(task.getOperationJobId()).isEqualTo(job.getId());
+                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.QUEUED);
 
-        task.start();
+                assertThat(task.getOperationJobId()).isEqualTo(job.getId());
 
-        when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+                task.start();
 
-        when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
-        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
-        taskService.completeTask(1L, 10L,
-                new CompleteOperationTaskRequest("agent-token-001", "{\"status\":\"CREATED\"}"));
+                when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
 
-        assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
+                taskService.completeTask(1L, 10L, new CompleteOperationTaskRequest(
+                                "agent-token-001", "{\"status\":\"CREATED\"}"));
 
-        assertThat(job.getStatus()).isEqualTo(JobStatus.SUCCEEDED);
+                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
 
-        assertThat(job.getResultCode()).isEqualTo("SUCCESS");
+                assertThat(job.getStatus()).isEqualTo(JobStatus.SUCCEEDED);
 
-        assertThat(job.getResultMessage()).isEqualTo("{\"status\":\"CREATED\"}");
-    }
+                assertThat(job.getResultCode()).isEqualTo("SUCCESS");
 
-    @Test
-    void backupTaskFailFailsLinkedJob() {
-        OperationJob job = OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
+                assertThat(job.getResultMessage()).isEqualTo("{\"status\":\"CREATED\"}");
+        }
 
-        job.start("worker-1", LocalDateTime.now().plusSeconds(60));
+        @Test
+        void backupTaskFailFailsLinkedJob() {
+                OperationJob job =
+                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
 
-        Agent agent = newAgent();
+                job.start("worker-1", LocalDateTime.now().plusSeconds(60));
 
-        OperationTask task =
-                OperationTask.createForJob(1L, 100L, OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
+                Agent agent = newAgent();
 
-        task.start();
+                OperationTask task = OperationTask.createForJob(1L, 100L,
+                                OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
 
-        when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+                task.start();
 
-        when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
-        when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
 
-        RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory =
-                new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
+                when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
 
-        OperationTaskService taskService = new OperationTaskService(agentRepository, taskRepository,
-                jobRepository, agentHostMetricRepository, restoreVerifyTaskPayloadFactory,
-                backupRestoreVerificationResultRecorder);
+                RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory =
+                                new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
 
-        taskService.failTask(1L, 10L, new FailOperationTaskRequest("agent-token-001",
-                "BACKUP_FAILED", "mysqldump failed"));
+                OperationTaskService taskService = new OperationTaskService(agentRepository,
+                                taskRepository, jobRepository, agentHostMetricRepository,
+                                restoreVerifyTaskPayloadFactory,
+                                backupRestoreVerificationResultRecorder);
 
-        assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.FAILED);
+                taskService.failTask(1L, 10L, new FailOperationTaskRequest("agent-token-001",
+                                "BACKUP_FAILED", "mysqldump failed"));
 
-        assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
+                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.FAILED);
 
-        assertThat(job.getResultCode()).isEqualTo("BACKUP_FAILED");
+                assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
 
-        assertThat(job.getResultMessage()).isEqualTo("mysqldump failed");
-    }
+                assertThat(job.getResultCode()).isEqualTo("BACKUP_FAILED");
 
-    private Agent newAgent() {
-        return Agent.register("local-agent", "localhost", "127.0.0.1", "Linux", "0.1.0",
-                "agent-token-001");
-    }
+                assertThat(job.getResultMessage()).isEqualTo("mysqldump failed");
+        }
+
+        private Agent newAgent() {
+                return Agent.register("local-agent", "localhost", "127.0.0.1", "Linux", "0.1.0",
+                                "agent-token-001");
+        }
 }

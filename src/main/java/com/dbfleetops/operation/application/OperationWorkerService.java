@@ -10,6 +10,9 @@ import com.dbfleetops.operation.dto.OperationJobResponse;
 import com.dbfleetops.operation.dto.SucceedJobRequest;
 import com.dbfleetops.operation.infra.OperationJobRepository;
 import com.dbfleetops.policy.dto.ConfigurationDriftResponse;
+import com.dbfleetops.worker.application.WorkerShutdownState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +22,8 @@ import java.util.List;
 @Service
 public class OperationWorkerService {
 
+        private static final Logger log = LoggerFactory.getLogger(OperationWorkerService.class);
+
         private static final long LEASE_SECONDS = 60L;
         private static final long RETRY_DELAY_SECONDS = 30L;
 
@@ -26,19 +31,32 @@ public class OperationWorkerService {
         private final AuditRecorderPort auditRecorderPort;
         private final OperationTaskService operationTaskService;
         private final ConfigurationCheckJobExecutor configurationCheckJobExecutor;
+        private final WorkerShutdownState workerShutdownState;
 
         public OperationWorkerService(OperationJobRepository jobRepository,
                         AuditRecorderPort auditRecorderPort,
                         OperationTaskService operationTaskService,
-                        ConfigurationCheckJobExecutor configurationCheckJobExecutor) {
+                        ConfigurationCheckJobExecutor configurationCheckJobExecutor,
+                        WorkerShutdownState workerShutdownState) {
                 this.jobRepository = jobRepository;
                 this.auditRecorderPort = auditRecorderPort;
                 this.operationTaskService = operationTaskService;
                 this.configurationCheckJobExecutor = configurationCheckJobExecutor;
+                this.workerShutdownState = workerShutdownState;
         }
 
         @Transactional
         public ClaimJobResponse claimJob(String workerId) {
+                if (workerShutdownState.isShuttingDown()) {
+                        log.info("job_claim_skipped reason=worker_shutdown workerId={}", workerId);
+
+                        auditRecorderPort.record(workerId, "JOB_CLAIM_SKIPPED", "OPERATION_JOB",
+                                        "-", "SKIPPED",
+                                        "Job claim skipped because worker is shutting down.");
+
+                        return ClaimJobResponse.empty();
+                }
+
                 List<OperationJob> jobs = jobRepository
                                 .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
                                                 JobStatus.QUEUED, LocalDateTime.now());
@@ -48,6 +66,17 @@ public class OperationWorkerService {
                 }
 
                 OperationJob job = jobs.getFirst();
+
+                if (workerShutdownState.isShuttingDown()) {
+                        log.info("job_claim_skipped_after_lookup reason=worker_shutdown workerId={} jobId={}",
+                                        workerId, job.getId());
+
+                        auditRecorderPort.record(workerId, "JOB_CLAIM_SKIPPED", "OPERATION_JOB",
+                                        String.valueOf(job.getId()), "SKIPPED",
+                                        "Job claim skipped after lookup because worker is shutting down.");
+
+                        return ClaimJobResponse.empty();
+                }
 
                 job.start(workerId, LocalDateTime.now().plusSeconds(LEASE_SECONDS));
 

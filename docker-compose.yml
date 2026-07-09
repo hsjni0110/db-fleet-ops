@@ -95,6 +95,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    stop_grace_period: 70s
     environment:
       SPRING_PROFILES_ACTIVE: ${WORKER_SPRING_PROFILES_ACTIVE:-docker,worker}
       DB_FLEETOPS_DATASOURCE_URL: jdbc:mysql://metadata-mysql:3306/${METADATA_MYSQL_DATABASE:-db_fleetops}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul

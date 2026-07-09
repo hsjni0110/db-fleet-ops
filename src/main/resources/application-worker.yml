@@ -1,10 +1,16 @@
 db-fleetops:
   worker:
     enabled: true
+    shutdown:
+      stop-claiming-on-shutdown: true
 
 spring:
   main:
     web-application-type: servlet
 
+  lifecycle:
+    timeout-per-shutdown-phase: 60s
+
 server:
   port: ${SERVER_PORT:8080}
+  shutdown: graceful
