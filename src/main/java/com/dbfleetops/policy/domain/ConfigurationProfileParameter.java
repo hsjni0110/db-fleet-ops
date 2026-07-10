@@ -1,5 +1,6 @@
 package com.dbfleetops.policy.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
@@ -22,6 +23,7 @@ public class ConfigurationProfileParameter {
 
     private String parameterName;
 
+    @Column(columnDefinition = "TEXT")
     private String expectedValue;
 
     @Enumerated(EnumType.STRING)

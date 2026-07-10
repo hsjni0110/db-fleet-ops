@@ -52,11 +52,15 @@ const jobForm = reactive<OperationJobFormState>({
   profileId: null,
   reason: "manual backup from operation console",
   requestedBy: "local-user",
-  parametersText: "slow_query_log=ON\nlong_query_time=1.0",
+  parametersText: "",
 });
 
 const activeProfiles = computed(() => {
   return props.profiles.filter((profile) => profile.status === "ACTIVE");
+});
+
+const selectedProfile = computed(() => {
+  return activeProfiles.value.find((profile) => profile.profileId === jobForm.profileId);
 });
 
 const selectedJobDescription = computed(() => {
@@ -107,6 +111,17 @@ function parseApplyParameters() {
   }
 
   return parameters;
+}
+
+function buildApplyParametersText(profile: ConfigurationProfileResponse | undefined) {
+  if (!profile) {
+    return "";
+  }
+
+  return profile.parameters
+    .filter((parameter) => parameter.dynamic && parameter.applyAllowed)
+    .map((parameter) => `${parameter.parameterName}=${parameter.expectedValue}`)
+    .join("\n");
 }
 
 function submitOperationJob() {
@@ -171,6 +186,14 @@ watch(
       jobForm.profileId = profiles[0].profileId;
     }
   },
+);
+
+watch(
+  selectedProfile,
+  (profile) => {
+    jobForm.parametersText = buildApplyParametersText(profile);
+  },
+  { immediate: true },
 );
 </script>
 

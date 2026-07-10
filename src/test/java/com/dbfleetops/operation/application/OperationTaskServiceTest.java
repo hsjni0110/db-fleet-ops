@@ -6,6 +6,11 @@ import com.dbfleetops.agent.domain.AgentStatus;
 import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
 import com.dbfleetops.backup.application.BackupRestoreVerificationResultRecorder;
+import com.dbfleetops.database.domain.DatabaseCredential;
+import com.dbfleetops.database.domain.DatabaseEngine;
+import com.dbfleetops.database.domain.ManagedDatabase;
+import com.dbfleetops.database.infra.DatabaseCredentialRepository;
+import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.domain.OperationJob;
@@ -51,6 +56,12 @@ class OperationTaskServiceTest {
         private OperationJobRepository jobRepository;
 
         @Mock
+        private ManagedDatabaseRepository databaseRepository;
+
+        @Mock
+        private DatabaseCredentialRepository credentialRepository;
+
+        @Mock
         private AgentHostMetricRepository agentHostMetricRepository;
 
         @Mock
@@ -61,8 +72,8 @@ class OperationTaskServiceTest {
                                 new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
 
                 return new OperationTaskService(agentRepository, taskRepository, jobRepository,
-                                agentHostMetricRepository, restoreVerifyTaskPayloadFactory,
-                                backupRestoreVerificationResultRecorder);
+                                databaseRepository, credentialRepository, agentHostMetricRepository,
+                                restoreVerifyTaskPayloadFactory, backupRestoreVerificationResultRecorder);
         }
 
         @Test
@@ -192,6 +203,11 @@ class OperationTaskServiceTest {
                                 .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
                                                 .thenReturn(Optional.of(agent));
 
+                when(databaseRepository.findById(1L)).thenReturn(Optional.of(newManagedDatabase()));
+
+                when(credentialRepository.findByDatabaseId(1L))
+                                .thenReturn(Optional.of(new DatabaseCredential(1L, "root", "rootpw")));
+
                 when(taskRepository.save(any(OperationTask.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -206,8 +222,10 @@ class OperationTaskServiceTest {
                 assertThat(response.status()).isEqualTo(OperationTaskStatus.QUEUED);
 
                 assertThat(response.parametersJson()).contains("\"operationJobId\": 100",
-                                "\"databaseId\": 1", "\"backupType\": \"LOGICAL\"",
-                                "\"verifyAfterBackup\": false");
+                                "\"databaseId\": 1", "\"databaseName\": \"orders\"",
+                                "\"host\": \"target-mysql\"", "\"port\": 3306",
+                                "\"username\": \"root\"", "\"password\": \"rootpw\"",
+                                "\"backupType\": \"LOGICAL\"", "\"verifyAfterBackup\": false");
         }
 
         @Test
@@ -219,6 +237,40 @@ class OperationTaskServiceTest {
                 OperationTaskService service = newService();
 
                 assertThrows(IllegalStateException.class,
+                                () -> service.createBackupTaskForOperationJob(100L, 1L));
+        }
+
+        @Test
+        void createBackupTaskForOperationJobThrowsExceptionWhenDatabaseDoesNotExist() {
+                Agent agent = newAgent();
+
+                when(agentRepository
+                                .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
+                                                .thenReturn(Optional.of(agent));
+
+                when(databaseRepository.findById(1L)).thenReturn(Optional.empty());
+
+                OperationTaskService service = newService();
+
+                assertThrows(IllegalArgumentException.class,
+                                () -> service.createBackupTaskForOperationJob(100L, 1L));
+        }
+
+        @Test
+        void createBackupTaskForOperationJobThrowsExceptionWhenCredentialDoesNotExist() {
+                Agent agent = newAgent();
+
+                when(agentRepository
+                                .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
+                                                .thenReturn(Optional.of(agent));
+
+                when(databaseRepository.findById(1L)).thenReturn(Optional.of(newManagedDatabase()));
+
+                when(credentialRepository.findByDatabaseId(1L)).thenReturn(Optional.empty());
+
+                OperationTaskService service = newService();
+
+                assertThrows(IllegalArgumentException.class,
                                 () -> service.createBackupTaskForOperationJob(100L, 1L));
         }
 
@@ -704,5 +756,11 @@ class OperationTaskServiceTest {
                 assertThat(job.getResultCode()).isEqualTo("CLEANUP_FAILED");
 
                 assertThat(job.getResultMessage()).isEqualTo("drop database failed");
+        }
+
+        private ManagedDatabase newManagedDatabase() {
+                return new ManagedDatabase("target-mysql", "target-mysql", 3306, "orders",
+                                DatabaseEngine.MYSQL, "LOCAL", "target-mysql", "platform-team",
+                                "local target database");
         }
 }

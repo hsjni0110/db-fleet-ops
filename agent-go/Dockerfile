@@ -8,16 +8,11 @@ RUN go mod download
 
 COPY . .
 
-RUN go build \
+RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /out/db-fleet-agent \
     ./cmd/db-fleet-agent
 
-FROM alpine:3.20
-
-RUN apk add --no-cache \
-    mysql-client \
-    ca-certificates \
-    tzdata
+FROM mysql:8.0
 
 WORKDIR /app
 

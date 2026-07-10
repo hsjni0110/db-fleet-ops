@@ -6,6 +6,10 @@ import com.dbfleetops.agent.domain.AgentStatus;
 import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
 import com.dbfleetops.backup.application.BackupRestoreVerificationResultRecorder;
+import com.dbfleetops.database.domain.DatabaseCredential;
+import com.dbfleetops.database.domain.ManagedDatabase;
+import com.dbfleetops.database.infra.DatabaseCredentialRepository;
+import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.domain.OperationTask;
 import com.dbfleetops.operation.domain.OperationTaskStatus;
@@ -31,6 +35,8 @@ public class OperationTaskService {
     private final AgentRepository agentRepository;
     private final OperationTaskRepository taskRepository;
     private final OperationJobRepository jobRepository;
+    private final ManagedDatabaseRepository databaseRepository;
+    private final DatabaseCredentialRepository credentialRepository;
     private final AgentHostMetricRepository agentHostMetricRepository;
     private final RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory;
     private final BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder;
@@ -38,12 +44,16 @@ public class OperationTaskService {
 
     public OperationTaskService(AgentRepository agentRepository,
             OperationTaskRepository taskRepository, OperationJobRepository jobRepository,
+            ManagedDatabaseRepository databaseRepository,
+            DatabaseCredentialRepository credentialRepository,
             AgentHostMetricRepository agentHostMetricRepository,
             RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory,
             BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder) {
         this.agentRepository = agentRepository;
         this.taskRepository = taskRepository;
         this.jobRepository = jobRepository;
+        this.databaseRepository = databaseRepository;
+        this.credentialRepository = credentialRepository;
         this.agentHostMetricRepository = agentHostMetricRepository;
         this.restoreVerifyTaskPayloadFactory = restoreVerifyTaskPayloadFactory;
         this.backupRestoreVerificationResultRecorder = backupRestoreVerificationResultRecorder;
@@ -225,27 +235,30 @@ public class OperationTaskService {
                         .orElseThrow(() -> new IllegalStateException(
                                 "No ONLINE agent available for backup task."));
 
-        /*
-         * 현재 이 메서드는 databaseId만 받아서 Task를 생성하고 있음.
-         *
-         * 하지만 Go Agent의 MYSQL_LOGICAL_BACKUP handler는 실제로 아래 값이 필요함.
-         *
-         * - databaseName - host - port - username - password
-         *
-         * 따라서 이 메서드는 다음 커밋에서 ManagedDatabase / Credential을 조회하도록 확장하는 것이 맞음.
-         *
-         * 지금은 기존 흐름을 깨지 않기 위해 verifyAfterBackup=false로 둠. verifyAfterBackup=true를 사용하려면
-         * parametersJson에 복원 검증에 필요한 접속 정보가 모두 들어가 있어야 함.
-         */
+        ManagedDatabase database = databaseRepository.findById(databaseId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Database not found. databaseId=" + databaseId));
+
+        DatabaseCredential credential = credentialRepository.findByDatabaseId(databaseId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Credential not found. databaseId=" + databaseId));
+
         String parametersJson = """
                 {
                   "operationJobId": %d,
                   "databaseId": %d,
+                  "databaseName": "%s",
+                  "host": "%s",
+                  "port": %d,
+                  "username": "%s",
+                  "password": "%s",
                   "backupType": "LOGICAL",
                   "compression": true,
                   "verifyAfterBackup": false
                 }
-                """.formatted(operationJobId, databaseId);
+                """.formatted(operationJobId, databaseId, escapeJson(database.getDatabaseName()),
+                escapeJson(database.getHost()), database.getPort(), escapeJson(credential.getUsername()),
+                escapeJson(credential.getPassword()));
 
         OperationTask task = OperationTask.createForJob(agent.getId(), operationJobId,
                 OperationTaskType.MYSQL_LOGICAL_BACKUP, parametersJson);
@@ -253,6 +266,16 @@ public class OperationTaskService {
         OperationTask savedTask = taskRepository.save(task);
 
         return OperationTaskResponse.from(savedTask);
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
     }
 
     private OperationJob getLinkedOperationJob(OperationTask task) {

@@ -6,6 +6,11 @@ import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
 import com.dbfleetops.audit.port.AuditRecorderPort;
 import com.dbfleetops.backup.application.BackupRestoreVerificationResultRecorder;
+import com.dbfleetops.database.domain.DatabaseCredential;
+import com.dbfleetops.database.domain.DatabaseEngine;
+import com.dbfleetops.database.domain.ManagedDatabase;
+import com.dbfleetops.database.infra.DatabaseCredentialRepository;
+import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.domain.OperationJob;
@@ -39,6 +44,12 @@ class BackupJobOperationTaskFlowTest {
 
         @Mock
         private OperationJobRepository jobRepository;
+
+        @Mock
+        private ManagedDatabaseRepository databaseRepository;
+
+        @Mock
+        private DatabaseCredentialRepository credentialRepository;
 
         @Mock
         private OperationTaskRepository taskRepository;
@@ -86,6 +97,11 @@ class BackupJobOperationTaskFlowTest {
                                 .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
                                                 .thenReturn(Optional.of(agent));
 
+                when(databaseRepository.findById(1L)).thenReturn(Optional.of(newManagedDatabase()));
+
+                when(credentialRepository.findByDatabaseId(1L))
+                                .thenReturn(Optional.of(new DatabaseCredential(1L, "root", "rootpw")));
+
                 when(taskRepository.save(any(OperationTask.class))).thenAnswer(invocation -> {
                         OperationTask task = invocation.getArgument(0);
 
@@ -98,7 +114,8 @@ class BackupJobOperationTaskFlowTest {
                                 new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
 
                 OperationTaskService taskService = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository, agentHostMetricRepository,
+                                taskRepository, jobRepository, databaseRepository,
+                                credentialRepository, agentHostMetricRepository,
                                 restoreVerifyTaskPayloadFactory,
                                 backupRestoreVerificationResultRecorder);
 
@@ -117,6 +134,10 @@ class BackupJobOperationTaskFlowTest {
                 assertThat(task).isNotNull();
 
                 assertThat(task.getTaskType()).isEqualTo(OperationTaskType.MYSQL_LOGICAL_BACKUP);
+
+                assertThat(task.getParametersJson()).contains("\"host\": \"target-mysql\"",
+                                "\"databaseName\": \"orders\"", "\"username\": \"root\"",
+                                "\"password\": \"rootpw\"");
 
                 assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.QUEUED);
 
@@ -166,7 +187,8 @@ class BackupJobOperationTaskFlowTest {
                                 new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
 
                 OperationTaskService taskService = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository, agentHostMetricRepository,
+                                taskRepository, jobRepository, databaseRepository,
+                                credentialRepository, agentHostMetricRepository,
                                 restoreVerifyTaskPayloadFactory,
                                 backupRestoreVerificationResultRecorder);
 
@@ -185,5 +207,11 @@ class BackupJobOperationTaskFlowTest {
         private Agent newAgent() {
                 return Agent.register("local-agent", "localhost", "127.0.0.1", "Linux", "0.1.0",
                                 "agent-token-001");
+        }
+
+        private ManagedDatabase newManagedDatabase() {
+                return new ManagedDatabase("target-mysql", "target-mysql", 3306, "orders",
+                                DatabaseEngine.MYSQL, "LOCAL", "target-mysql", "platform-team",
+                                "local target database");
         }
 }

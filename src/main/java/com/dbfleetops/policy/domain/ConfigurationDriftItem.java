@@ -1,5 +1,6 @@
 package com.dbfleetops.policy.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -22,8 +23,10 @@ public class ConfigurationDriftItem {
 
     private String parameterName;
 
+    @Column(columnDefinition = "TEXT")
     private String expectedValue;
 
+    @Column(columnDefinition = "TEXT")
     private String actualValue;
 
     @Enumerated(EnumType.STRING)
@@ -38,6 +41,7 @@ public class ConfigurationDriftItem {
     @Enumerated(EnumType.STRING)
     private ComplianceStatus complianceStatus;
 
+    @Column(columnDefinition = "TEXT")
     private String message;
 
     private LocalDateTime createdAt;
