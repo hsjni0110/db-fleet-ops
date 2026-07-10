@@ -56,6 +56,9 @@ class BackupJobOperationTaskFlowTest {
         private ConfigurationCheckJobExecutor configurationCheckJobExecutor;
 
         @Mock
+        private ConfigurationApplyJobExecutor configurationApplyJobExecutor;
+
+        @Mock
         private BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder;
 
         @Mock
@@ -101,7 +104,7 @@ class BackupJobOperationTaskFlowTest {
 
                 OperationWorkerService workerService = new OperationWorkerService(jobRepository,
                                 auditRecorderPort, taskService, configurationCheckJobExecutor,
-                                workerShutdownState);
+                                configurationApplyJobExecutor, workerShutdownState);
 
                 ClaimJobResponse claimResponse = workerService.claimJob("worker-1");
 

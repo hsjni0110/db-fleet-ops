@@ -99,6 +99,8 @@ services:
     stop_grace_period: 70s
     environment:
       SPRING_PROFILES_ACTIVE: ${WORKER_SPRING_PROFILES_ACTIVE:-docker,worker}
+      DB_FLEETOPS_WORKER_ID: ${DB_FLEETOPS_WORKER_ID:-compose-worker-1}
+      DB_FLEETOPS_WORKER_CLAIM_INTERVAL_MS: ${DB_FLEETOPS_WORKER_CLAIM_INTERVAL_MS:-5000}
       DB_FLEETOPS_DATASOURCE_URL: jdbc:mysql://metadata-mysql:3306/${METADATA_MYSQL_DATABASE:-db_fleetops}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
       DB_FLEETOPS_DATASOURCE_DRIVER: com.mysql.cj.jdbc.Driver
       DB_FLEETOPS_DATASOURCE_USERNAME: ${METADATA_MYSQL_USERNAME:-dbfleet}

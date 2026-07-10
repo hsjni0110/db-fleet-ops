@@ -9,6 +9,8 @@ import com.dbfleetops.operation.dto.FailJobRequest;
 import com.dbfleetops.operation.dto.OperationJobResponse;
 import com.dbfleetops.operation.dto.SucceedJobRequest;
 import com.dbfleetops.operation.infra.OperationJobRepository;
+import com.dbfleetops.policy.domain.ConfigurationApply;
+import com.dbfleetops.policy.domain.ConfigurationApplyStatus;
 import com.dbfleetops.worker.application.WorkerShutdownState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,7 +46,16 @@ class OperationWorkerServiceTest {
         private ConfigurationCheckJobExecutor configurationCheckJobExecutor;
 
         @Mock
+        private ConfigurationApplyJobExecutor configurationApplyJobExecutor;
+
+        @Mock
         private WorkerShutdownState workerShutdownState;
+
+        private OperationWorkerService createService() {
+                return new OperationWorkerService(jobRepository, auditRecorderPort,
+                                operationTaskService, configurationCheckJobExecutor,
+                                configurationApplyJobExecutor, workerShutdownState);
+        }
 
         @Test
         void claimJobReturnsEmptyWhenNoQueuedJobExists() {
@@ -53,9 +64,7 @@ class OperationWorkerServiceTest {
                                                 eq(JobStatus.QUEUED), any(LocalDateTime.class)))
                                                                 .thenReturn(List.of());
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService,
-                                configurationCheckJobExecutor, workerShutdownState);
+                OperationWorkerService service = createService();
 
                 ClaimJobResponse response = service.claimJob("worker-1");
 
@@ -74,9 +83,7 @@ class OperationWorkerServiceTest {
                                                 eq(JobStatus.QUEUED), any(LocalDateTime.class)))
                                                                 .thenReturn(List.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService,
-                                configurationCheckJobExecutor, workerShutdownState);
+                OperationWorkerService service = createService();
 
                 ClaimJobResponse response = service.claimJob("worker-1");
 
@@ -111,9 +118,7 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService,
-                                configurationCheckJobExecutor, workerShutdownState);
+                OperationWorkerService service = createService();
 
                 OperationJobResponse response = service.succeedJob("worker-1", 1L,
                                 new SucceedJobRequest("backup completed"));
@@ -139,9 +144,7 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService,
-                                configurationCheckJobExecutor, workerShutdownState);
+                OperationWorkerService service = createService();
 
                 OperationJobResponse response = service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false));
@@ -167,9 +170,7 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService,
-                                configurationCheckJobExecutor, workerShutdownState);
+                OperationWorkerService service = createService();
 
                 assertThrows(IllegalStateException.class, () -> service.succeedJob("worker-2", 1L,
                                 new SucceedJobRequest("backup completed")));
@@ -182,9 +183,7 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService,
-                                configurationCheckJobExecutor, workerShutdownState);
+                OperationWorkerService service = createService();
 
                 assertThrows(IllegalStateException.class, () -> service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false)));
@@ -199,9 +198,7 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService,
-                                configurationCheckJobExecutor, workerShutdownState);
+                OperationWorkerService service = createService();
 
                 OperationJobResponse response = service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "mysqldump failed", false));
@@ -222,9 +219,7 @@ class OperationWorkerServiceTest {
 
                 when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService,
-                                configurationCheckJobExecutor, workerShutdownState);
+                OperationWorkerService service = createService();
 
                 OperationJobResponse response = service.failJob("worker-1", 1L,
                                 new FailJobRequest("BACKUP_FAILED", "temporary error", true));
@@ -257,9 +252,7 @@ class OperationWorkerServiceTest {
                                                 eq(JobStatus.QUEUED), any(LocalDateTime.class)))
                                                                 .thenReturn(List.of(job));
 
-                OperationWorkerService service = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, operationTaskService,
-                                configurationCheckJobExecutor, workerShutdownState);
+                OperationWorkerService service = createService();
 
                 ClaimJobResponse response = service.claimJob("worker-1");
 
@@ -273,5 +266,130 @@ class OperationWorkerServiceTest {
                 verify(auditRecorderPort).record(eq("worker-1"), eq("OPERATION_TASK_CREATED"),
                                 eq("OPERATION_JOB"), nullable(String.class), eq("SUCCESS"),
                                 contains("Backup operation task created"));
+        }
+
+        @Test
+        void claimConfigurationApplyJobExecutesApplyAndSucceedsJobWhenApplySucceeded() {
+                OperationJob job = OperationJob.create(JobType.CONFIGURATION_APPLY, 1L,
+                                "local-user", "idem-apply-001", "{}");
+
+                ConfigurationApply apply =
+                                ConfigurationApply.create(1L, 10L, "local-user", "apply", 1);
+                apply.start(20L);
+                apply.complete(21L, 1, 0, 0);
+                org.springframework.test.util.ReflectionTestUtils.setField(apply, "id", 30L);
+
+                when(jobRepository
+                                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
+                                                eq(JobStatus.QUEUED), any(LocalDateTime.class)))
+                                                                .thenReturn(List.of(job));
+
+                when(configurationApplyJobExecutor.execute(job)).thenReturn(apply);
+
+                OperationWorkerService service = createService();
+
+                ClaimJobResponse response = service.claimJob("worker-1");
+
+                assertThat(response.claimed()).isTrue();
+                assertThat(job.getStatus()).isEqualTo(JobStatus.SUCCEEDED);
+                assertThat(job.getResultCode()).isEqualTo("SUCCESS");
+                assertThat(job.getResultMessage()).contains("applyId=30");
+
+                verify(configurationApplyJobExecutor).execute(job);
+                verify(auditRecorderPort).record(eq("worker-1"),
+                                eq("CONFIGURATION_APPLY_COMPLETED"), eq("OPERATION_JOB"),
+                                nullable(String.class), eq("SUCCESS"),
+                                contains("Configuration apply completed"));
+        }
+
+        @Test
+        void claimConfigurationApplyJobFailsJobWithoutRetryWhenApplyFailed() {
+                OperationJob job = OperationJob.create(JobType.CONFIGURATION_APPLY, 1L,
+                                "local-user", "idem-apply-001", "{}");
+
+                ConfigurationApply apply =
+                                ConfigurationApply.create(1L, 10L, "local-user", "apply", 1);
+                apply.start(20L);
+                apply.complete(21L, 0, 1, 0);
+                org.springframework.test.util.ReflectionTestUtils.setField(apply, "id", 30L);
+
+                when(jobRepository
+                                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
+                                                eq(JobStatus.QUEUED), any(LocalDateTime.class)))
+                                                                .thenReturn(List.of(job));
+
+                when(configurationApplyJobExecutor.execute(job)).thenReturn(apply);
+
+                OperationWorkerService service = createService();
+
+                ClaimJobResponse response = service.claimJob("worker-1");
+
+                assertThat(response.claimed()).isTrue();
+                assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
+                assertThat(job.getRetryCount()).isZero();
+                assertThat(job.getResultCode()).isEqualTo("CONFIGURATION_APPLY_FAILED");
+                assertThat(job.getResultMessage()).contains("status=FAILED");
+
+                verify(configurationApplyJobExecutor).execute(job);
+                verify(auditRecorderPort).record(eq("worker-1"), eq("JOB_FAILED"),
+                                eq("OPERATION_JOB"), nullable(String.class), eq("FAILED"),
+                                contains("Configuration apply completed"));
+        }
+
+        @Test
+        void claimConfigurationApplyJobFailsJobWithoutRetryWhenApplyPartiallySucceeded() {
+                OperationJob job = OperationJob.create(JobType.CONFIGURATION_APPLY, 1L,
+                                "local-user", "idem-apply-001", "{}");
+
+                ConfigurationApply apply =
+                                ConfigurationApply.create(1L, 10L, "local-user", "apply", 2);
+                apply.start(20L);
+                apply.complete(21L, 1, 1, 0);
+                org.springframework.test.util.ReflectionTestUtils.setField(apply, "id", 30L);
+
+                when(jobRepository
+                                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
+                                                eq(JobStatus.QUEUED), any(LocalDateTime.class)))
+                                                                .thenReturn(List.of(job));
+
+                when(configurationApplyJobExecutor.execute(job)).thenReturn(apply);
+
+                OperationWorkerService service = createService();
+
+                ClaimJobResponse response = service.claimJob("worker-1");
+
+                assertThat(response.claimed()).isTrue();
+                assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
+                assertThat(job.getRetryCount()).isZero();
+                assertThat(job.getResultCode()).isEqualTo("CONFIGURATION_APPLY_FAILED");
+                assertThat(job.getResultMessage()).contains(ConfigurationApplyStatus.PARTIALLY_SUCCEEDED.name());
+        }
+
+        @Test
+        void claimConfigurationApplyJobFailsJobWithoutRetryWhenExecutorThrowsException() {
+                OperationJob job = OperationJob.create(JobType.CONFIGURATION_APPLY, 1L,
+                                "local-user", "idem-apply-001", "{}");
+
+                when(jobRepository
+                                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
+                                                eq(JobStatus.QUEUED), any(LocalDateTime.class)))
+                                                                .thenReturn(List.of(job));
+
+                when(configurationApplyJobExecutor.execute(job))
+                                .thenThrow(new IllegalArgumentException("apply payload invalid"));
+
+                OperationWorkerService service = createService();
+
+                ClaimJobResponse response = service.claimJob("worker-1");
+
+                assertThat(response.claimed()).isTrue();
+                assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
+                assertThat(job.getRetryCount()).isZero();
+                assertThat(job.getResultCode()).isEqualTo("IllegalArgumentException");
+                assertThat(job.getResultMessage()).isEqualTo("apply payload invalid");
+
+                verify(auditRecorderPort).record(eq("worker-1"), eq("JOB_FAILED"),
+                                eq("OPERATION_JOB"), nullable(String.class), eq("FAILED"),
+                                eq("apply payload invalid"));
         }
 }

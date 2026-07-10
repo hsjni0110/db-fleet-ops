@@ -9,6 +9,8 @@ import com.dbfleetops.operation.dto.FailJobRequest;
 import com.dbfleetops.operation.dto.OperationJobResponse;
 import com.dbfleetops.operation.dto.SucceedJobRequest;
 import com.dbfleetops.operation.infra.OperationJobRepository;
+import com.dbfleetops.policy.domain.ConfigurationApply;
+import com.dbfleetops.policy.domain.ConfigurationApplyStatus;
 import com.dbfleetops.policy.dto.ConfigurationDriftResponse;
 import com.dbfleetops.worker.application.WorkerShutdownState;
 import org.slf4j.Logger;
@@ -31,17 +33,20 @@ public class OperationWorkerService {
         private final AuditRecorderPort auditRecorderPort;
         private final OperationTaskService operationTaskService;
         private final ConfigurationCheckJobExecutor configurationCheckJobExecutor;
+        private final ConfigurationApplyJobExecutor configurationApplyJobExecutor;
         private final WorkerShutdownState workerShutdownState;
 
         public OperationWorkerService(OperationJobRepository jobRepository,
                         AuditRecorderPort auditRecorderPort,
                         OperationTaskService operationTaskService,
                         ConfigurationCheckJobExecutor configurationCheckJobExecutor,
+                        ConfigurationApplyJobExecutor configurationApplyJobExecutor,
                         WorkerShutdownState workerShutdownState) {
                 this.jobRepository = jobRepository;
                 this.auditRecorderPort = auditRecorderPort;
                 this.operationTaskService = operationTaskService;
                 this.configurationCheckJobExecutor = configurationCheckJobExecutor;
+                this.configurationApplyJobExecutor = configurationApplyJobExecutor;
                 this.workerShutdownState = workerShutdownState;
         }
 
@@ -90,6 +95,10 @@ public class OperationWorkerService {
 
                 if (job.getJobType() == JobType.CONFIGURATION_CHECK) {
                         executeConfigurationCheckJob(workerId, job);
+                }
+
+                if (job.getJobType() == JobType.CONFIGURATION_APPLY) {
+                        executeConfigurationApplyJob(workerId, job);
                 }
 
                 return ClaimJobResponse.claimed(job);
@@ -149,6 +158,39 @@ public class OperationWorkerService {
                                                         : "Configuration check failed.";
 
                         failAndRetryIfNeeded(workerId, job, resultCode, resultMessage, true);
+                }
+        }
+
+        private void executeConfigurationApplyJob(String workerId, OperationJob job) {
+                try {
+                        ConfigurationApply apply = configurationApplyJobExecutor.execute(job);
+
+                        String resultMessage = "Configuration apply completed. applyId="
+                                        + apply.getId() + ", status=" + apply.getStatus()
+                                        + ", successCount=" + apply.getSuccessCount()
+                                        + ", failedCount=" + apply.getFailedCount()
+                                        + ", skippedCount=" + apply.getSkippedCount();
+
+                        if (apply.getStatus() == ConfigurationApplyStatus.SUCCEEDED) {
+                                job.succeed(resultMessage);
+
+                                auditRecorderPort.record(workerId, "CONFIGURATION_APPLY_COMPLETED",
+                                                "OPERATION_JOB", String.valueOf(job.getId()),
+                                                "SUCCESS", resultMessage);
+
+                                return;
+                        }
+
+                        failAndRetryIfNeeded(workerId, job, "CONFIGURATION_APPLY_FAILED",
+                                        resultMessage, false);
+                } catch (Exception exception) {
+                        String resultCode = exception.getClass().getSimpleName();
+
+                        String resultMessage =
+                                        exception.getMessage() != null ? exception.getMessage()
+                                                        : "Configuration apply failed.";
+
+                        failAndRetryIfNeeded(workerId, job, resultCode, resultMessage, false);
                 }
         }
 

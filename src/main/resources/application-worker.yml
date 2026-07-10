@@ -1,6 +1,8 @@
 db-fleetops:
   worker:
     enabled: true
+    id: ${DB_FLEETOPS_WORKER_ID:worker-1}
+    claim-interval-ms: ${DB_FLEETOPS_WORKER_CLAIM_INTERVAL_MS:5000}
     shutdown:
       stop-claiming-on-shutdown: true
 
