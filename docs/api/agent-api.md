@@ -12,6 +12,11 @@ Go Agent → Control Plane
 
 이 구조를 선택한 이유는 DB 서버에 별도 inbound 포트를 열지 않기 위해서입니다.
 
+운영 콘솔에서 Agent 상태를 읽기 위한 public query API는 별도로 제공합니다.
+internal API는 Agent 런타임이 `agentToken`으로 호출하는 쓰기/폴링 API이고,
+console query API는 운영자가 상태를 확인하는 읽기 API입니다.
+public query API 응답에는 `agentToken`을 절대 포함하지 않습니다.
+
 현재 Agent는 다음 흐름으로 동작합니다.
 
 ```text
@@ -31,6 +36,100 @@ Complete 또는 Fail 보고
   ↓
 반복
 ```
+
+---
+
+## Console Query API
+
+### Agent 목록 조회
+
+```http
+GET /api/v1/agents
+```
+
+### Response
+
+```json
+[
+  {
+    "agentId": 1,
+    "agentName": "local-agent",
+    "hostname": "localhost",
+    "ipAddress": "127.0.0.1",
+    "osName": "linux",
+    "architecture": "amd64",
+    "agentVersion": "0.1.0",
+    "status": "ONLINE",
+    "lastHeartbeatAt": "2026-07-06T17:30:00",
+    "heartbeatDelaySeconds": 12,
+    "createdAt": "2026-07-06T17:00:00",
+    "updatedAt": "2026-07-06T17:30:00"
+  }
+]
+```
+
+### Agent 상세 조회
+
+```http
+GET /api/v1/agents/{agentId}
+```
+
+### Response
+
+```json
+{
+  "agent": {
+    "agentId": 1,
+    "agentName": "local-agent",
+    "hostname": "localhost",
+    "ipAddress": "127.0.0.1",
+    "osName": "linux",
+    "architecture": "amd64",
+    "agentVersion": "0.1.0",
+    "status": "ONLINE",
+    "lastHeartbeatAt": "2026-07-06T17:30:00",
+    "heartbeatDelaySeconds": 12,
+    "createdAt": "2026-07-06T17:00:00",
+    "updatedAt": "2026-07-06T17:30:00"
+  },
+  "recentHostMetrics": [
+    {
+      "metricId": 10,
+      "agentId": 1,
+      "cpuUsagePercent": 12.5,
+      "memoryUsagePercent": 61.2,
+      "diskUsagePercent": 73.8,
+      "collectedAt": "2026-07-06T17:30:00"
+    }
+  ],
+  "recentOperationTasks": [
+    {
+      "taskId": 20,
+      "agentId": 1,
+      "operationJobId": 30,
+      "taskType": "COLLECT_LINUX_STATUS",
+      "status": "SUCCEEDED",
+      "parametersJson": "{}",
+      "resultPayloadJson": "{}",
+      "errorCode": null,
+      "errorMessage": null,
+      "startedAt": "2026-07-06T17:29:00",
+      "completedAt": "2026-07-06T17:30:00",
+      "createdAt": "2026-07-06T17:28:00"
+    }
+  ]
+}
+```
+
+### 설명
+
+Console Query API는 운영 콘솔 화면 전용 읽기 API입니다.
+
+목록 화면에서는 Agent 기본 정보와 Heartbeat 지연 시간을 표시합니다.
+상세 화면에서는 최근 Host Metric 10건과 최근 OperationTask 10건을 함께 표시합니다.
+
+`heartbeatDelaySeconds`는 서버 시각 기준으로 `lastHeartbeatAt` 이후 경과 시간을 초 단위로 계산합니다.
+Heartbeat가 없는 Agent라면 `heartbeatDelaySeconds`는 `null`입니다.
 
 ---
 

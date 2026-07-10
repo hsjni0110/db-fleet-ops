@@ -35,6 +35,7 @@ type registerAgentRequest struct {
 	Hostname     string `json:"hostname"`
 	IPAddress    string `json:"ipAddress"`
 	OSName       string `json:"osName"`
+	Architecture string `json:"architecture"`
 	AgentVersion string `json:"agentVersion"`
 }
 
@@ -53,6 +54,7 @@ func (c *ControlPlaneClient) RegisterAgent(
 		Hostname:     agentInfo.Hostname,
 		IPAddress:    agentInfo.IPAddress,
 		OSName:       agentInfo.OSName,
+		Architecture: agentInfo.Architecture,
 		AgentVersion: agentInfo.AgentVersion,
 	}
 

@@ -21,7 +21,7 @@ class AgentPersistenceTest {
         @Test
         void saveAndFindAgent() {
                 Agent agent = Agent.register("local-agent", "localhost", "127.0.0.1", "Linux",
-                                "0.1.0", "agent-token-001");
+                                "amd64", "0.1.0", "agent-token-001");
 
                 Agent savedAgent = agentRepository.save(agent);
 
@@ -30,6 +30,8 @@ class AgentPersistenceTest {
                 assertThat(foundAgent.getAgentName()).isEqualTo("local-agent");
 
                 assertThat(foundAgent.getHostname()).isEqualTo("localhost");
+
+                assertThat(foundAgent.getArchitecture()).isEqualTo("amd64");
 
                 assertThat(foundAgent.getStatus()).isEqualTo(AgentStatus.ONLINE);
 

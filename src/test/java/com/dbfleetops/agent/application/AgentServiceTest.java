@@ -33,6 +33,7 @@ class AgentServiceTest {
                         "localhost",
                         "127.0.0.1",
                         "Linux",
+                        "amd64",
                         "0.1.0"
                 );
 
@@ -53,6 +54,30 @@ class AgentServiceTest {
 
         verify(agentRepository)
                 .save(any(Agent.class));
+    }
+
+    @Test
+    void registerStoresUnknownArchitectureWhenBlank() {
+        RegisterAgentRequest request =
+                new RegisterAgentRequest(
+                        "local-agent",
+                        "localhost",
+                        "127.0.0.1",
+                        "Linux",
+                        " ",
+                        "0.1.0"
+                );
+
+        when(agentRepository.save(any(Agent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        AgentService service =
+                new AgentService(agentRepository);
+
+        service.register(request);
+
+        verify(agentRepository)
+                .save(argThat(agent -> "unknown".equals(agent.getArchitecture())));
     }
 
     @Test

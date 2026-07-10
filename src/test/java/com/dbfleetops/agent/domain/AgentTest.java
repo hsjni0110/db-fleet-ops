@@ -15,6 +15,7 @@ class AgentTest {
                         "localhost",
                         "127.0.0.1",
                         "Linux",
+                        "amd64",
                         "0.1.0",
                         "token-001"
                 );
@@ -24,6 +25,9 @@ class AgentTest {
 
         assertThat(agent.getHostname())
                 .isEqualTo("localhost");
+
+        assertThat(agent.getArchitecture())
+                .isEqualTo("amd64");
 
         assertThat(agent.getStatus())
                 .isEqualTo(AgentStatus.ONLINE);

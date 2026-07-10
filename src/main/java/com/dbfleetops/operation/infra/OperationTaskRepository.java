@@ -11,5 +11,7 @@ public interface OperationTaskRepository extends JpaRepository<OperationTask, Lo
     List<OperationTask> findTop1ByAgentIdAndStatusOrderByCreatedAtAsc(Long agentId,
             OperationTaskStatus status);
 
+    List<OperationTask> findTop10ByAgentIdOrderByCreatedAtDesc(Long agentId);
+
     long countByStatus(OperationTaskStatus status);
 }

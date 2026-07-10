@@ -2,6 +2,8 @@ import { http } from "./http";
 import type {
   AgentHeartbeatRequest,
   AgentHeartbeatResponse,
+  AgentConsoleResponse,
+  AgentDetailResponse,
   AgentRegisterRequest,
   AgentRegisterResponse,
   AgentTaskResponse,
@@ -10,6 +12,18 @@ import type {
   NextAgentTaskResponse,
   StartAgentTaskRequest,
 } from "../types";
+
+export async function getAgents(): Promise<AgentConsoleResponse[]> {
+  const response = await http.get<AgentConsoleResponse[]>("/api/v1/agents");
+
+  return response.data;
+}
+
+export async function getAgentDetail(agentId: number): Promise<AgentDetailResponse> {
+  const response = await http.get<AgentDetailResponse>(`/api/v1/agents/${agentId}`);
+
+  return response.data;
+}
 
 export async function registerAgent(
   request: AgentRegisterRequest,

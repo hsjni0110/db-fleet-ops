@@ -20,6 +20,8 @@ public class Agent {
 
     private String osName;
 
+    private String architecture;
+
     private String agentVersion;
 
     private String agentToken;
@@ -41,6 +43,7 @@ public class Agent {
             String hostname,
             String ipAddress,
             String osName,
+            String architecture,
             String agentVersion,
             String agentToken
     ) {
@@ -48,6 +51,7 @@ public class Agent {
         this.hostname = hostname;
         this.ipAddress = ipAddress;
         this.osName = osName;
+        this.architecture = normalizeArchitecture(architecture);
         this.agentVersion = agentVersion;
         this.agentToken = agentToken;
         this.status = AgentStatus.ONLINE;
@@ -61,6 +65,7 @@ public class Agent {
             String hostname,
             String ipAddress,
             String osName,
+            String architecture,
             String agentVersion,
             String agentToken
     ) {
@@ -69,9 +74,37 @@ public class Agent {
                 hostname,
                 ipAddress,
                 osName,
+                architecture,
                 agentVersion,
                 agentToken
         );
+    }
+
+    public static Agent register(
+            String agentName,
+            String hostname,
+            String ipAddress,
+            String osName,
+            String agentVersion,
+            String agentToken
+    ) {
+        return register(
+                agentName,
+                hostname,
+                ipAddress,
+                osName,
+                "unknown",
+                agentVersion,
+                agentToken
+        );
+    }
+
+    private static String normalizeArchitecture(String architecture) {
+        if (architecture == null || architecture.isBlank()) {
+            return "unknown";
+        }
+
+        return architecture;
     }
 
     public void heartbeat() {
@@ -124,6 +157,10 @@ public class Agent {
 
     public String getOsName() {
         return osName;
+    }
+
+    public String getArchitecture() {
+        return normalizeArchitecture(architecture);
     }
 
     public String getAgentVersion() {

@@ -5,6 +5,7 @@ public record RegisterAgentRequest(
         String hostname,
         String ipAddress,
         String osName,
+        String architecture,
         String agentVersion
 ) {
 }

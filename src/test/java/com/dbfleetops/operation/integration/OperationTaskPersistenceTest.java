@@ -56,6 +56,20 @@ class OperationTaskPersistenceTest {
         }
 
         @Test
+        void findLatestTasksByAgentId() {
+                taskRepository.save(OperationTask.create(1L,
+                                OperationTaskType.COLLECT_LINUX_STATUS, "{}"));
+
+                taskRepository.save(OperationTask.create(1L,
+                                OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}"));
+
+                List<OperationTask> foundTasks =
+                                taskRepository.findTop10ByAgentIdOrderByCreatedAtDesc(1L);
+
+                assertThat(foundTasks).hasSize(2);
+        }
+
+        @Test
         void taskStartIsPersisted() {
                 OperationTask task = OperationTask.create(1L,
                                 OperationTaskType.COLLECT_LINUX_STATUS, "{}");

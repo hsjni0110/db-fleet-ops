@@ -32,6 +32,7 @@ public class AgentService {
                         request.hostname(),
                         request.ipAddress(),
                         request.osName(),
+                        request.architecture(),
                         request.agentVersion(),
                         generateAgentToken()
                 );

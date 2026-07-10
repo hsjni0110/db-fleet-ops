@@ -1,7 +1,7 @@
 import type { DateTimeString, Nullable } from "./common";
 import type { OperationTaskType, OperationTaskStatus } from "./operationJob";
 
-export type AgentStatus = "ONLINE" | "OFFLINE" | "UNKNOWN";
+export type AgentStatus = "ONLINE" | "OFFLINE" | "UNKNOWN" | "DISABLED";
 
 export interface AgentRegisterRequest {
   agentName: string;
@@ -66,4 +66,34 @@ export interface FailAgentTaskRequest {
   agentToken: string;
   errorCode: string;
   errorMessage: string;
+}
+
+export interface AgentConsoleResponse {
+  agentId: number;
+  agentName: string;
+  hostname: string;
+  ipAddress: string;
+  osName: string;
+  architecture: string;
+  agentVersion: string;
+  status: AgentStatus;
+  lastHeartbeatAt?: Nullable<DateTimeString>;
+  heartbeatDelaySeconds?: Nullable<number>;
+  createdAt: DateTimeString;
+  updatedAt: DateTimeString;
+}
+
+export interface AgentHostMetricResponse {
+  metricId: number;
+  agentId: number;
+  cpuUsagePercent: number;
+  memoryUsagePercent: number;
+  diskUsagePercent: number;
+  collectedAt: DateTimeString;
+}
+
+export interface AgentDetailResponse {
+  agent: AgentConsoleResponse;
+  recentHostMetrics: AgentHostMetricResponse[];
+  recentOperationTasks: AgentTaskResponse[];
 }

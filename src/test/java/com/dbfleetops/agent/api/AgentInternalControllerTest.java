@@ -43,6 +43,7 @@ class AgentInternalControllerTest {
                                   "hostname": "localhost",
                                   "ipAddress": "127.0.0.1",
                                   "osName": "Linux",
+                                  "architecture": "amd64",
                                   "agentVersion": "0.1.0"
                                 }
                                 """;
