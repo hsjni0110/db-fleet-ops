@@ -225,7 +225,8 @@ class OperationTaskServiceTest {
                                 "\"databaseId\": 1", "\"databaseName\": \"orders\"",
                                 "\"host\": \"target-mysql\"", "\"port\": 3306",
                                 "\"username\": \"root\"", "\"password\": \"rootpw\"",
-                                "\"backupType\": \"LOGICAL\"", "\"verifyAfterBackup\": false");
+                                "\"backupType\": \"LOGICAL\"", "\"verifyAfterBackup\": true",
+                                "\"verifyRowCount\": true", "\"cleanup\": true");
         }
 
         @Test

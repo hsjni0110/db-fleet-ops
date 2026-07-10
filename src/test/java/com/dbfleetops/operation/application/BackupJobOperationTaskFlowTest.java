@@ -30,9 +30,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -76,7 +76,7 @@ class BackupJobOperationTaskFlowTest {
         private WorkerShutdownState workerShutdownState;
 
         @Test
-        void backupJobClaimCreatesTaskAndTaskCompleteSucceedsJob() {
+        void backupJobClaimCreatesTaskAndBackupCompleteCreatesRestoreVerifyTask() {
                 OperationJob job =
                                 OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
 
@@ -86,7 +86,7 @@ class BackupJobOperationTaskFlowTest {
 
                 ReflectionTestUtils.setField(agent, "id", 1L);
 
-                AtomicReference<OperationTask> savedTask = new AtomicReference<>();
+                List<OperationTask> savedTasks = new ArrayList<>();
 
                 when(jobRepository
                                 .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
@@ -105,7 +105,12 @@ class BackupJobOperationTaskFlowTest {
                 when(taskRepository.save(any(OperationTask.class))).thenAnswer(invocation -> {
                         OperationTask task = invocation.getArgument(0);
 
-                        savedTask.set(task);
+                        if (task.getId() == null) {
+                                ReflectionTestUtils.setField(task, "id",
+                                                10L + savedTasks.size());
+                        }
+
+                        savedTasks.add(task);
 
                         return task;
                 });
@@ -129,7 +134,7 @@ class BackupJobOperationTaskFlowTest {
 
                 assertThat(job.getStatus()).isEqualTo(JobStatus.RUNNING);
 
-                OperationTask task = savedTask.get();
+                OperationTask task = savedTasks.getFirst();
 
                 assertThat(task).isNotNull();
 
@@ -137,7 +142,8 @@ class BackupJobOperationTaskFlowTest {
 
                 assertThat(task.getParametersJson()).contains("\"host\": \"target-mysql\"",
                                 "\"databaseName\": \"orders\"", "\"username\": \"root\"",
-                                "\"password\": \"rootpw\"");
+                                "\"password\": \"rootpw\"", "\"verifyAfterBackup\": true",
+                                "\"verifyRowCount\": true", "\"cleanup\": true");
 
                 assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.QUEUED);
 
@@ -151,16 +157,39 @@ class BackupJobOperationTaskFlowTest {
 
                 when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
 
-                taskService.completeTask(1L, 10L, new CompleteOperationTaskRequest(
-                                "agent-token-001", "{\"status\":\"CREATED\"}"));
+                taskService.completeTask(1L, 10L,
+                                new CompleteOperationTaskRequest("agent-token-001", """
+                                                {
+                                                  "status": "VERIFIED",
+                                                  "backupFile": "/var/lib/db-fleet-agent/backups/orders.sql",
+                                                  "fileSizeBytes": 3198,
+                                                  "checksumSha256": "abc123",
+                                                  "createdAt": "2026-07-10T16:40:00+09:00",
+                                                  "message": "backup artifact verified"
+                                                }
+                                                """));
 
                 assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
 
-                assertThat(job.getStatus()).isEqualTo(JobStatus.SUCCEEDED);
+                assertThat(job.getStatus()).isEqualTo(JobStatus.RUNNING);
 
-                assertThat(job.getResultCode()).isEqualTo("SUCCESS");
+                assertThat(savedTasks).hasSize(2);
 
-                assertThat(job.getResultMessage()).isEqualTo("{\"status\":\"CREATED\"}");
+                OperationTask restoreVerifyTask = savedTasks.get(1);
+
+                assertThat(restoreVerifyTask.getTaskType())
+                                .isEqualTo(OperationTaskType.MYSQL_RESTORE_VERIFY);
+
+                assertThat(restoreVerifyTask.getOperationJobId()).isEqualTo(job.getId());
+
+                assertThat(restoreVerifyTask.getParametersJson()).contains(
+                                "\"operationJobId\":100",
+                                "\"databaseId\":1",
+                                "\"backupTaskId\":10",
+                                "\"sourceDatabaseName\":\"orders\"",
+                                "\"backupFile\":\"/var/lib/db-fleet-agent/backups/orders.sql\"",
+                                "\"verifyRowCount\":true",
+                                "\"cleanup\":true");
         }
 
         @Test

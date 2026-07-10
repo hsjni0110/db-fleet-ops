@@ -254,7 +254,9 @@ public class OperationTaskService {
                   "password": "%s",
                   "backupType": "LOGICAL",
                   "compression": true,
-                  "verifyAfterBackup": false
+                  "verifyAfterBackup": true,
+                  "verifyRowCount": true,
+                  "cleanup": true
                 }
                 """.formatted(operationJobId, databaseId, escapeJson(database.getDatabaseName()),
                 escapeJson(database.getHost()), database.getPort(), escapeJson(credential.getUsername()),
