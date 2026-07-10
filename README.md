@@ -28,30 +28,62 @@ DB FleetOps는 이러한 운영 질문을 API, Job Engine, Agent, Worker, Audit,
 
 ---
 
-## 2. 현재 구현 범위
+## 2. 문서 목록 및 구현 현황
 
-현재 구현된 주요 범위는 다음과 같습니다.
+프로젝트의 각 단계별 설계 문서는 `docs` 디렉토리에 정리되어 있습니다.
 
-```text
-Spring Boot 기반 Control Plane
-MySQL Health Check
-공통 오류 응답 및 Request ID 추적
-단위 테스트 / 통합 테스트 분리
-Operation Job Engine
-Worker Claim / Lease / Retry / Audit 구조
-Go Agent 기반 Host 작업 실행
-OperationJob과 OperationTask 연결
-MySQL Logical Backup 실행
-백업 파일 검증
-복원 검증 기반 백업 성공 판단
-Configuration Drift 탐지
-Safe Configuration Apply
-Docker Compose 배포
-Kubernetes / minikube 배포 구조
-Actuator / Prometheus / Grafana 관측성 구성
-Worker Graceful Shutdown
-Smoke Test
-```
+| 번호 | 문서 | 설명 |
+|---:|---|---|
+| 1 | [프로젝트 개요](docs/1-프로젝트-개요.md) | 프로젝트 목적, 현재 구현 범위, API, 기술 스택, 패키지 구조 정리 |
+| 2 | [테스트 전략](docs/2-테스트-전략.md) | 단위 테스트, MVC 테스트, 통합 테스트를 분리한 이유와 실행 방식 정리 |
+| 3 | [비동기 운영 작업을 위한 Job Engine 설계](docs/3-비동기-운영-작업을-위한-job-engine-설계.md) | OperationJob, 상태 전이, Idempotency, Worker Claim, Lease, Retry, Audit 설계 |
+| 4 | [Control Plane과 Go Agent를 분리한 DB Host 작업 실행 구조](docs/4-control-plane과-go-agent를-분리한-db-host-작업-실행-구조.md) | Control Plane과 Agent를 분리한 이유, Pull 방식 통신, Agent Task 구조 정리 |
+| 5 | [Operation Job과 Operation Task를 연결한 Agent 기반 백업 실행 구조](docs/5-operation-job과-operation-task를-연결한-agent-기반-백업-실행-구조.md) | Backup Job, OperationTask, Go Agent 실행, mysqldump, 결과 반영 흐름 정리 |
+| 6 | [Configuration Drift 설계](docs/6-configuration-draft-설계.md) | Configuration Profile, Snapshot, Drift 비교, Drift 저장 및 조회 구조 정리 |
+| 7 | [Safe Configuration Apply 설계](docs/7-safe-configuration-apply-설계.md) | 설정 변경 검증, SET GLOBAL, 변경 전후 Snapshot, Apply 결과 저장 구조 정리 |
+| 8 | [백업 성공 기준을 "파일 생성"에서 "복원 가능성"으로 확장하기](docs/8-백업-성공기준을-확장시키기.md) | 백업 파일 생성 이후 Restore 검증까지 성공 기준을 확장한 이유와 구현 정리 |
+| 9 | [DB FleetOps 배포 및 관측성 구성 정리](docs/9-db-fleetops-배포-및-관측성-구성.md) | Docker Compose, Kubernetes, Actuator, Prometheus, Grafana, Smoke Test 구성 정리 |
+
+
+### 2.1 Database 인스턴스 목록 확인
+
+![Database inventory 확인](./docs/images/1-db-instance-관리.png)
+
+target이 되는 DB를 등록하고, 관리할 수 있습니다.
+
+![DB detail](./docs/images/2-db-detail.png)
+
+
+### 2.2 작업 상태 추적
+
+![Operation job](./docs/images/3-operation-job.png)
+
+Operation job이라는 단위로 작업 상태를 추적할 수 있습니다.
+
+### 2.3 Agent 관리
+
+![Agent Management](./docs/images/4-agent-detail.png)
+
+작업을 Polling하여 수행하는 Go Agent를 관리하는 탭입니다. 해당 Agent가 수행한 작업을 확인할 수 있습니다.
+
+### 2.4 Configuration Profile 등록
+
+![Configuration Profile](./docs/images/5-configuration-profile.png)
+
+DB가 따라야할 설정 값들에 대해서 프로필을 생성할 수 있습니다. 해당 프로필을 기준을 잘 따르고 있는지, Drift 탭에서 확인할 수 있습니다.
+
+### 2.5 Configuration Drift
+
+![Configuration Drift](./docs/images/6-configuration-draft.png)
+
+Drift 페이지에서는 실제 DB의 설정 값과 Profile에서 등록한 프로필의 설정값을 비교한 결과를 제시합니다.
+
+### 2.6 백업 결과 검증 페이지
+
+![Restore Verify](./docs/images/7-restore-verify.png)
+
+백업 작업의 경우에는 자동으로 백업이 복구 가능한 수준인지 검증을 합니다. 이에 대한 결과를 백업 결과 검증 페이지를 통해서 확인할 수 있습니다.
+
 
 ---
 
@@ -512,96 +544,3 @@ Probe
 ```
 
 자세한 내용은 [DB FleetOps 배포 및 관측성 구성 정리](docs/9-db-fleetops-배포-및-관측성-구성.md) 문서에 정리되어 있습니다.
-
----
-
-## 13. 문서 목록
-
-프로젝트의 각 단계별 설계 문서는 `docs` 디렉토리에 정리되어 있습니다.
-
-| 번호 | 문서 | 설명 |
-|---:|---|---|
-| 1 | [프로젝트 개요](docs/1-프로젝트-개요.md) | 프로젝트 목적, 현재 구현 범위, API, 기술 스택, 패키지 구조 정리 |
-| 2 | [테스트 전략](docs/2-테스트-전략.md) | 단위 테스트, MVC 테스트, 통합 테스트를 분리한 이유와 실행 방식 정리 |
-| 3 | [비동기 운영 작업을 위한 Job Engine 설계](docs/3-비동기-운영-작업을-위한-job-engine-설계.md) | OperationJob, 상태 전이, Idempotency, Worker Claim, Lease, Retry, Audit 설계 |
-| 4 | [Control Plane과 Go Agent를 분리한 DB Host 작업 실행 구조](docs/4-control-plane과-go-agent를-분리한-db-host-작업-실행-구조.md) | Control Plane과 Agent를 분리한 이유, Pull 방식 통신, Agent Task 구조 정리 |
-| 5 | [Operation Job과 Operation Task를 연결한 Agent 기반 백업 실행 구조](docs/5-operation-job과-operation-task를-연결한-agent-기반-백업-실행-구조.md) | Backup Job, OperationTask, Go Agent 실행, mysqldump, 결과 반영 흐름 정리 |
-| 6 | [Configuration Drift 설계](docs/6-configuration-draft-설계.md) | Configuration Profile, Snapshot, Drift 비교, Drift 저장 및 조회 구조 정리 |
-| 7 | [Safe Configuration Apply 설계](docs/7-safe-configuration-apply-설계.md) | 설정 변경 검증, SET GLOBAL, 변경 전후 Snapshot, Apply 결과 저장 구조 정리 |
-| 8 | [백업 성공 기준을 “파일 생성”에서 “복원 가능성”으로 확장하기](docs/8-백업-성공기준을-확장시키기.md) | 백업 파일 생성 이후 Restore 검증까지 성공 기준을 확장한 이유와 구현 정리 |
-| 9 | [DB FleetOps 배포 및 관측성 구성 정리](docs/9-db-fleetops-배포-및-관측성-구성.md) | Docker Compose, Kubernetes, Actuator, Prometheus, Grafana, Smoke Test 구성 정리 |
-
----
-
-## 14. 실행 및 테스트
-
-### 14.1 단위 테스트
-
-```bash
-./gradlew test
-```
-
-### 14.2 통합 테스트
-
-통합 테스트는 실제 MySQL 환경에 의존하므로 일반 테스트와 분리되어 있습니다.
-
-```bash
-./gradlew integrationTest
-```
-
-통합 테스트 실행 전 환경변수를 적용합니다.
-
-```bash
-set -a
-source .env
-set +a
-```
-
-### 14.3 Docker Compose 로그 확인
-
-실행 중 오류 로그를 확인할 때는 다음 명령을 사용할 수 있습니다.
-
-```bash
-docker compose logs -f --tail=200 | grep --color=always -Ei "error|failed|exception|fatal"
-```
-
----
-
-## 15. 프로젝트에서 중점적으로 고민한 부분
-
-이 프로젝트는 단순 CRUD API를 만드는 것보다 운영 상황에서 문제가 될 수 있는 지점을 구조로 풀어내는 데 초점을 두었습니다.
-
-특히 다음 부분을 중요하게 다루었습니다.
-
-```text
-긴 작업을 HTTP 요청 안에서 직접 실행하지 않기
-중복 요청으로 같은 운영 작업이 여러 번 생성되지 않게 하기
-Worker가 죽어도 작업 상태가 고착되지 않게 하기
-Agent가 임의 명령을 실행하지 않게 하기
-DB Host에 inbound port를 열지 않기
-백업 파일 생성만으로 성공 처리하지 않기
-설정 변경 전후 값을 남기기
-읽기 중심 점검과 쓰기 중심 변경을 분리하기
-테스트와 통합 테스트를 분리하기
-배포 후 상태를 관측할 수 있게 하기
-```
-
----
-
-## 16. 현재 한계와 개선 방향
-
-현재 프로젝트는 포트폴리오와 학습 목적의 MVP 성격이 강합니다.  
-따라서 다음 개선 여지가 남아 있습니다.
-
-```text
-DB Inventory 기반 다중 DB 관리 고도화
-PostgreSQL 등 다른 DBMS Adapter 확장
-Testcontainers 기반 통합 테스트 자동화
-Agent 인증 및 Token Rotation 강화
-대용량 DB 백업 검증 전략 개선
-Configuration Apply 승인 프로세스 추가
-Rollback 전략 구체화
-Alert 연동
-CI/CD Pipeline 구성
-운영 Dashboard 고도화
-```
