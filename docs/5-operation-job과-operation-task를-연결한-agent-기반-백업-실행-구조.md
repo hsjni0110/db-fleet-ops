@@ -82,7 +82,7 @@ Task 완료 보고
 OperationJob 성공 처리
 ```
 
-이 흐름이 완성되어야 사용자는 단순히 "Task가 성공했다"가 아니라 “백업 운영 요청이 성공했다”는 결과를 볼 수 있습니다.
+이 흐름이 완성되어야 사용자는 단순히 "Task가 성공했다"가 아니라 "백업 운영 요청이 성공했다"는 결과를 볼 수 있습니다.
 
 운영 플랫폼에서 중요한 것은 개별 실행 단위보다 상위 요청의 상태입니다.
 
@@ -104,9 +104,11 @@ OperationJob 성공 처리
 
 처음 구현할 때는 이 이름이 자연스러워 보였습니다.
 
+```
 Agent가 가져가는 작업
   ↓
 AgentTask
+```
 
 하지만 기능을 확장하면서 이 이름이 정확하지 않다는 점이 드러났습니다.
 
@@ -114,36 +116,38 @@ AgentTask
 
 Agent의 본질은 다음에 가깝습니다.
 
-Agent ID
-Agent Token
-Agent Name
-Hostname
-IP Address
-Status
-Last Heartbeat
+- Agent ID
+- Agent Token
+- Agent Name
+- Hostname
+- IP Address
+- Status
+- Last Heartbeat
 
 반면 Task의 본질은 다음입니다.
 
-작업 종류
-작업 상태
-작업 입력값
-작업 결과
-실행 Agent
-상위 OperationJob
-시작 시간
-완료 시간
-실패 코드
-실패 메시지
+- 작업 종류
+- 작업 상태
+- 작업 입력값
+- 작업 결과
+- 실행 Agent
+- 상위 OperationJob
+- 시작 시간
+- 완료 시간
+- 실패 코드
+- 실패 메시지
 
 즉, Task는 Agent의 생명주기보다 Operation의 생명주기에 더 가깝습니다.
 
 백업을 예로 들면 더 명확합니다.
 
+```
 Backup OperationJob
   ↓
 MYSQL_LOGICAL_BACKUP OperationTask
   ↓
 Go Agent 실행
+```
 
 Agent는 실행자입니다.
 
@@ -153,9 +157,11 @@ Task는 운영 작업의 하위 실행 단위입니다.
 
 최종 개념은 다음과 같습니다.
 
+```
 OperationJob
   └── OperationTask
         └── Agent가 실행
+```
 
 이렇게 변경하면 앞으로 복원 검증, 백업 업로드, 설정 점검 같은 단계도 자연스럽게 확장할 수 있습니다.
 
@@ -176,10 +182,12 @@ OperationJob: BACKUP
 
 AgentTask를 agent 모듈에 두면 처음에는 구조가 단순해 보입니다.
 
+```
 agent
   ├── Agent
   ├── AgentTask
   └── AgentTaskService
+```
 
 하지만 OperationJob과 연결하려고 하면 문제가 생깁니다.
 
@@ -323,9 +331,9 @@ OperationTask
   - updatedAt
 ```
 
-여기서 중요한 필드는 operationJobId입니다.
+여기서 중요한 필드는 `operationJobId`입니다.
 
-이 값이 있으면 해당 Task는 특정 OperationJob의 하위 실행 단위입니다.
+이 값이 있으면 해당 `Task`는 특정 `OperationJob`의 하위 실행 단위입니다.
 
 ```
 OperationJob.id = 100
@@ -366,6 +374,7 @@ OperationJob
   - retryCount: 0
   - maxRetryCount: 3
 ```
+
 여기서 실제 작업을 즉시 실행하지 않는 이유는 백업이 오래 걸리거나 실패할 수 있는 작업이기 때문입니다.
 
 HTTP 요청 안에서 백업을 직접 실행하면 다음 문제가 생깁니다.
@@ -478,8 +487,6 @@ Job이 영원히 RUNNING 상태로 남을 위험
 이 문제를 해결하려면 Lease 만료 시점 이후에는 다른 Worker가 다시 가져갈 수 있어야 합니다.
 
 현재 구현은 기본 Claim과 Lease 설정까지만 구현했고, 만료된 Lease를 다시 회수하는 정교한 로직은 이후 개선 지점입니다.
-
-그래도 leaseOwner, leaseUntil을 도메인에 먼저 둔 이유는 운영 작업에서는 반드시 필요한 개념이기 때문입니다.
 
 # 9. Backup Job Claim 시 OperationTask 생성
 
@@ -734,9 +741,9 @@ Agent는 Heartbeat와 별도로 Linux 상태 수집 Task도 수행할 수 있습
 - Memory 사용률
 - Disk 사용률
 
-CPU 사용률은 /proc/stat을 기준으로 계산합니다.
+CPU 사용률은 `/proc/stat`을 기준으로 계산합니다.
 
-중요한 점은 /proc/stat의 값은 순간 사용률이 아니라 누적 tick 값이라는 것입니다.
+중요한 점은 `/proc/stat`의 값은 순간 사용률이 아니라 누적 tick 값이라는 것입니다.
 
 따라서 한 번 읽어서는 CPU 사용률을 알 수 없습니다.
 
@@ -756,9 +763,9 @@ idleDelta 계산
 CPU 사용률 계산
 ```
 
-Memory 사용률은 /proc/meminfo에서 MemTotal, MemAvailable을 사용합니다.
+Memory 사용률은 `/proc/meminfo`에서 `MemTotal`, `MemAvailable`을 사용합니다.
 
-단순히 MemFree만 사용하지 않는 이유는 Linux가 page cache를 적극적으로 사용하기 때문입니다. 실제 사용 가능한 메모리를 판단하려면 MemAvailable이 더 적절합니다.
+단순히 MemFree만 사용하지 않는 이유는 Linux가 `page cache`를 적극적으로 사용하기 때문입니다. 실제 사용 가능한 메모리를 판단하려면 MemAvailable이 더 적절합니다.
 
 Disk 사용률은 `statfs("/")`를 사용해 root filesystem 기준으로 계산합니다.
 
@@ -768,7 +775,7 @@ available blocks
 used blocks
 ```
 
-macOS 같은 개발 환경에는 /proc/stat, /proc/meminfo가 없습니다. 그래서 Linux가 아닌 OS에서는 metric 값을 0.0으로 반환하도록 했습니다.
+macOS 같은 개발 환경에는 `/proc/stat`, `/proc/meminfo`가 없습니다. 그래서 Linux가 아닌 OS에서는 metric 값을 0.0으로 반환하도록 했습니다.
 
 이렇게 한 이유는 로컬 개발환경에서 테스트가 깨지는 것을 막기 위해서입니다.
 
@@ -935,19 +942,13 @@ Agent
   - 또는 Host local credential 사용
 ```
 
-⸻
+---
 
 # 17. 파일이 생성됐다고 백업이 성공한 것은 아니다
 
-mysqldump 실행 후 .sql 파일이 생성되면 성공으로 처리하고 싶을 수 있습니다.
+`mysqldump` 실행 후 `.sql` 파일이 생성되면 성공으로 처리하고 싶을 수 있습니다.
 
 하지만 운영 관점에서는 위험합니다.
-
-```
-파일 생성
-≠
-복구 가능한 백업
-```
 
 예를 들어 다음 상황이 있을 수 있습니다.
 
@@ -1264,49 +1265,3 @@ Restore Possible
 ```
 
 향후에는 임시 DB에 복원해보는 검증이 필요합니다.
-
-
-23. 다음 단계
-
-다음 단계는 Restore Verification입니다.
-
-현재 백업 검증은 파일 수준입니다.
-
-파일 존재
-파일 크기
-checksum
-dump header
-
-하지만 운영 관점에서 더 중요한 검증은 복원 가능 여부입니다.
-
-다음 구조로 확장할 수 있습니다.
-
-mysqldump
-  ↓
-artifact verify
-  ↓
-temporary database create
-  ↓
-restore
-  ↓
-table count check
-  ↓
-row count check
-  ↓
-temporary database drop
-
-이 단계가 들어가면 백업 결과를 더 신뢰할 수 있습니다.
-
-또 다른 개선 방향은 Backup Pipeline을 더 명확한 Step 구조로 나누는 것입니다.
-
-OperationJob: BACKUP
-  ├── OperationTask: MYSQL_LOGICAL_BACKUP
-  ├── OperationTask: BACKUP_ARTIFACT_VERIFY
-  ├── OperationTask: BACKUP_UPLOAD
-  └── OperationTask: RESTORE_VERIFY
-
-현재는 하나의 Task 안에서 dump와 verify를 함께 수행합니다.
-
-하지만 기능이 커지면 Task를 더 작은 단계로 나누는 것이 좋습니다.
-
-이렇게 하면 어느 단계에서 실패했는지 명확해지고, 일부 단계만 재시도하는 것도 쉬워집니다.

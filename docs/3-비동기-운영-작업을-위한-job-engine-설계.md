@@ -128,6 +128,12 @@ RUNNING Job
 
 현재 구현은 JPA 조회 기반으로 단순하게 시작했습니다. 이후 Worker가 여러 개로 늘어나면 MySQL의 FOR UPDATE SKIP LOCKED를 사용해 동시 Claim 문제를 더 안전하게 처리할 수 있습니다.
 
+`FOR UPDATE SKIP LOCKED`를 쓰는 이유는 Job Queue의 Claim을 DB row lock 기반의 원자적 연산으로 만들기 위해서입니다. 
+
+FOR UPDATE는 같은 Job을 두 Worker가 동시에 가져가지 못하게 하고, SKIP LOCKED는 이미 다른 Worker가 잡은 Job에서 대기하지 않고 다음 Job으로 넘어가게 해서 Worker 수가 늘어났을 때 lock contention과 head-of-line blocking을 줄입니다. 
+
+실제 작업 중에는 lock을 잡지 않고, claim 순간에만 짧게 lock을 사용하고 lease_until으로 장애 복구를 처리하는 구조입니다.
+
 현재 단계에서 JPA 기반으로 먼저 구현한 이유는 Job Engine의 도메인 흐름을 먼저 검증하기 위해서입니다. 처음부터 동시성 제어까지 모두 넣으면 구현 복잡도가 커지고, 상태 전이와 API 흐름을 검증하기 어려워집니다.
 
 # 7. Lease를 둔 이유
@@ -284,19 +290,3 @@ PersistenceTest는 JPA를 통해 Job이 실제로 저장되고, 상태 변경이
 - RBAC
 
 특히 Worker Claim은 현재 JPA 조회 기반이므로 여러 Worker가 동시에 Job을 가져가는 상황에서는 보완이 필요합니다. 이후에는 MySQL Native Query를 사용해 FOR UPDATE SKIP LOCKED를 적용할 계획입니다.
-
-# 14. 정리
-
-이번에 구현한 핵심은 실제 백업 명령 실행이 아니라, 운영 작업을 안전하게 다루기 위한 Job Engine의 기본 구조입니다.
-
-현재 구조를 통해 다음 기반을 확보했습니다.
-
-- 운영 요청을 Job으로 저장
-- 중복 요청 방지
-- Worker Claim
-- Lease 기반 점유
-- 성공/실패 처리
-- Retry 처리
-- Audit 기록
-
-이 기반이 있어야 이후 실제 백업, 설정 변경, Agent 연동, Kubernetes 환경에서의 장애 복구까지 자연스럽게 확장할 수 있습니다.
