@@ -20,6 +20,7 @@ public class DatabaseCredential {
     private String password;
 
     private LocalDateTime createdAt;
+
     private LocalDateTime updatedAt;
 
     protected DatabaseCredential() {}
@@ -37,7 +38,5 @@ public class DatabaseCredential {
         this.password = password;
         this.updatedAt = LocalDateTime.now();
     }
-
-
 
 }

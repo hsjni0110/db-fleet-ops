@@ -7,6 +7,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 public class OperationJobController {
 
@@ -46,5 +48,10 @@ public class OperationJobController {
         return ResponseEntity.ok(
                 operationJobService.getJob(jobId)
         );
+    }
+
+    @GetMapping("/api/v1/jobs")
+    public ResponseEntity<List<OperationJobResponse>> getJobs() {
+        return ResponseEntity.ok(operationJobService.getJobs());
     }
 }

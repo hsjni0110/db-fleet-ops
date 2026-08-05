@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -39,6 +40,37 @@ class OperationJobServiceTest {
 
         @Mock
         private ConfigurationApplyValidationService configurationApplyValidationService;
+
+        @Test
+        void getJobsMapsRepositoryResultsInLatestFirstOrder() {
+                OperationJob newest = OperationJob.create(JobType.BACKUP, 2L, "operator", null);
+                OperationJob older = OperationJob.create(JobType.CONFIGURATION_CHECK, 1L,
+                                "operator", null);
+                when(jobRepository.findAllByOrderByCreatedAtDesc())
+                                .thenReturn(List.of(newest, older));
+
+                OperationJobService service = new OperationJobService(databaseRepository,
+                                jobRepository, auditRecorderPort,
+                                configurationApplyValidationService);
+
+                List<OperationJobResponse> responses = service.getJobs();
+
+                assertThat(responses).extracting(OperationJobResponse::targetDatabaseId)
+                                .containsExactly(2L, 1L);
+                assertThat(responses).extracting(OperationJobResponse::jobType)
+                                .containsExactly(JobType.BACKUP, JobType.CONFIGURATION_CHECK);
+        }
+
+        @Test
+        void getJobsReturnsEmptyList() {
+                when(jobRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of());
+
+                OperationJobService service = new OperationJobService(databaseRepository,
+                                jobRepository, auditRecorderPort,
+                                configurationApplyValidationService);
+
+                assertThat(service.getJobs()).isEmpty();
+        }
 
         @Test
         void createBackupJobCreatesQueuedJob() {

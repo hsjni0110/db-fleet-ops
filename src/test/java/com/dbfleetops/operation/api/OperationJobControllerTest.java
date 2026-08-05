@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
@@ -105,5 +106,37 @@ class OperationJobControllerTest {
                 .andExpect(jsonPath("$.jobId").value(1))
                 .andExpect(jsonPath("$.jobType").value("BACKUP"))
                 .andExpect(jsonPath("$.status").value("QUEUED"));
+    }
+
+    @Test
+    void getJobsReturnsJobsInServiceOrder() throws Exception {
+        OperationJobResponse newest = new OperationJobResponse(
+                2L, JobType.BACKUP, JobStatus.RUNNING, 1L, "operator", 0, 3,
+                null, null, LocalDateTime.of(2026, 7, 2, 10, 0),
+                LocalDateTime.of(2026, 7, 2, 10, 1), null, null, null,
+                LocalDateTime.of(2026, 7, 2, 10, 0));
+        OperationJobResponse older = new OperationJobResponse(
+                1L, JobType.BACKUP, JobStatus.SUCCEEDED, 1L, "operator", 0, 3,
+                null, null, LocalDateTime.of(2026, 7, 1, 10, 0),
+                LocalDateTime.of(2026, 7, 1, 10, 1),
+                LocalDateTime.of(2026, 7, 1, 10, 2), "SUCCESS", "done",
+                LocalDateTime.of(2026, 7, 1, 10, 0));
+
+        when(operationJobService.getJobs()).thenReturn(List.of(newest, older));
+
+        mockMvc.perform(get("/api/v1/jobs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].jobId").value(2))
+                .andExpect(jsonPath("$[0].status").value("RUNNING"))
+                .andExpect(jsonPath("$[1].jobId").value(1));
+    }
+
+    @Test
+    void getJobsReturnsEmptyArray() throws Exception {
+        when(operationJobService.getJobs()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/jobs"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
     }
 }

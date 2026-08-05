@@ -17,5 +17,7 @@ public interface OperationJobRepository extends JpaRepository<OperationJob, Long
         List<OperationJob> findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
                         JobStatus status, LocalDateTime now);
 
+        List<OperationJob> findAllByOrderByCreatedAtDesc();
+
         long countByStatus(JobStatus status);
 }

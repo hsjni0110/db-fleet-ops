@@ -4,6 +4,12 @@ import type {
   OperationJobResponse,
 } from "../types";
 
+export async function getOperationJobs(): Promise<OperationJobResponse[]> {
+  const response = await http.get<OperationJobResponse[]>("/api/v1/jobs");
+
+  return response.data;
+}
+
 export async function getOperationJob(
   jobId: number | string,
 ): Promise<OperationJobResponse> {
