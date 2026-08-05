@@ -68,7 +68,7 @@ public class DatabaseInventoryService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Credential not found. databaseId=" + databaseId));
 
-        credential.update(request.username(), request.password());
+        credential.changeCredentials(request.username(), request.password());
 
         return DatabaseResponse.from(database);
     }

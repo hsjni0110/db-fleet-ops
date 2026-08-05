@@ -5,6 +5,9 @@ import lombok.Getter;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+import static org.springframework.util.Assert.hasText;
+import static org.springframework.util.Assert.notNull;
+
 @Getter
 @Entity
 public class DatabaseCredential {
@@ -26,6 +29,9 @@ public class DatabaseCredential {
     protected DatabaseCredential() {}
 
     public DatabaseCredential(Long databaseId, String username, String password) {
+        validateDatabaseId(databaseId);
+        validateCredentials(username, password);
+
         this.databaseId = databaseId;
         this.username = username;
         this.password = password;
@@ -33,10 +39,21 @@ public class DatabaseCredential {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void update(String username, String password) {
+    public void changeCredentials(String username, String password) {
+        validateCredentials(username, password);
+
         this.username = username;
         this.password = password;
         this.updatedAt = LocalDateTime.now();
+    }
+
+    private static void validateDatabaseId(Long databaseId) {
+        notNull(databaseId, "데이터베이스 ID는 필수입니다.");
+    }
+
+    private static void validateCredentials(String username, String password) {
+        hasText(username, "데이터베이스 사용자 이름은 필수입니다.");
+        hasText(password, "데이터베이스 비밀번호는 필수입니다.");
     }
 
 }
