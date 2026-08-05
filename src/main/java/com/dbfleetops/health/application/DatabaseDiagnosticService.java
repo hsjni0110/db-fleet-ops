@@ -78,12 +78,7 @@ public class DatabaseDiagnosticService {
                                 "Database not found. databaseId=" + databaseId
                         ));
 
-        if (!database.isActive()) {
-            throw new IllegalStateException(
-                    "Inactive database cannot be diagnosed. databaseId="
-                            + databaseId
-            );
-        }
+        database.requireActive();
 
         DatabaseCredential credential =
                 credentialRepository.findByDatabaseId(databaseId)

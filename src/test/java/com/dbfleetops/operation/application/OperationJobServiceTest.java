@@ -3,6 +3,7 @@ package com.dbfleetops.operation.application;
 import com.dbfleetops.audit.port.AuditRecorderPort;
 import com.dbfleetops.database.domain.DatabaseEngine;
 import com.dbfleetops.database.domain.ManagedDatabase;
+import com.dbfleetops.database.dto.RegisterManagedDatabaseRequest;
 import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
@@ -178,8 +179,9 @@ class OperationJobServiceTest {
         }
 
         private ManagedDatabase newDatabase() {
-                return new ManagedDatabase("order-mysql", "localhost", 3306, "orders",
+                return ManagedDatabase.register(new RegisterManagedDatabaseRequest("order-mysql",
+                                "localhost", 3306, "orders",
                                 DatabaseEngine.MYSQL, "LOCAL", "order-service", "platform-team",
-                                "test database");
+                                "test database"));
         }
 }

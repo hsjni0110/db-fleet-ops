@@ -58,11 +58,7 @@ public class DatabaseHealthService {
                         "Database not found. databaseId=" + databaseId
                 ));
 
-        if (!database.isActive()) {
-            throw new IllegalStateException(
-                    "Inactive database cannot be checked. databaseId=" + databaseId
-            );
-        }
+        database.requireActive();
 
         DatabaseCredential credential = credentialRepository.findByDatabaseId(databaseId)
                 .orElseThrow(() -> new IllegalArgumentException(

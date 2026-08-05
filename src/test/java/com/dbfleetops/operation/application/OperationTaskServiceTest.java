@@ -9,6 +9,7 @@ import com.dbfleetops.backup.application.BackupRestoreVerificationResultRecorder
 import com.dbfleetops.database.domain.DatabaseCredential;
 import com.dbfleetops.database.domain.DatabaseEngine;
 import com.dbfleetops.database.domain.ManagedDatabase;
+import com.dbfleetops.database.dto.RegisterManagedDatabaseRequest;
 import com.dbfleetops.database.infra.DatabaseCredentialRepository;
 import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.operation.domain.JobStatus;
@@ -760,8 +761,9 @@ class OperationTaskServiceTest {
         }
 
         private ManagedDatabase newManagedDatabase() {
-                return new ManagedDatabase("target-mysql", "target-mysql", 3306, "orders",
+                return ManagedDatabase.register(new RegisterManagedDatabaseRequest("target-mysql",
+                                "target-mysql", 3306, "orders",
                                 DatabaseEngine.MYSQL, "LOCAL", "target-mysql", "platform-team",
-                                "local target database");
+                                "local target database"));
         }
 }

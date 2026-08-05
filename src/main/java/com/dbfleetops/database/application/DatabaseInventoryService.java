@@ -10,6 +10,7 @@ import com.dbfleetops.database.domain.ManagedDatabase;
 import com.dbfleetops.database.dto.DatabaseCreateRequest;
 import com.dbfleetops.database.dto.DatabaseResponse;
 import com.dbfleetops.database.dto.DatabaseUpdateRequest;
+import com.dbfleetops.database.dto.RegisterManagedDatabaseRequest;
 import com.dbfleetops.database.infra.DatabaseCredentialRepository;
 import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 
@@ -32,9 +33,10 @@ public class DatabaseInventoryService {
     public DatabaseResponse create(DatabaseCreateRequest request) {
         connectionValidator.validate(request);
 
-        ManagedDatabase database = new ManagedDatabase(request.name(), request.host(),
-                request.port(), request.databaseName(), request.engine(), request.environment(),
-                request.serviceName(), request.owner(), request.description());
+        ManagedDatabase database = ManagedDatabase.register(new RegisterManagedDatabaseRequest(
+                request.name(), request.host(), request.port(), request.databaseName(),
+                request.engine(), request.environment(), request.serviceName(), request.owner(),
+                request.description()));
 
         ManagedDatabase savedDatabase = databaseRepository.save(database);
 
@@ -60,9 +62,10 @@ public class DatabaseInventoryService {
         connectionValidator.validate(request);
 
         ManagedDatabase database = getDatabase(databaseId);
-        database.update(request.name(), request.host(), request.port(), request.databaseName(),
-                request.engine(), request.environment(), request.serviceName(), request.owner(),
-                request.description());
+        database.changeConnection(request.host(), request.port(), request.databaseName(),
+                request.engine());
+        database.changeMetadata(request.name(), request.environment(), request.serviceName(),
+                request.owner(), request.description());
 
         DatabaseCredential credential = credentialRepository.findByDatabaseId(databaseId)
                 .orElseThrow(() -> new IllegalArgumentException(

@@ -42,8 +42,6 @@ class OperationJobServiceConfigurationApplyTest {
 
         when(database.getId()).thenReturn(1L);
 
-        when(database.isActive()).thenReturn(true);
-
         when(databaseRepository.findById(1L)).thenReturn(Optional.of(database));
 
         when(applyValidationService.validate(eq(1L), any(CreateConfigurationApplyJobRequest.class)))
@@ -85,8 +83,6 @@ class OperationJobServiceConfigurationApplyTest {
         ManagedDatabase database = mock(ManagedDatabase.class);
 
         when(database.getId()).thenReturn(1L);
-
-        when(database.isActive()).thenReturn(true);
 
         when(databaseRepository.findById(1L)).thenReturn(Optional.of(database));
 
@@ -166,14 +162,16 @@ class OperationJobServiceConfigurationApplyTest {
 
         when(database.getId()).thenReturn(1L);
 
-        when(database.isActive()).thenReturn(false);
+        doThrow(new IllegalStateException(
+                "비활성화된 데이터베이스는 운영 작업을 수행할 수 없습니다."))
+                        .when(database).requireActive();
 
         when(databaseRepository.findById(1L)).thenReturn(Optional.of(database));
 
         assertThatThrownBy(() -> service.createConfigurationApplyJob(1L, "idem-config-apply-001",
                 new CreateConfigurationApplyJobRequest(1L, "local-user", "enable slow query log",
                         List.of(new ConfigurationApplyParameterRequest("slow_query_log", "ON")))))
-                                .isInstanceOf(IllegalStateException.class).hasMessageContaining(
-                                        "Inactive database cannot create operation job");
+                                .isInstanceOf(IllegalStateException.class)
+                                .hasMessage("비활성화된 데이터베이스는 운영 작업을 수행할 수 없습니다.");
     }
 }

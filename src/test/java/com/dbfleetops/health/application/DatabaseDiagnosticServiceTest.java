@@ -3,6 +3,7 @@ package com.dbfleetops.health.application;
 import com.dbfleetops.database.domain.DatabaseCredential;
 import com.dbfleetops.database.domain.DatabaseEngine;
 import com.dbfleetops.database.domain.ManagedDatabase;
+import com.dbfleetops.database.dto.RegisterManagedDatabaseRequest;
 import com.dbfleetops.database.infra.DatabaseCredentialRepository;
 import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.health.domain.ConnectionSummary;
@@ -167,7 +168,7 @@ class DatabaseDiagnosticServiceTest {
     }
 
     private ManagedDatabase newDatabase() {
-        return new ManagedDatabase(
+        return ManagedDatabase.register(new RegisterManagedDatabaseRequest(
                 "order-mysql",
                 "localhost",
                 3306,
@@ -177,7 +178,7 @@ class DatabaseDiagnosticServiceTest {
                 "order-service",
                 "platform-team",
                 "test database"
-        );
+        ));
     }
 
     @Test

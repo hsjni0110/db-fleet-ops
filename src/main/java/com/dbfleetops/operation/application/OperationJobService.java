@@ -118,11 +118,7 @@ public class OperationJobService {
                                 .orElseThrow(() -> new IllegalArgumentException(
                                                 "Database not found. databaseId=" + databaseId));
 
-                if (!database.isActive()) {
-                        throw new IllegalStateException(
-                                        "Inactive database cannot create operation job. databaseId="
-                                                        + databaseId);
-                }
+                database.requireActive();
 
                 return database;
         }

@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import com.dbfleetops.database.domain.DatabaseCredential;
 import com.dbfleetops.database.domain.DatabaseEngine;
 import com.dbfleetops.database.domain.ManagedDatabase;
+import com.dbfleetops.database.dto.RegisterManagedDatabaseRequest;
 import com.dbfleetops.database.infra.DatabaseCredentialRepository;
 import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.health.domain.DatabaseErrorCode;
@@ -238,7 +239,7 @@ class DatabaseHealthServiceTest {
 
     @Test
     void checkByDatabaseIdSelectsAdapterAndSavesResult() {
-        ManagedDatabase database = new ManagedDatabase(
+        ManagedDatabase database = ManagedDatabase.register(new RegisterManagedDatabaseRequest(
                 "order-mysql",
                 "localhost",
                 3306,
@@ -248,7 +249,7 @@ class DatabaseHealthServiceTest {
                 "order-service",
                 "platform-team",
                 "test database"
-        );
+        ));
 
         DatabaseCredential credential = new DatabaseCredential(
                 1L,
@@ -308,7 +309,7 @@ class DatabaseHealthServiceTest {
 
     @Test
     void checkByDatabaseIdDoesNotRunAdapterWhenDatabaseIsInactive() {
-        ManagedDatabase database = new ManagedDatabase(
+        ManagedDatabase database = ManagedDatabase.register(new RegisterManagedDatabaseRequest(
                 "order-mysql",
                 "localhost",
                 3306,
@@ -318,7 +319,7 @@ class DatabaseHealthServiceTest {
                 "order-service",
                 "platform-team",
                 "test database"
-        );
+        ));
 
         database.deactivate();
 

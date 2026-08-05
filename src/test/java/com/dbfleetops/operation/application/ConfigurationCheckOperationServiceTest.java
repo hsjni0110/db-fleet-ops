@@ -38,8 +38,6 @@ class OperationJobServiceConfigurationCheckTest {
 
         when(database.getId()).thenReturn(1L);
 
-        when(database.isActive()).thenReturn(true);
-
         when(databaseRepository.findById(1L)).thenReturn(Optional.of(database));
 
         when(jobRepository.save(any(OperationJob.class))).thenAnswer(invocation -> {
@@ -70,8 +68,6 @@ class OperationJobServiceConfigurationCheckTest {
         ManagedDatabase database = mock(ManagedDatabase.class);
 
         when(database.getId()).thenReturn(1L);
-
-        when(database.isActive()).thenReturn(true);
 
         when(databaseRepository.findById(1L)).thenReturn(Optional.of(database));
 
