@@ -95,7 +95,7 @@ class OperationTaskPersistenceTest {
                 OperationTask savedTask = taskRepository.save(task);
 
                 savedTask.start();
-                savedTask.complete("{\"cpuUsagePercent\":12.5}");
+                savedTask.succeed("{\"cpuUsagePercent\":12.5}");
 
                 taskRepository.flush();
 

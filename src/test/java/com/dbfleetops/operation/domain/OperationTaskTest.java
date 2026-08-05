@@ -3,7 +3,8 @@ package com.dbfleetops.operation.domain;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 class OperationTaskTest {
 
@@ -22,6 +23,29 @@ class OperationTaskTest {
         }
 
         @Test
+        void createRejectsMissingAgentId() {
+                assertThatIllegalArgumentException()
+                                .isThrownBy(() -> OperationTask.create(null,
+                                                OperationTaskType.COLLECT_LINUX_STATUS, "{}"))
+                                .withMessage("Agent 식별자는 필수입니다.");
+        }
+
+        @Test
+        void createRejectsMissingTaskType() {
+                assertThatIllegalArgumentException()
+                                .isThrownBy(() -> OperationTask.create(1L, null, "{}"))
+                                .withMessage("작업 유형은 필수입니다.");
+        }
+
+        @Test
+        void createForJobRejectsMissingOperationJobId() {
+                assertThatIllegalArgumentException()
+                                .isThrownBy(() -> OperationTask.createForJob(1L, null,
+                                                OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}"))
+                                .withMessage("Operation Job 식별자는 필수입니다.");
+        }
+
+        @Test
         void startChangesQueuedTaskToRunning() {
                 OperationTask task = newLinuxStatusTask();
 
@@ -33,12 +57,22 @@ class OperationTaskTest {
         }
 
         @Test
+        void startRejectsTaskThatIsNotQueued() {
+                OperationTask task = newLinuxStatusTask();
+                task.start();
+
+                assertThatIllegalStateException()
+                                .isThrownBy(task::start)
+                                .withMessage("대기 중인 Task만 시작할 수 있습니다. 현재 상태=RUNNING");
+        }
+
+        @Test
         void completeChangesRunningTaskToSucceeded() {
                 OperationTask task = newLinuxStatusTask();
 
                 task.start();
 
-                task.complete("{\"cpuUsagePercent\":12.5}");
+                task.succeed("{\"cpuUsagePercent\":12.5}");
 
                 assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
 
@@ -66,14 +100,28 @@ class OperationTaskTest {
         void completeThrowsExceptionWhenTaskIsNotRunning() {
                 OperationTask task = newLinuxStatusTask();
 
-                assertThrows(IllegalStateException.class, () -> task.complete("{}"));
+                assertThatIllegalStateException()
+                                .isThrownBy(() -> task.succeed("{}"))
+                                .withMessage("실행 중인 Task만 성공 처리할 수 있습니다. 현재 상태=QUEUED");
         }
 
         @Test
         void failThrowsExceptionWhenTaskIsNotRunning() {
                 OperationTask task = newLinuxStatusTask();
 
-                assertThrows(IllegalStateException.class, () -> task.fail("ERROR", "failed"));
+                assertThatIllegalStateException()
+                                .isThrownBy(() -> task.fail("ERROR", "failed"))
+                                .withMessage("실행 중인 Task만 실패 처리할 수 있습니다. 현재 상태=QUEUED");
+        }
+
+        @Test
+        void failRejectsMissingErrorCode() {
+                OperationTask task = newLinuxStatusTask();
+                task.start();
+
+                assertThatIllegalArgumentException()
+                                .isThrownBy(() -> task.fail(" ", "failed"))
+                                .withMessage("오류 코드는 필수입니다.");
         }
 
         private OperationTask newLinuxStatusTask() {

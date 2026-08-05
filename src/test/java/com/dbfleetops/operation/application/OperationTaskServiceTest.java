@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -579,8 +580,10 @@ class OperationTaskServiceTest {
         }
 
         private Agent newAgent() {
-                return Agent.register("local-agent", "localhost", "127.0.0.1", "Linux", "0.1.0",
-                                "agent-token-001");
+                Agent agent = Agent.register("local-agent", "localhost", "127.0.0.1", "Linux",
+                                "0.1.0", "agent-token-001");
+                ReflectionTestUtils.setField(agent, "id", 1L);
+                return agent;
         }
 
         @Test

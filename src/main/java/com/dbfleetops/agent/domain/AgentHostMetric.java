@@ -45,9 +45,4 @@ public class AgentHostMetric {
         return new AgentHostMetric(agentId, cpuUsagePercent, memoryUsagePercent, diskUsagePercent);
     }
 
-
-
-
-
-
 }

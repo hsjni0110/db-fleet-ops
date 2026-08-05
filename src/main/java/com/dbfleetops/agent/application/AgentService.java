@@ -54,13 +54,13 @@ public class AgentService {
                                 "Agent not found. agentId=" + agentId
                         ));
 
-        if (!agent.tokenMatches(request.agentToken())) {
+        if (!agent.matchesToken(request.agentToken())) {
             throw new IllegalArgumentException(
                     "Invalid agent token. agentId=" + agentId
             );
         }
 
-        agent.heartbeat();
+        agent.recordHeartbeat();
 
         return AgentHeartbeatResponse.from(agent);
     }

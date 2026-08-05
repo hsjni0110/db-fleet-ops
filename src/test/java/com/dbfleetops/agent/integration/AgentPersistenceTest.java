@@ -55,7 +55,7 @@ class AgentPersistenceTest {
 
                 assertThat(offlineAgent.getStatus()).isEqualTo(AgentStatus.OFFLINE);
 
-                offlineAgent.heartbeat();
+                offlineAgent.recordHeartbeat();
 
                 agentRepository.flush();
 

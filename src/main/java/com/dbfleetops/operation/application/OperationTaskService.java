@@ -68,10 +68,10 @@ public class OperationTaskService {
         OperationTask task;
 
         if (request.operationJobId() == null) {
-            task = OperationTask.create(agent.getId(), request.taskType(),
+            task = OperationTask.create(request.agentId(), request.taskType(),
                     request.parametersJson());
         } else {
-            task = OperationTask.createForJob(agent.getId(), request.operationJobId(),
+            task = OperationTask.createForJob(request.agentId(), request.operationJobId(),
                     request.taskType(), request.parametersJson());
         }
 
@@ -109,7 +109,7 @@ public class OperationTaskService {
 
         OperationTask task = getTaskOwnedByAgent(agentId, taskId);
 
-        task.complete(request.resultPayloadJson());
+        task.succeed(request.resultPayloadJson());
 
         persistLinuxStatusMetricIfNeeded(task, request.resultPayloadJson());
 
@@ -208,7 +208,7 @@ public class OperationTaskService {
         Agent agent = agentRepository.findById(agentId).orElseThrow(
                 () -> new IllegalArgumentException("Agent not found. agentId=" + agentId));
 
-        if (!agent.tokenMatches(agentToken)) {
+        if (!agent.matchesToken(agentToken)) {
             throw new IllegalArgumentException("Invalid agent token. agentId=" + agentId);
         }
 
