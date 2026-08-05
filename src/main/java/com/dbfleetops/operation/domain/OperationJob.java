@@ -1,9 +1,12 @@
 package com.dbfleetops.operation.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(
         name = "operation_job",
@@ -229,83 +232,23 @@ public class OperationJob {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public JobType getJobType() {
-        return jobType;
-    }
 
-    public Long getTargetDatabaseId() {
-        return targetDatabaseId;
-    }
 
-    public JobStatus getStatus() {
-        return status;
-    }
 
-    public String getRequestedBy() {
-        return requestedBy;
-    }
 
-    public String getIdempotencyKey() {
-        return idempotencyKey;
-    }
 
-    public String getRequestPayload() {
-        return requestPayload;
-    }
 
-    public int getPriority() {
-        return priority;
-    }
 
-    public int getRetryCount() {
-        return retryCount;
-    }
 
-    public int getMaxRetryCount() {
-        return maxRetryCount;
-    }
 
-    public String getLeaseOwner() {
-        return leaseOwner;
-    }
 
-    public LocalDateTime getLeaseUntil() {
-        return leaseUntil;
-    }
 
-    public LocalDateTime getAvailableAt() {
-        return availableAt;
-    }
 
-    public LocalDateTime getStartedAt() {
-        return startedAt;
-    }
 
-    public LocalDateTime getFinishedAt() {
-        return finishedAt;
-    }
 
-    public String getResultCode() {
-        return resultCode;
-    }
 
-    public String getResultMessage() {
-        return resultMessage;
-    }
 
-    public Long getVersion() {
-        return version;
-    }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
 }

@@ -1,13 +1,18 @@
 package com.dbfleetops.health.domain;
 
+import lombok.Getter;
+import lombok.AccessLevel;
+
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 public class DatabaseHealthResult {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Getter(AccessLevel.NONE)
     private Long id;
 
     private Long databaseId;
@@ -41,10 +46,4 @@ public class DatabaseHealthResult {
         this.checkedAt = LocalDateTime.now();
     }
 
-    public Long getDatabaseId() { return databaseId; }
-    public HealthStatus getStatus() { return status; }
-    public boolean isConnectionSuccess() { return connectionSuccess; }
-    public long getResponseTimeMs() { return responseTimeMs; }
-    public String getMessage() { return message; }
-    public LocalDateTime getCheckedAt() { return checkedAt; }
 }

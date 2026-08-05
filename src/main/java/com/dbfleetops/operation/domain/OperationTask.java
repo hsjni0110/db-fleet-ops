@@ -1,9 +1,12 @@
 package com.dbfleetops.operation.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "operation_task")
 public class OperationTask {
@@ -100,55 +103,16 @@ public class OperationTask {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public Long getAgentId() {
-        return agentId;
-    }
 
-    public Long getOperationJobId() {
-        return operationJobId;
-    }
 
-    public OperationTaskType getTaskType() {
-        return taskType;
-    }
 
-    public OperationTaskStatus getStatus() {
-        return status;
-    }
 
-    public String getParametersJson() {
-        return parametersJson;
-    }
 
-    public String getResultPayloadJson() {
-        return resultPayloadJson;
-    }
 
-    public String getErrorCode() {
-        return errorCode;
-    }
 
-    public String getErrorMessage() {
-        return errorMessage;
-    }
 
-    public LocalDateTime getStartedAt() {
-        return startedAt;
-    }
 
-    public LocalDateTime getCompletedAt() {
-        return completedAt;
-    }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
 }

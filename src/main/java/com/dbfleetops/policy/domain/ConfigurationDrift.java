@@ -1,5 +1,7 @@
 package com.dbfleetops.policy.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -10,6 +12,7 @@ import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "configuration_drift")
 public class ConfigurationDrift {
@@ -84,47 +87,14 @@ public class ConfigurationDrift {
                 totalCount, compliantCount, nonCompliantCount, missingCount);
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public Long getDatabaseId() {
-        return databaseId;
-    }
 
-    public Long getProfileId() {
-        return profileId;
-    }
 
-    public Long getSnapshotId() {
-        return snapshotId;
-    }
 
-    public ConfigurationEngineType getEngineType() {
-        return engineType;
-    }
 
-    public ConfigurationDriftStatus getStatus() {
-        return status;
-    }
 
-    public Integer getTotalCount() {
-        return totalCount;
-    }
 
-    public Integer getCompliantCount() {
-        return compliantCount;
-    }
 
-    public Integer getNonCompliantCount() {
-        return nonCompliantCount;
-    }
 
-    public Integer getMissingCount() {
-        return missingCount;
-    }
 
-    public LocalDateTime getCheckedAt() {
-        return checkedAt;
-    }
 }

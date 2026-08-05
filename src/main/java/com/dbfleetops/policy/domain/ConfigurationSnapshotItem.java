@@ -1,5 +1,7 @@
 package com.dbfleetops.policy.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -9,6 +11,7 @@ import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "configuration_snapshot_item")
 public class ConfigurationSnapshotItem {
@@ -66,39 +69,12 @@ public class ConfigurationSnapshotItem {
         }
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public Long getSnapshotId() {
-        return snapshotId;
-    }
 
-    public String getParameterName() {
-        return parameterName;
-    }
 
-    public String getActualValue() {
-        return actualValue;
-    }
 
-    public String getUnit() {
-        return unit;
-    }
 
-    public String getValueType() {
-        return valueType;
-    }
 
-    public Boolean getDynamic() {
-        return dynamic;
-    }
 
-    public String getSource() {
-        return source;
-    }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 }

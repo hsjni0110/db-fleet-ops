@@ -1,5 +1,7 @@
 package com.dbfleetops.policy.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -11,6 +13,7 @@ import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "configuration_profile_parameter")
 public class ConfigurationProfileParameter {
@@ -100,47 +103,14 @@ public class ConfigurationProfileParameter {
         }
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public Long getProfileId() {
-        return profileId;
-    }
 
-    public String getParameterName() {
-        return parameterName;
-    }
 
-    public String getExpectedValue() {
-        return expectedValue;
-    }
 
-    public ParameterValueType getValueType() {
-        return valueType;
-    }
 
-    public Boolean getRequired() {
-        return required;
-    }
 
-    public Boolean getDynamic() {
-        return dynamic;
-    }
 
-    public Boolean getApplyAllowed() {
-        return applyAllowed;
-    }
 
-    public String getDescription() {
-        return description;
-    }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
 }

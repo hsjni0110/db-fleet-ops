@@ -1,5 +1,7 @@
 package com.dbfleetops.policy.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -10,6 +12,7 @@ import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "configuration_apply_item")
 public class ConfigurationApplyItem {
@@ -130,63 +133,18 @@ public class ConfigurationApplyItem {
         }
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public Long getApplyId() {
-        return applyId;
-    }
 
-    public String getParameterName() {
-        return parameterName;
-    }
 
-    public String getRequestedValue() {
-        return requestedValue;
-    }
 
-    public String getBeforeValue() {
-        return beforeValue;
-    }
 
-    public String getAfterValue() {
-        return afterValue;
-    }
 
-    public ParameterValueType getValueType() {
-        return valueType;
-    }
 
-    public Boolean getDynamic() {
-        return dynamic;
-    }
 
-    public Boolean getApplyAllowed() {
-        return applyAllowed;
-    }
 
-    public ConfigurationApplyItemStatus getApplyStatus() {
-        return applyStatus;
-    }
 
-    public String getFailureCode() {
-        return failureCode;
-    }
 
-    public String getFailureMessage() {
-        return failureMessage;
-    }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 
-    public LocalDateTime getAppliedAt() {
-        return appliedAt;
-    }
 
-    public LocalDateTime getVerifiedAt() {
-        return verifiedAt;
-    }
 }

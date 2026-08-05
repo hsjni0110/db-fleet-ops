@@ -1,9 +1,12 @@
 package com.dbfleetops.backup.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "backup_restore_verification",
         indexes = {
@@ -184,71 +187,20 @@ public class BackupRestoreVerification {
         }
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public Long getOperationJobId() {
-        return operationJobId;
-    }
 
-    public Long getBackupTaskId() {
-        return backupTaskId;
-    }
 
-    public Long getRestoreVerifyTaskId() {
-        return restoreVerifyTaskId;
-    }
 
-    public Long getDatabaseId() {
-        return databaseId;
-    }
 
-    public String getSourceDatabaseName() {
-        return sourceDatabaseName;
-    }
 
-    public String getBackupFile() {
-        return backupFile;
-    }
 
-    public String getTemporaryDatabaseName() {
-        return temporaryDatabaseName;
-    }
 
-    public BackupRestoreVerificationStatus getStatus() {
-        return status;
-    }
 
-    public Integer getRestoredTableCount() {
-        return restoredTableCount;
-    }
 
-    public Integer getCheckedTableCount() {
-        return checkedTableCount;
-    }
 
-    public Long getTotalRowCount() {
-        return totalRowCount;
-    }
 
-    public String getErrorCode() {
-        return errorCode;
-    }
 
-    public String getErrorMessage() {
-        return errorMessage;
-    }
 
-    public LocalDateTime getStartedAt() {
-        return startedAt;
-    }
 
-    public LocalDateTime getCompletedAt() {
-        return completedAt;
-    }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 }

@@ -1,5 +1,7 @@
 package com.dbfleetops.agent.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -8,6 +10,7 @@ import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "agent_host_metric")
 public class AgentHostMetric {
@@ -42,27 +45,9 @@ public class AgentHostMetric {
         return new AgentHostMetric(agentId, cpuUsagePercent, memoryUsagePercent, diskUsagePercent);
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public Long getAgentId() {
-        return agentId;
-    }
 
-    public Double getCpuUsagePercent() {
-        return cpuUsagePercent;
-    }
 
-    public Double getMemoryUsagePercent() {
-        return memoryUsagePercent;
-    }
 
-    public Double getDiskUsagePercent() {
-        return diskUsagePercent;
-    }
 
-    public LocalDateTime getCollectedAt() {
-        return collectedAt;
-    }
 }

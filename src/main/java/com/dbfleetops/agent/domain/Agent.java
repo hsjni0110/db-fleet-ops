@@ -1,9 +1,12 @@
 package com.dbfleetops.agent.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "agent")
 public class Agent {
@@ -139,51 +142,15 @@ public class Agent {
         return agentToken != null && agentToken.equals(token);
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public String getAgentName() {
-        return agentName;
-    }
 
-    public String getHostname() {
-        return hostname;
-    }
 
-    public String getIpAddress() {
-        return ipAddress;
-    }
 
-    public String getOsName() {
-        return osName;
-    }
 
-    public String getArchitecture() {
-        return normalizeArchitecture(architecture);
-    }
 
-    public String getAgentVersion() {
-        return agentVersion;
-    }
 
-    public String getAgentToken() {
-        return agentToken;
-    }
 
-    public AgentStatus getStatus() {
-        return status;
-    }
 
-    public LocalDateTime getLastHeartbeatAt() {
-        return lastHeartbeatAt;
-    }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
 }

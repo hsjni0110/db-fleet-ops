@@ -1,9 +1,12 @@
 package com.dbfleetops.backup.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "backup_restore_verification_item", indexes = {
         @Index(name = "idx_restore_verification_item_verification_id",
@@ -89,35 +92,11 @@ public class BackupRestoreVerificationItem {
                 BackupRestoreVerificationItemStatus.SKIPPED, message);
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public Long getVerificationId() {
-        return verificationId;
-    }
 
-    public String getTableName() {
-        return tableName;
-    }
 
-    public Boolean getExistsInRestoredDb() {
-        return existsInRestoredDb;
-    }
 
-    public Long getRowCount() {
-        return rowCount;
-    }
 
-    public BackupRestoreVerificationItemStatus getStatus() {
-        return status;
-    }
 
-    public String getMessage() {
-        return message;
-    }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 }

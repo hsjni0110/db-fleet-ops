@@ -1,9 +1,12 @@
 package com.dbfleetops.audit.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "audit_log")
 public class AuditLog {
@@ -65,35 +68,11 @@ public class AuditLog {
         );
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public String getActor() {
-        return actor;
-    }
 
-    public String getAction() {
-        return action;
-    }
 
-    public String getResourceType() {
-        return resourceType;
-    }
 
-    public String getResourceId() {
-        return resourceId;
-    }
 
-    public String getResult() {
-        return result;
-    }
 
-    public String getMessage() {
-        return message;
-    }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 }

@@ -1,5 +1,7 @@
 package com.dbfleetops.policy.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -10,6 +12,7 @@ import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "configuration_snapshot")
 public class ConfigurationSnapshot {
@@ -46,19 +49,7 @@ public class ConfigurationSnapshot {
         return new ConfigurationSnapshot(databaseId, engineType);
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public Long getDatabaseId() {
-        return databaseId;
-    }
 
-    public ConfigurationEngineType getEngineType() {
-        return engineType;
-    }
 
-    public LocalDateTime getCapturedAt() {
-        return capturedAt;
-    }
 }

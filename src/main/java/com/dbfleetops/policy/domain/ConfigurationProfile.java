@@ -1,5 +1,7 @@
 package com.dbfleetops.policy.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
@@ -10,6 +12,7 @@ import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "configuration_profile")
 public class ConfigurationProfile {
@@ -85,39 +88,12 @@ public class ConfigurationProfile {
         }
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public String getProfileName() {
-        return profileName;
-    }
 
-    public ConfigurationEngineType getEngineType() {
-        return engineType;
-    }
 
-    public String getEnvironment() {
-        return environment;
-    }
 
-    public String getVersionRange() {
-        return versionRange;
-    }
 
-    public String getDescription() {
-        return description;
-    }
 
-    public ConfigurationProfileStatus getStatus() {
-        return status;
-    }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
 }

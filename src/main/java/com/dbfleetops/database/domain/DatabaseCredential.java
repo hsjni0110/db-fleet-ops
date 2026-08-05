@@ -1,8 +1,11 @@
 package com.dbfleetops.database.domain;
 
+import lombok.Getter;
+
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 public class DatabaseCredential {
 
@@ -19,8 +22,7 @@ public class DatabaseCredential {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    protected DatabaseCredential() {
-    }
+    protected DatabaseCredential() {}
 
     public DatabaseCredential(Long databaseId, String username, String password) {
         this.databaseId = databaseId;
@@ -36,27 +38,6 @@ public class DatabaseCredential {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public Long getDatabaseId() {
-        return databaseId;
-    }
 
-    public String getUsername() {
-        return username;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
 }

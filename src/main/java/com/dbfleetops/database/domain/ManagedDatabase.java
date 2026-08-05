@@ -1,5 +1,7 @@
 package com.dbfleetops.database.domain;
 
+import lombok.Getter;
+
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Entity;
@@ -9,6 +11,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
+@Getter
 @Entity
 public class ManagedDatabase {
     
@@ -94,55 +97,16 @@ public class ManagedDatabase {
         return this.status == DatabaseStatus.ACTIVE;
     }
 
-    public Long getId() {
-        return id;
-    }
 
-    public String getName() {
-        return name;
-    }
 
-    public String getHost() {
-        return host;
-    }
 
-    public int getPort() {
-        return port;
-    }
 
-    public String getDatabaseName() {
-        return databaseName;
-    }
 
-    public DatabaseEngine getEngine() {
-        return engine;
-    }
 
-    public DatabaseStatus getStatus() {
-        return status;
-    }
 
-    public String getEnvironment() {
-        return environment;
-    }
 
-    public String getServiceName() {
-        return serviceName;
-    }
 
-    public String getOwner() {
-        return owner;
-    }
 
-    public String getDescription() {
-        return description;
-    }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
 }
