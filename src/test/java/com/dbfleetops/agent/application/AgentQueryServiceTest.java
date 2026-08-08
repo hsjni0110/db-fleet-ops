@@ -7,7 +7,7 @@ import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
 import com.dbfleetops.operation.domain.OperationTask;
 import com.dbfleetops.operation.domain.OperationTaskType;
-import com.dbfleetops.operation.infra.OperationTaskRepository;
+import com.dbfleetops.operation.adapter.persistence.JpaOperationTaskRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -30,7 +30,7 @@ class AgentQueryServiceTest {
     private AgentHostMetricRepository hostMetricRepository;
 
     @Mock
-    private OperationTaskRepository operationTaskRepository;
+    private JpaOperationTaskRepository operationTaskRepository;
 
     @Test
     void findByIdReturnsAgentMetricAndTaskSummaryWithoutToken() {

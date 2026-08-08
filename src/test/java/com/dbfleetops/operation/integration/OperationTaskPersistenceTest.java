@@ -3,11 +3,14 @@ package com.dbfleetops.operation.integration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import com.dbfleetops.operation.domain.OperationTask;
 import com.dbfleetops.operation.domain.OperationTaskStatus;
 import com.dbfleetops.operation.domain.OperationTaskType;
-import com.dbfleetops.operation.infra.OperationTaskRepository;
+import com.dbfleetops.operation.application.required.TaskStore;
+import com.dbfleetops.operation.adapter.persistence.TaskStoreAdapter;
 import java.util.List;
 import java.util.Optional;
 import java.time.LocalDateTime;
@@ -16,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 @ActiveProfiles("test")
+@Import(TaskStoreAdapter.class)
 class OperationTaskPersistenceTest {
 
         private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 7, 12, 0);
@@ -26,7 +30,10 @@ class OperationTaskPersistenceTest {
         }
 
         @Autowired
-        private OperationTaskRepository taskRepository;
+        private TaskStore taskRepository;
+
+        @Autowired
+        private TestEntityManager entityManager;
 
         @Test
         void saveAndFindOperationTask() {
@@ -55,7 +62,7 @@ class OperationTaskPersistenceTest {
                 taskRepository.save(task);
 
                 Optional<OperationTask> foundTask =
-                                taskRepository.findTop1ByAgentIdAndStatusOrderByCreatedAtAsc(1L,
+                                taskRepository.findNextForUpdate(1L,
                                                 OperationTaskStatus.QUEUED);
 
                 assertThat(foundTask).isPresent();
@@ -73,7 +80,7 @@ class OperationTaskPersistenceTest {
                                 OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}"));
 
                 List<OperationTask> foundTasks =
-                                taskRepository.findTop10ByAgentIdOrderByCreatedAtDesc(1L);
+                                taskRepository.findRecentByAgent(1L);
 
                 assertThat(foundTasks).hasSize(2);
         }
@@ -87,7 +94,7 @@ class OperationTaskPersistenceTest {
 
                 claim(savedTask);
 
-                taskRepository.flush();
+                entityManager.flush();
 
                 OperationTask foundTask = taskRepository.findById(savedTask.getId()).orElseThrow();
 
@@ -107,7 +114,7 @@ class OperationTaskPersistenceTest {
                 savedTask.acceptSuccessReport(1, REPORT_ID, "success-fingerprint",
                                 "{\"cpuUsagePercent\":12.5}", NOW.plusSeconds(10));
 
-                taskRepository.flush();
+                entityManager.flush();
 
                 OperationTask foundTask = taskRepository.findById(savedTask.getId()).orElseThrow();
 
@@ -131,7 +138,7 @@ class OperationTaskPersistenceTest {
                                 "LINUX_STATUS_FAILED", "failed to read /proc/stat",
                                 NOW.plusSeconds(10));
 
-                taskRepository.flush();
+                entityManager.flush();
 
                 OperationTask foundTask = taskRepository.findById(savedTask.getId()).orElseThrow();
 

@@ -7,7 +7,7 @@ import com.dbfleetops.agent.dto.AgentHostMetricResponse;
 import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
 import com.dbfleetops.operation.dto.OperationTaskResponse;
-import com.dbfleetops.operation.infra.OperationTaskRepository;
+import com.dbfleetops.operation.adapter.persistence.JpaOperationTaskRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,12 +19,12 @@ public class AgentQueryService {
 
     private final AgentRepository agentRepository;
     private final AgentHostMetricRepository hostMetricRepository;
-    private final OperationTaskRepository operationTaskRepository;
+    private final JpaOperationTaskRepository operationTaskRepository;
 
     public AgentQueryService(
             AgentRepository agentRepository,
             AgentHostMetricRepository hostMetricRepository,
-            OperationTaskRepository operationTaskRepository
+            JpaOperationTaskRepository operationTaskRepository
     ) {
         this.agentRepository = agentRepository;
         this.hostMetricRepository = hostMetricRepository;

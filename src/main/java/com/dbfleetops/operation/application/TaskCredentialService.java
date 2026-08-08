@@ -1,13 +1,10 @@
 package com.dbfleetops.operation.application;
 
-import com.dbfleetops.agent.infra.AgentRepository;
-import com.dbfleetops.database.application.CredentialCipher;
-import com.dbfleetops.database.infra.DatabaseCredentialRepository;
-import com.dbfleetops.database.infra.ManagedDatabaseRepository;
+import com.dbfleetops.operation.application.provided.TaskCredential;
+import com.dbfleetops.operation.application.required.*;
 import com.dbfleetops.operation.dto.ResolveTaskCredentialRequest;
 import com.dbfleetops.operation.dto.TaskCredentialResponse;
 import com.dbfleetops.operation.exception.TaskExecutionConflictException;
-import com.dbfleetops.operation.infra.OperationTaskRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,32 +12,30 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 
 @Service
-public class TaskCredentialService {
-    private final AgentRepository agentRepository;
-    private final OperationTaskRepository taskRepository;
-    private final DatabaseCredentialRepository credentialRepository;
-    private final ManagedDatabaseRepository databaseRepository;
-    private final CredentialCipher cipher;
+public class TaskCredentialService implements TaskCredential {
+    private final AgentReader agentRepository;
+    private final TaskStore taskRepository;
+    private final CredentialReader credentialRepository;
+    private final DatabaseReader databaseRepository;
     private final Clock clock;
 
-    public TaskCredentialService(AgentRepository agentRepository,
-            OperationTaskRepository taskRepository,
-            DatabaseCredentialRepository credentialRepository,
-            ManagedDatabaseRepository databaseRepository, CredentialCipher cipher, Clock clock) {
+    public TaskCredentialService(AgentReader agentRepository,
+            TaskStore taskRepository,
+            CredentialReader credentialRepository,
+            DatabaseReader databaseRepository, Clock clock) {
         this.agentRepository = agentRepository;
         this.taskRepository = taskRepository;
         this.credentialRepository = credentialRepository;
         this.databaseRepository = databaseRepository;
-        this.cipher = cipher;
         this.clock = clock;
     }
 
     @Transactional
     public TaskCredentialResponse resolve(Long agentId, Long taskId,
             ResolveTaskCredentialRequest request) {
-        var agent = agentRepository.findById(agentId).orElseThrow(
+        agentRepository.findAgent(agentId).orElseThrow(
                 () -> new TaskExecutionConflictException("Agent not found. agentId=" + agentId));
-        if (!agent.matchesToken(request.agentToken())) {
+        if (!agentRepository.matchesToken(agentId, request.agentToken())) {
             throw new TaskExecutionConflictException("Invalid Agent token.");
         }
         var task = taskRepository.findById(taskId).orElseThrow(
@@ -53,14 +48,14 @@ public class TaskCredentialService {
         } catch (IllegalStateException | IllegalArgumentException exception) {
             throw new TaskExecutionConflictException(exception.getMessage(), exception);
         }
-        var credential = credentialRepository.findById(task.getCredentialId()).orElseThrow(
+        var credential = credentialRepository.findCredential(task.getCredentialId()).orElseThrow(
                 () -> new TaskExecutionConflictException("Credential not found."));
-        var database = databaseRepository.findById(credential.getDatabaseId()).orElseThrow(
+        var database = databaseRepository.findDatabase(credential.databaseId()).orElseThrow(
                 () -> new TaskExecutionConflictException("Database not found."));
-        if (!agentId.equals(database.getAssignedAgentId())) {
+        if (!agentId.equals(database.assignedAgentId())) {
             throw new TaskExecutionConflictException("Database is assigned to another Agent.");
         }
-        return new TaskCredentialResponse(credential.getUsername(),
-                credential.revealPassword(cipher));
+        var resolved = credentialRepository.resolve(credential.id());
+        return new TaskCredentialResponse(resolved.username(), resolved.password());
     }
 }

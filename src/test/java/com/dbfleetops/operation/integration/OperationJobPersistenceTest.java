@@ -3,7 +3,7 @@ package com.dbfleetops.operation.integration;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.domain.OperationJob;
-import com.dbfleetops.operation.infra.OperationJobRepository;
+import com.dbfleetops.operation.adapter.persistence.JpaOperationJobRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OperationJobPersistenceTest {
 
     @Autowired
-    private OperationJobRepository jobRepository;
+    private JpaOperationJobRepository jobRepository;
 
     @Test
     void saveAndFindOperationJob() {

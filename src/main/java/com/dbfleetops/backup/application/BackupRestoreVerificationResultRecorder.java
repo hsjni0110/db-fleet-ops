@@ -4,9 +4,8 @@ import com.dbfleetops.backup.domain.BackupRestoreVerification;
 import com.dbfleetops.backup.domain.BackupRestoreVerificationItem;
 import com.dbfleetops.backup.infra.BackupRestoreVerificationItemRepository;
 import com.dbfleetops.backup.infra.BackupRestoreVerificationRepository;
-import com.dbfleetops.operation.domain.OperationTask;
-import com.dbfleetops.operation.dto.MysqlRestoreVerifyTaskItemResultPayload;
-import com.dbfleetops.operation.dto.MysqlRestoreVerifyTaskResultPayload;
+import com.dbfleetops.backup.dto.RestoreVerificationItemResult;
+import com.dbfleetops.backup.dto.RestoreVerificationResult;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -28,15 +27,15 @@ public class BackupRestoreVerificationResultRecorder {
         this.objectMapper = objectMapper;
     }
 
-    public MysqlRestoreVerifyTaskResultPayload record(OperationTask restoreVerifyTask,
+    public RestoreVerificationResult record(Long operationJobId, Long restoreVerifyTaskId,
             String resultPayloadJson) {
-        MysqlRestoreVerifyTaskResultPayload resultPayload = parseResultPayload(resultPayloadJson);
+        RestoreVerificationResult resultPayload = parseResultPayload(resultPayloadJson);
 
-        validateResultPayload(restoreVerifyTask, resultPayload);
+        validateResultPayload(operationJobId, resultPayload);
 
         BackupRestoreVerification verification =
-                BackupRestoreVerification.create(restoreVerifyTask.getOperationJobId(),
-                        resultPayload.backupTaskId(), restoreVerifyTask.getId(),
+                BackupRestoreVerification.create(operationJobId,
+                        resultPayload.backupTaskId(), restoreVerifyTaskId,
                         resultPayload.databaseId(), resultPayload.sourceDatabaseName(),
                         resultPayload.backupFile(), resultPayload.temporaryDatabaseName());
 
@@ -65,7 +64,7 @@ public class BackupRestoreVerificationResultRecorder {
         return resultPayload;
     }
 
-    private MysqlRestoreVerifyTaskResultPayload parseResultPayload(String resultPayloadJson) {
+    private RestoreVerificationResult parseResultPayload(String resultPayloadJson) {
         if (resultPayloadJson == null || resultPayloadJson.isBlank()) {
             throw new IllegalArgumentException(
                     "Restore verify task resultPayloadJson is required.");
@@ -73,16 +72,16 @@ public class BackupRestoreVerificationResultRecorder {
 
         try {
             return objectMapper.readValue(resultPayloadJson,
-                    MysqlRestoreVerifyTaskResultPayload.class);
+                    RestoreVerificationResult.class);
         } catch (JsonProcessingException exception) {
             throw new IllegalArgumentException("Invalid restore verify task resultPayloadJson.",
                     exception);
         }
     }
 
-    private void validateResultPayload(OperationTask restoreVerifyTask,
-            MysqlRestoreVerifyTaskResultPayload resultPayload) {
-        if (restoreVerifyTask.getOperationJobId() == null) {
+    private void validateResultPayload(Long operationJobId,
+            RestoreVerificationResult resultPayload) {
+        if (operationJobId == null) {
             throw new IllegalArgumentException(
                     "Restore verify task must be linked to operation job.");
         }
@@ -120,18 +119,18 @@ public class BackupRestoreVerificationResultRecorder {
     }
 
     private void saveItems(Long verificationId,
-            List<MysqlRestoreVerifyTaskItemResultPayload> items) {
+            List<RestoreVerificationItemResult> items) {
         if (items == null || items.isEmpty()) {
             return;
         }
 
-        for (MysqlRestoreVerifyTaskItemResultPayload item : items) {
+        for (RestoreVerificationItemResult item : items) {
             itemRepository.save(toEntity(verificationId, item));
         }
     }
 
     private BackupRestoreVerificationItem toEntity(Long verificationId,
-            MysqlRestoreVerifyTaskItemResultPayload item) {
+            RestoreVerificationItemResult item) {
         String status = item.status() == null ? "" : item.status().toUpperCase();
 
         return switch (status) {

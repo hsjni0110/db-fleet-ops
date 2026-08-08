@@ -1,6 +1,6 @@
 package com.dbfleetops.worker.application;
 
-import com.dbfleetops.operation.application.OperationWorkerService;
+import com.dbfleetops.operation.application.provided.WorkerJobs;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.JobType;
 import com.dbfleetops.operation.dto.ClaimJobResponse;
@@ -17,7 +17,7 @@ class OperationJobClaimSchedulerTest {
 
     @Test
     void claimAvailableJobCallsWorkerServiceWithConfiguredWorkerId() {
-        OperationWorkerService workerService = mock(OperationWorkerService.class);
+        WorkerJobs workerService = mock(WorkerJobs.class);
         WorkerShutdownState workerShutdownState = mock(WorkerShutdownState.class);
         WorkerProperties workerProperties = new WorkerProperties();
 
@@ -49,7 +49,7 @@ class OperationJobClaimSchedulerTest {
 
     @Test
     void claimAvailableJobSkipsClaimWhenWorkerIsShuttingDown() {
-        OperationWorkerService workerService = mock(OperationWorkerService.class);
+        WorkerJobs workerService = mock(WorkerJobs.class);
         WorkerShutdownState workerShutdownState = mock(WorkerShutdownState.class);
         WorkerProperties workerProperties = new WorkerProperties();
 

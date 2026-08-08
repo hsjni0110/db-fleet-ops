@@ -5,9 +5,7 @@ import com.dbfleetops.backup.domain.BackupRestoreVerificationItem;
 import com.dbfleetops.backup.domain.BackupRestoreVerificationStatus;
 import com.dbfleetops.backup.infra.BackupRestoreVerificationItemRepository;
 import com.dbfleetops.backup.infra.BackupRestoreVerificationRepository;
-import com.dbfleetops.operation.domain.OperationTask;
-import com.dbfleetops.operation.domain.OperationTaskType;
-import com.dbfleetops.operation.dto.MysqlRestoreVerifyTaskResultPayload;
+import com.dbfleetops.backup.dto.RestoreVerificationResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,11 +31,6 @@ class BackupRestoreVerificationResultRecorderTest {
 
     @Test
     void recordVerifiedRestoreVerificationResult() {
-        OperationTask restoreVerifyTask =
-                OperationTask.createForJob(1L, 100L, OperationTaskType.MYSQL_RESTORE_VERIFY, "{}");
-
-        setId(restoreVerifyTask, 300L);
-
         when(verificationRepository.save(any(BackupRestoreVerification.class)))
                 .thenAnswer(invocation -> {
                     BackupRestoreVerification verification = invocation.getArgument(0);
@@ -47,7 +40,7 @@ class BackupRestoreVerificationResultRecorderTest {
                     return verification;
                 });
 
-        MysqlRestoreVerifyTaskResultPayload result = recorder.record(restoreVerifyTask, """
+        RestoreVerificationResult result = recorder.record(100L, 300L, """
                 {
                   "status": "VERIFIED",
                   "operationJobId": 100,
@@ -102,11 +95,6 @@ class BackupRestoreVerificationResultRecorderTest {
 
     @Test
     void recordFailedRestoreVerificationResult() {
-        OperationTask restoreVerifyTask =
-                OperationTask.createForJob(1L, 100L, OperationTaskType.MYSQL_RESTORE_VERIFY, "{}");
-
-        setId(restoreVerifyTask, 300L);
-
         when(verificationRepository.save(any(BackupRestoreVerification.class)))
                 .thenAnswer(invocation -> {
                     BackupRestoreVerification verification = invocation.getArgument(0);
@@ -116,7 +104,7 @@ class BackupRestoreVerificationResultRecorderTest {
                     return verification;
                 });
 
-        MysqlRestoreVerifyTaskResultPayload result = recorder.record(restoreVerifyTask, """
+        RestoreVerificationResult result = recorder.record(100L, 300L, """
                 {
                   "status": "FAILED",
                   "operationJobId": 100,

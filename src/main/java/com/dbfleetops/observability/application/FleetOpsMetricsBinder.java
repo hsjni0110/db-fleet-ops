@@ -6,8 +6,8 @@ import com.dbfleetops.backup.domain.BackupRestoreVerificationStatus;
 import com.dbfleetops.backup.infra.BackupRestoreVerificationRepository;
 import com.dbfleetops.operation.domain.JobStatus;
 import com.dbfleetops.operation.domain.OperationTaskStatus;
-import com.dbfleetops.operation.infra.OperationJobRepository;
-import com.dbfleetops.operation.infra.OperationTaskRepository;
+import com.dbfleetops.operation.adapter.persistence.JpaOperationJobRepository;
+import com.dbfleetops.operation.adapter.persistence.JpaOperationTaskRepository;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -17,14 +17,14 @@ import org.springframework.stereotype.Component;
 public class FleetOpsMetricsBinder {
 
     private final MeterRegistry meterRegistry;
-    private final OperationJobRepository operationJobRepository;
-    private final OperationTaskRepository operationTaskRepository;
+    private final JpaOperationJobRepository operationJobRepository;
+    private final JpaOperationTaskRepository operationTaskRepository;
     private final AgentRepository agentRepository;
     private final BackupRestoreVerificationRepository backupRestoreVerificationRepository;
 
     public FleetOpsMetricsBinder(MeterRegistry meterRegistry,
-            OperationJobRepository operationJobRepository,
-            OperationTaskRepository operationTaskRepository, AgentRepository agentRepository,
+            JpaOperationJobRepository operationJobRepository,
+            JpaOperationTaskRepository operationTaskRepository, AgentRepository agentRepository,
             BackupRestoreVerificationRepository backupRestoreVerificationRepository) {
         this.meterRegistry = meterRegistry;
         this.operationJobRepository = operationJobRepository;

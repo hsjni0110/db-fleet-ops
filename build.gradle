@@ -42,6 +42,7 @@ dependencies {
     runtimeOnly 'com.h2database:h2'
     testRuntimeOnly 'com.h2database:h2'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.1'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     failureTestImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
     failureTestImplementation 'org.testcontainers:testcontainers:2.0.5'

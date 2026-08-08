@@ -1,6 +1,6 @@
 package com.dbfleetops.worker.application;
 
-import com.dbfleetops.operation.application.OperationWorkerService;
+import com.dbfleetops.operation.application.provided.WorkerJobs;
 import com.dbfleetops.operation.dto.ClaimJobResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,12 +14,12 @@ public class OperationJobClaimScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(OperationJobClaimScheduler.class);
 
-    private final OperationWorkerService workerService;
+    private final WorkerJobs workerService;
     private final WorkerShutdownState workerShutdownState;
     private final WorkerProperties workerProperties;
 
     public OperationJobClaimScheduler(
-            OperationWorkerService workerService,
+            WorkerJobs workerService,
             WorkerShutdownState workerShutdownState,
             WorkerProperties workerProperties
     ) {

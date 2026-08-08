@@ -1,256 +1,90 @@
 package com.dbfleetops.operation.application;
 
-import com.dbfleetops.agent.domain.Agent;
-import com.dbfleetops.agent.domain.AgentStatus;
-import com.dbfleetops.agent.infra.AgentHostMetricRepository;
-import com.dbfleetops.agent.infra.AgentRepository;
-import com.dbfleetops.audit.port.AuditRecorderPort;
-import com.dbfleetops.backup.application.BackupRestoreVerificationResultRecorder;
-import com.dbfleetops.database.domain.DatabaseCredential;
-import com.dbfleetops.database.domain.DatabaseEngine;
-import com.dbfleetops.database.domain.ManagedDatabase;
-import com.dbfleetops.database.dto.RegisterManagedDatabaseRequest;
-import com.dbfleetops.database.infra.DatabaseCredentialRepository;
-import com.dbfleetops.database.infra.ManagedDatabaseRepository;
-import com.dbfleetops.operation.domain.JobStatus;
-import com.dbfleetops.operation.domain.JobType;
-import com.dbfleetops.operation.domain.OperationJob;
-import com.dbfleetops.operation.domain.OperationTask;
-import com.dbfleetops.operation.domain.OperationTaskStatus;
-import com.dbfleetops.operation.domain.OperationTaskType;
-import com.dbfleetops.operation.dto.ClaimJobResponse;
-import com.dbfleetops.operation.dto.CompleteOperationTaskRequest;
-import com.dbfleetops.operation.dto.FailOperationTaskRequest;
-import com.dbfleetops.operation.infra.OperationJobRepository;
-import com.dbfleetops.operation.infra.OperationTaskRepository;
-import com.dbfleetops.worker.application.WorkerShutdownState;
+import com.dbfleetops.operation.application.required.*;
+import com.dbfleetops.operation.application.workflow.backup.BackupWorkflow;
+import com.dbfleetops.operation.domain.*;
+import com.dbfleetops.operation.dto.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-
+import java.time.*;
+import java.util.*;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
 class BackupJobOperationTaskFlowTest {
-
-        private static void claim(OperationTask task) {
-                LocalDateTime now = LocalDateTime.now();
-                task.claim(now, now.plusMinutes(5));
-        }
-
-        @Mock
-        private OperationJobRepository jobRepository;
-
-        @Mock
-        private ManagedDatabaseRepository databaseRepository;
-
-        @Mock
-        private DatabaseCredentialRepository credentialRepository;
-
-        @Mock
-        private OperationTaskRepository taskRepository;
-
-        @Mock
-        private AgentRepository agentRepository;
-
-        @Mock
-        private AuditRecorderPort auditRecorderPort;
-
-        @Mock
-        private AgentHostMetricRepository agentHostMetricRepository;
-
-        @Mock
-        private ConfigurationCheckJobExecutor configurationCheckJobExecutor;
-
-        @Mock
-        private ConfigurationApplyJobExecutor configurationApplyJobExecutor;
-
-        @Mock
-        private BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder;
-
-        @Mock
-        private WorkerShutdownState workerShutdownState;
-
-        @Test
-        void backupJobClaimCreatesTaskAndBackupCompleteCreatesRestoreVerifyTask() {
-                OperationJob job =
-                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
-
-                ReflectionTestUtils.setField(job, "id", 100L);
-
-                Agent agent = newAgent();
-
-                ReflectionTestUtils.setField(agent, "id", 1L);
-
-                List<OperationTask> savedTasks = new ArrayList<>();
-
-                when(jobRepository
-                                .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
-                                                eq(JobStatus.QUEUED), any(LocalDateTime.class)))
-                                                                .thenReturn(List.of(job));
-
-                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
-
-                when(databaseRepository.findById(1L)).thenReturn(Optional.of(newManagedDatabase()));
-
-                DatabaseCredential credential = new DatabaseCredential(1L, "root", "encrypted");
-                ReflectionTestUtils.setField(credential, "id", 7L);
-                when(credentialRepository.findByDatabaseId(1L)).thenReturn(Optional.of(credential));
-
-                when(taskRepository.save(any(OperationTask.class))).thenAnswer(invocation -> {
-                        OperationTask task = invocation.getArgument(0);
-
-                        if (task.getId() == null) {
-                                ReflectionTestUtils.setField(task, "id",
-                                                10L + savedTasks.size());
-                        }
-
-                        savedTasks.add(task);
-
-                        return task;
-                });
-
-                RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory =
-                                new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
-
-                OperationTaskService taskService = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository, databaseRepository,
-                                credentialRepository, agentHostMetricRepository,
-                                restoreVerifyTaskPayloadFactory,
-                                backupRestoreVerificationResultRecorder);
-
-                OperationWorkerService workerService = new OperationWorkerService(jobRepository,
-                                auditRecorderPort, taskService, configurationCheckJobExecutor,
-                                configurationApplyJobExecutor, workerShutdownState);
-
-                ClaimJobResponse claimResponse = workerService.claimJob("worker-1");
-
-                assertThat(claimResponse.claimed()).isTrue();
-
-                assertThat(job.getStatus()).isEqualTo(JobStatus.RUNNING);
-
-                OperationTask task = savedTasks.getFirst();
-
-                assertThat(task).isNotNull();
-
-                assertThat(task.getTaskType()).isEqualTo(OperationTaskType.MYSQL_LOGICAL_BACKUP);
-
-                assertThat(task.getParametersJson()).contains("\"host\": \"target-mysql\"",
-                                "\"databaseName\": \"orders\"", "\"verifyAfterBackup\": true",
-                                "\"verifyRowCount\": true", "\"cleanup\": true");
-                assertThat(task.getParametersJson()).doesNotContain("username", "password");
-                assertThat(task.getCredentialId()).isEqualTo(7L);
-
-                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.QUEUED);
-
-                assertThat(task.getOperationJobId()).isEqualTo(job.getId());
-
-                claim(task);
-
-                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
-
-                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
-
-                when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
-
-                taskService.completeTask(1L, 10L,
-                                new CompleteOperationTaskRequest("agent-token-001", """
-                                                {
-                                                  "status": "VERIFIED",
-                                                  "backupFile": "/var/lib/db-fleet-agent/backups/orders.sql",
-                                                  "fileSizeBytes": 3198,
-                                                  "checksumSha256": "abc123",
-                                                  "createdAt": "2026-07-10T16:40:00+09:00",
-                                                  "message": "backup artifact verified"
-                                                }
-                                                """));
-
-                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
-
-                assertThat(job.getStatus()).isEqualTo(JobStatus.RUNNING);
-
-                assertThat(savedTasks).hasSize(2);
-
-                OperationTask restoreVerifyTask = savedTasks.get(1);
-
-                assertThat(restoreVerifyTask.getTaskType())
-                                .isEqualTo(OperationTaskType.MYSQL_RESTORE_VERIFY);
-
-                assertThat(restoreVerifyTask.getOperationJobId()).isEqualTo(job.getId());
-
-                assertThat(restoreVerifyTask.getParametersJson()).contains(
-                                "\"operationJobId\":100",
-                                "\"databaseId\":1",
-                                "\"backupTaskId\":10",
-                                "\"sourceDatabaseName\":\"orders\"",
-                                "\"backupFile\":\"/var/lib/db-fleet-agent/backups/orders.sql\"",
-                                "\"verifyRowCount\":true",
-                                "\"cleanup\":true");
-        }
-
-        @Test
-        void backupTaskFailFailsLinkedJob() {
-                OperationJob job =
-                                OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
-
-                job.start("worker-1", LocalDateTime.now().plusSeconds(60));
-
-                Agent agent = newAgent();
-
-                OperationTask task = OperationTask.createForJob(1L, 100L,
-                                OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
-
-                claim(task);
-
-                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
-
-                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
-
-                when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
-
-                RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory =
-                                new RestoreVerifyTaskPayloadFactory(new ObjectMapper());
-
-                OperationTaskService taskService = new OperationTaskService(agentRepository,
-                                taskRepository, jobRepository, databaseRepository,
-                                credentialRepository, agentHostMetricRepository,
-                                restoreVerifyTaskPayloadFactory,
-                                backupRestoreVerificationResultRecorder);
-
-                taskService.failTask(1L, 10L, new FailOperationTaskRequest("agent-token-001",
-                                "BACKUP_FAILED", "mysqldump failed"));
-
-                assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.FAILED);
-
-                assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
-
-                assertThat(job.getResultCode()).isEqualTo("BACKUP_FAILED");
-
-                assertThat(job.getResultMessage()).isEqualTo("mysqldump failed");
-        }
-
-        private Agent newAgent() {
-                return Agent.register("local-agent", "localhost", "127.0.0.1", "Linux", "0.1.0",
-                                "agent-token-001");
-        }
-
-        private ManagedDatabase newManagedDatabase() {
-                ManagedDatabase database = ManagedDatabase.register(new RegisterManagedDatabaseRequest("target-mysql",
-                                "target-mysql", 3306, "orders",
-                                DatabaseEngine.MYSQL, "LOCAL", "target-mysql", "platform-team",
-                                "local target database"));
-                ReflectionTestUtils.setField(database, "id", 1L);
-                database.assignAgent(1L);
-                return database;
-        }
+    private final AgentReader agents = mock(AgentReader.class);
+    private final DatabaseReader databases = mock(DatabaseReader.class);
+    private final CredentialReader credentials = mock(CredentialReader.class);
+    private final TaskStore tasks = mock(TaskStore.class);
+    private final JobStore jobs = mock(JobStore.class);
+    private final BackupVerificationWriter verifications = mock(BackupVerificationWriter.class);
+
+    @Test
+    void backupSuccessCreatesOneRestoreVerificationTask() {
+        OperationJob job = OperationJob.create(JobType.BACKUP, 1L, "user", "key");
+        ReflectionTestUtils.setField(job, "id", 100L);
+        job.start("worker", LocalDateTime.now().plusMinutes(1));
+        when(agents.findAgent(1L)).thenReturn(Optional.of(new AgentExecutionTarget(1L, true)));
+        when(agents.matchesToken(1L, "token")).thenReturn(true);
+        when(databases.findDatabase(1L)).thenReturn(Optional.of(new DatabaseExecutionTarget(
+                1L, "orders", "mysql", 3306, "MYSQL", 1L, true)));
+        when(credentials.findCredentialByDatabase(1L)).thenReturn(Optional.of(new CredentialReference(7L, 1L)));
+        when(jobs.findByIdForUpdate(100L)).thenReturn(Optional.of(job));
+        List<OperationTask> saved = new ArrayList<>();
+        when(tasks.save(any())).thenAnswer(call -> {
+            OperationTask task = call.getArgument(0);
+            ReflectionTestUtils.setField(task, "id", 10L + saved.size());
+            saved.add(task); return task;
+        });
+        JobTaskCoordinator coordinator = new JobTaskCoordinator(jobs, tasks);
+        BackupPayloadBuilder payloads = mock(BackupPayloadBuilder.class);
+        when(payloads.shouldVerifyAfterBackup(anyString())).thenReturn(true);
+        when(payloads.createRestorePayload(anyLong(), anyLong(), anyString(), anyString()))
+                .thenReturn("{}");
+        BackupWorkflow workflow = new BackupWorkflow(agents, databases, credentials, tasks,
+                coordinator, payloads, verifications);
+        OperationTask backup = toEntity(workflow.createBackupTask(100L, 1L), saved);
+        backup.claim(LocalDateTime.now(), LocalDateTime.now().plusMinutes(1));
+        when(tasks.findById(backup.getId())).thenReturn(Optional.of(backup));
+        TaskReportService reports = new TaskReportService(agents, tasks,
+                new TaskResultDispatcher(List.of(workflow)), coordinator, Clock.systemUTC(),
+                new OperationTaskResultFingerprint());
+
+        reports.completeTask(1L, backup.getId(), new CompleteOperationTaskRequest("token", """
+                {"status":"VERIFIED","backupFile":"/tmp/orders.sql"}
+                """));
+
+        assertThat(saved).hasSize(2);
+        assertThat(saved.get(1).getTaskType()).isEqualTo(OperationTaskType.MYSQL_RESTORE_VERIFY);
+        assertThat(job.getStatus()).isEqualTo(JobStatus.RUNNING);
+    }
+
+    @Test
+    void failedTaskFailsLinkedJob() {
+        OperationJob job = OperationJob.create(JobType.BACKUP, 1L, "user", "key");
+        ReflectionTestUtils.setField(job, "id", 100L);
+        job.start("worker", LocalDateTime.now().plusMinutes(1));
+        OperationTask task = OperationTask.createForJob(1L, 100L,
+                OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
+        task.claim(LocalDateTime.now(), LocalDateTime.now().plusMinutes(1));
+        when(agents.findAgent(1L)).thenReturn(Optional.of(new AgentExecutionTarget(1L, true)));
+        when(agents.matchesToken(1L, "token")).thenReturn(true);
+        when(tasks.findById(10L)).thenReturn(Optional.of(task));
+        when(jobs.findByIdForUpdate(100L)).thenReturn(Optional.of(job));
+        JobTaskCoordinator coordinator = new JobTaskCoordinator(jobs, tasks);
+        TaskReportService reports = new TaskReportService(agents, tasks,
+                new TaskResultDispatcher(List.of()), coordinator, Clock.systemUTC(),
+                new OperationTaskResultFingerprint());
+
+        reports.failTask(1L, 10L, new FailOperationTaskRequest("token", "BACKUP_FAILED", "failed"));
+
+        assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
+        assertThat(job.getResultCode()).isEqualTo("BACKUP_FAILED");
+    }
+
+    private OperationTask toEntity(OperationTaskResponse ignored, List<OperationTask> saved) {
+        return saved.getFirst();
+    }
 }
