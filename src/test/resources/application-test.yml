@@ -12,3 +12,6 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
     show-sql: false
+db-fleetops:
+  credential:
+    encryption-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=

@@ -17,6 +17,18 @@ repositories {
 	mavenCentral()
 }
 
+sourceSets {
+    failureTest {
+        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    failureTestImplementation.extendsFrom testImplementation
+    failureTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -31,9 +43,16 @@ dependencies {
     testRuntimeOnly 'com.h2database:h2'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    failureTestImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
+    failureTestImplementation 'org.testcontainers:testcontainers:2.0.5'
+    failureTestImplementation 'org.testcontainers:testcontainers-mysql:2.0.5'
+    failureTestImplementation 'org.testcontainers:testcontainers-toxiproxy:2.0.5'
+    failureTestImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.5'
 }
 
 tasks.named('test') {
+    systemProperty 'db-fleetops.credential.encryption-key',
+            'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
     useJUnitPlatform {
         excludeTags 'integration'
     }
@@ -45,6 +64,8 @@ tasks.register('integrationTest', Test) {
 
     testClassesDirs = testing.suites.test.sources.output.classesDirs
     classpath = testing.suites.test.sources.runtimeClasspath
+    systemProperty 'db-fleetops.credential.encryption-key',
+            'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 
     useJUnitPlatform {
         includeTags 'integration'
@@ -55,5 +76,48 @@ tasks.register('integrationTest', Test) {
     testLogging {
         events 'passed', 'skipped', 'failed'
         exceptionFormat 'full'
+    }
+}
+
+tasks.register('agentFailureTest', Test) {
+    description = 'Reproduces known Control Plane-Agent failure scenarios.'
+    group = 'verification'
+
+    dependsOn tasks.named('bootJar')
+    testClassesDirs = sourceSets.failureTest.output.classesDirs
+    classpath = sourceSets.failureTest.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'agent-failure'
+    }
+    shouldRunAfter tasks.named('test'), tasks.named('integrationTest')
+
+    systemProperty 'failureTest.requireDocker',
+            System.getenv('FAILURE_TEST_REQUIRE_DOCKER') ?: 'false'
+
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
+}
+
+tasks.register('architectureTest', Test) {
+    description = 'Measures whether the Control Plane-Agent split provides its claimed benefits.'
+    group = 'verification'
+
+    dependsOn tasks.named('bootJar')
+    testClassesDirs = sourceSets.failureTest.output.classesDirs
+    classpath = sourceSets.failureTest.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'architecture-check'
+    }
+
+    systemProperty 'failureTest.requireDocker',
+            System.getenv('FAILURE_TEST_REQUIRE_DOCKER') ?: 'false'
+
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+        showStandardStreams = true
     }
 }

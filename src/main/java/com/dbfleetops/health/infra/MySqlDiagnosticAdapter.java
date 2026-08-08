@@ -1,6 +1,7 @@
 package com.dbfleetops.health.infra;
 
 import com.dbfleetops.database.domain.DatabaseCredential;
+import com.dbfleetops.database.application.CredentialCipher;
 import com.dbfleetops.database.domain.DatabaseEngine;
 import com.dbfleetops.database.domain.ManagedDatabase;
 import com.dbfleetops.health.domain.ConnectionSummary;
@@ -21,6 +22,11 @@ import java.util.List;
 
 @Component
 public class MySqlDiagnosticAdapter implements DatabaseDiagnosticPort {
+    private final CredentialCipher credentialCipher;
+
+    public MySqlDiagnosticAdapter(CredentialCipher credentialCipher) {
+        this.credentialCipher = credentialCipher;
+    }
 
     @Override
     public DatabaseEngine supports() {
@@ -413,7 +419,7 @@ public class MySqlDiagnosticAdapter implements DatabaseDiagnosticPort {
         return DriverManager.getConnection(
                 jdbcUrl,
                 credential.getUsername(),
-                credential.getPassword()
+                credential.revealPassword(credentialCipher)
         );
     }
 }

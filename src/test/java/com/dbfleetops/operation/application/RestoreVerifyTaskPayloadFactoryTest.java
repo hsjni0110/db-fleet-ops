@@ -65,9 +65,9 @@ class RestoreVerifyTaskPayloadFactoryTest {
 
         assertThat(payload.port()).isEqualTo(3306);
 
-        assertThat(payload.username()).isEqualTo("backup_user");
-
-        assertThat(payload.password()).isEqualTo("secret");
+        assertThat(payload.username()).isNull();
+        assertThat(payload.password()).isNull();
+        assertThat(restoreVerifyPayloadJson).doesNotContain("username", "password", "secret");
 
         assertThat(payload.temporaryDatabaseName()).startsWith("restore_verify_orders_100_");
 

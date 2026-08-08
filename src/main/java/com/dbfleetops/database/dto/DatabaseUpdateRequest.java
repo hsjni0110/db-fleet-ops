@@ -13,6 +13,13 @@ public record DatabaseUpdateRequest(
         String owner,
         String description,
         String username,
-        String password
+        String password,
+        Long assignedAgentId
 ) {
+    public DatabaseUpdateRequest(String name, String host, int port, String databaseName,
+            DatabaseEngine engine, String environment, String serviceName, String owner,
+            String description, String username, String password) {
+        this(name, host, port, databaseName, engine, environment, serviceName, owner, description,
+                username, password, null);
+    }
 }

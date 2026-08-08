@@ -32,8 +32,7 @@ public class RestoreVerifyTaskPayloadFactory {
         MysqlRestoreVerifyTaskPayload restoreVerifyTaskPayload = new MysqlRestoreVerifyTaskPayload(
                 restoreVerifyTaskOperationJobId, backupTaskPayload.databaseId(), backupTaskId,
                 backupTaskPayload.databaseName(), backupResultPayload.backupFile(),
-                backupTaskPayload.host(), backupTaskPayload.port(), backupTaskPayload.username(),
-                backupTaskPayload.password(),
+                backupTaskPayload.host(), backupTaskPayload.port(), null, null,
                 buildTemporaryDatabaseName(backupTaskPayload.databaseName(),
                         restoreVerifyTaskOperationJobId),
                 backupTaskPayload.expectedTables(), backupTaskPayload.shouldVerifyRowCount(),

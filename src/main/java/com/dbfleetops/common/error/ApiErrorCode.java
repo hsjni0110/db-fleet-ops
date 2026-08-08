@@ -16,6 +16,10 @@ public enum ApiErrorCode {
     METHOD_NOT_ALLOWED("DBOPS-COMMON-40501", HttpStatus.METHOD_NOT_ALLOWED, "Method not allowed",
             "The HTTP method is not supported for this resource.", "method-not-allowed"),
 
+    TASK_EXECUTION_CONFLICT("DBOPS-TASK-40901", HttpStatus.CONFLICT,
+            "Task execution conflict", "The task execution is stale, expired, or no longer active.",
+            "task-execution-conflict"),
+
     INTERNAL_SERVER_ERROR("DBOPS-COMMON-50001", HttpStatus.INTERNAL_SERVER_ERROR,
             "Internal server error", "An unexpected server error occurred.",
             "internal-server-error"),

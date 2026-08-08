@@ -13,6 +13,8 @@ import com.dbfleetops.database.dto.DatabaseUpdateRequest;
 import com.dbfleetops.database.dto.RegisterManagedDatabaseRequest;
 import com.dbfleetops.database.infra.DatabaseCredentialRepository;
 import com.dbfleetops.database.infra.ManagedDatabaseRepository;
+import com.dbfleetops.agent.infra.AgentRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class DatabaseInventoryService {
@@ -20,13 +22,26 @@ public class DatabaseInventoryService {
     private final ManagedDatabaseRepository databaseRepository;
     private final DatabaseCredentialRepository credentialRepository;
     private final DatabaseConnectionValidator connectionValidator;
+    private final AgentRepository agentRepository;
+    private final CredentialCipher credentialCipher;
+
+    @Autowired
+    public DatabaseInventoryService(ManagedDatabaseRepository managedDatabaseRepository,
+            DatabaseCredentialRepository databaseCredentialRepository,
+            DatabaseConnectionValidator connectionValidator, AgentRepository agentRepository,
+            CredentialCipher credentialCipher) {
+        this.databaseRepository = managedDatabaseRepository;
+        this.credentialRepository = databaseCredentialRepository;
+        this.connectionValidator = connectionValidator;
+        this.agentRepository = agentRepository;
+        this.credentialCipher = credentialCipher;
+    }
 
     public DatabaseInventoryService(ManagedDatabaseRepository managedDatabaseRepository,
             DatabaseCredentialRepository databaseCredentialRepository,
             DatabaseConnectionValidator connectionValidator) {
-        this.databaseRepository = managedDatabaseRepository;
-        this.credentialRepository = databaseCredentialRepository;
-        this.connectionValidator = connectionValidator;
+        this(managedDatabaseRepository, databaseCredentialRepository, connectionValidator, null,
+                new CredentialCipher("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="));
     }
 
     @Transactional
@@ -39,9 +54,10 @@ public class DatabaseInventoryService {
                 request.description()));
 
         ManagedDatabase savedDatabase = databaseRepository.save(database);
+        assignAgent(savedDatabase, request.assignedAgentId());
 
         DatabaseCredential credential = new DatabaseCredential(savedDatabase.getId(),
-                request.username(), request.password());
+                request.username(), credentialCipher.encrypt(request.password()));
 
         credentialRepository.save(credential);
         return DatabaseResponse.from(savedDatabase);
@@ -66,12 +82,13 @@ public class DatabaseInventoryService {
                 request.engine());
         database.changeMetadata(request.name(), request.environment(), request.serviceName(),
                 request.owner(), request.description());
+        assignAgent(database, request.assignedAgentId());
 
         DatabaseCredential credential = credentialRepository.findByDatabaseId(databaseId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Credential not found. databaseId=" + databaseId));
 
-        credential.changeCredentials(request.username(), request.password());
+        credential.changeCredentials(request.username(), credentialCipher.encrypt(request.password()));
 
         return DatabaseResponse.from(database);
     }
@@ -85,5 +102,12 @@ public class DatabaseInventoryService {
     private ManagedDatabase getDatabase(Long databaseId) {
         return databaseRepository.findById(databaseId).orElseThrow(
                 () -> new IllegalArgumentException("Database not found. databaseId=" + databaseId));
+    }
+
+    private void assignAgent(ManagedDatabase database, Long agentId) {
+        if (agentId != null && (agentRepository == null || !agentRepository.existsById(agentId))) {
+            throw new IllegalArgumentException("Agent not found. agentId=" + agentId);
+        }
+        database.assignAgent(agentId);
     }
 }

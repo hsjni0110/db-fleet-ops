@@ -2,11 +2,19 @@ package com.dbfleetops.operation.domain;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 class OperationTaskTest {
+        private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 7, 12, 0);
+        private static final String REPORT_ID = "8d77288c-cf64-4ae8-a5be-a4010192fc6e";
+
+        private static void claim(OperationTask task) {
+                task.claim(NOW, NOW.plusMinutes(1));
+        }
 
         @Test
         void createInitializesQueuedTask() {
@@ -49,7 +57,7 @@ class OperationTaskTest {
         void startChangesQueuedTaskToRunning() {
                 OperationTask task = newLinuxStatusTask();
 
-                task.start();
+                claim(task);
 
                 assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.RUNNING);
 
@@ -59,10 +67,10 @@ class OperationTaskTest {
         @Test
         void startRejectsTaskThatIsNotQueued() {
                 OperationTask task = newLinuxStatusTask();
-                task.start();
+                claim(task);
 
                 assertThatIllegalStateException()
-                                .isThrownBy(task::start)
+                                .isThrownBy(() -> claim(task))
                                 .withMessage("대기 중인 Task만 시작할 수 있습니다. 현재 상태=RUNNING");
         }
 
@@ -70,9 +78,9 @@ class OperationTaskTest {
         void completeChangesRunningTaskToSucceeded() {
                 OperationTask task = newLinuxStatusTask();
 
-                task.start();
+                claim(task);
 
-                task.succeed("{\"cpuUsagePercent\":12.5}");
+                task.acceptSuccessReport(1, REPORT_ID, "success-fingerprint", "{\"cpuUsagePercent\":12.5}", NOW.plusSeconds(10));
 
                 assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.SUCCEEDED);
 
@@ -85,9 +93,9 @@ class OperationTaskTest {
         void failChangesRunningTaskToFailed() {
                 OperationTask task = newLinuxStatusTask();
 
-                task.start();
+                claim(task);
 
-                task.fail("LINUX_STATUS_FAILED", "failed to read /proc/stat");
+                task.acceptFailureReport(1, REPORT_ID, "failure-fingerprint", "LINUX_STATUS_FAILED", "failed to read /proc/stat", NOW.plusSeconds(10));
 
                 assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.FAILED);
 
@@ -101,8 +109,8 @@ class OperationTaskTest {
                 OperationTask task = newLinuxStatusTask();
 
                 assertThatIllegalStateException()
-                                .isThrownBy(() -> task.succeed("{}"))
-                                .withMessage("실행 중인 Task만 성공 처리할 수 있습니다. 현재 상태=QUEUED");
+                                .isThrownBy(() -> task.acceptSuccessReport(1, REPORT_ID, "success-fingerprint", "{}", NOW.plusSeconds(10)))
+                                .withMessage("완료된 성공 또는 실패 Task만 결과를 재보고할 수 있습니다. 현재 상태=QUEUED");
         }
 
         @Test
@@ -110,17 +118,17 @@ class OperationTaskTest {
                 OperationTask task = newLinuxStatusTask();
 
                 assertThatIllegalStateException()
-                                .isThrownBy(() -> task.fail("ERROR", "failed"))
-                                .withMessage("실행 중인 Task만 실패 처리할 수 있습니다. 현재 상태=QUEUED");
+                                .isThrownBy(() -> task.acceptFailureReport(1, REPORT_ID, "failure-fingerprint", "ERROR", "failed", NOW.plusSeconds(10)))
+                                .withMessage("완료된 성공 또는 실패 Task만 결과를 재보고할 수 있습니다. 현재 상태=QUEUED");
         }
 
         @Test
         void failRejectsMissingErrorCode() {
                 OperationTask task = newLinuxStatusTask();
-                task.start();
+                claim(task);
 
                 assertThatIllegalArgumentException()
-                                .isThrownBy(() -> task.fail(" ", "failed"))
+                                .isThrownBy(() -> task.acceptFailureReport(1, REPORT_ID, "failure-fingerprint", " ", "failed", NOW.plusSeconds(10)))
                                 .withMessage("오류 코드는 필수입니다.");
         }
 

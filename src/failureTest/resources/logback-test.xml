@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!--
+        테스트 진행 설명은 각 실패 재현 테스트가 간단한 관찰값으로 출력합니다.
+        Testcontainers와 Docker Client의 내부 기동 로그는 핵심 Scenario 설명을 가리므로
+        오류만 터미널에 표시하고 전체 Container Log는 Report 파일에 보관합니다.
+    -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="ERROR">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

@@ -15,7 +15,8 @@ public record DatabaseResponse(
     String environment,
     String serviceName,
     String owner,
-    String description
+    String description,
+    Long assignedAgentId
 ) {
     public static DatabaseResponse from(ManagedDatabase database) {
         return new DatabaseResponse(
@@ -29,7 +30,8 @@ public record DatabaseResponse(
             database.getEnvironment(),
             database.getServiceName(),
             database.getOwner(),
-            database.getDescription()
+            database.getDescription(),
+            database.getAssignedAgentId()
         );
     }
 }

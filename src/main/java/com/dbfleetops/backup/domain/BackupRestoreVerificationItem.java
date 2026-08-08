@@ -92,11 +92,4 @@ public class BackupRestoreVerificationItem {
                 BackupRestoreVerificationItemStatus.SKIPPED, message);
     }
 
-
-
-
-
-
-
-
 }

@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"log"
 	"time"
 
@@ -17,13 +19,15 @@ type TaskDispatcher interface {
 }
 
 type AgentService struct {
-	registrationPort port.RegistrationPort
-	heartbeatPort   port.HeartbeatPort
-	taskPort        port.TaskPort
-	linuxInfoPort   port.LinuxInfoPort
-	taskDispatcher  TaskDispatcher
-	stateStorePort port.AgentStateStorePort
-	identityPort   port.AgentIdentityPort
+	registrationPort     port.RegistrationPort
+	heartbeatPort        port.HeartbeatPort
+	taskPort             port.TaskPort
+	linuxInfoPort        port.LinuxInfoPort
+	taskDispatcher       TaskDispatcher
+	stateStorePort       port.AgentStateStorePort
+	identityPort         port.AgentIdentityPort
+	leaseRenewalInterval time.Duration
+	taskLeaseDuration    time.Duration
 }
 
 func NewAgentService(
@@ -36,13 +40,15 @@ func NewAgentService(
 	identityPort port.AgentIdentityPort,
 ) *AgentService {
 	return &AgentService{
-		registrationPort: registrationPort,
-		heartbeatPort:   heartbeatPort,
-		taskPort:        taskPort,
-		linuxInfoPort:   linuxInfoPort,
-		taskDispatcher:  taskDispatcher,
-		stateStorePort:  stateStorePort,
-		identityPort:    identityPort,
+		registrationPort:     registrationPort,
+		heartbeatPort:        heartbeatPort,
+		taskPort:             taskPort,
+		linuxInfoPort:        linuxInfoPort,
+		taskDispatcher:       taskDispatcher,
+		stateStorePort:       stateStorePort,
+		identityPort:         identityPort,
+		leaseRenewalInterval: 20 * time.Second,
+		taskLeaseDuration:    60 * time.Second,
 	}
 }
 
@@ -185,19 +191,52 @@ func (s *AgentService) PollAndHandleTask(
 		nextTask.TaskType,
 	)
 
-	if err := s.taskPort.StartTask(ctx, nextTask.TaskID); err != nil {
-		return err
+	taskContext, cancelTask := context.WithCancel(ctx)
+	defer cancelTask()
+	leaseDone := make(chan struct{})
+	leaseLost := make(chan struct{}, 1)
+	go s.maintainTaskLease(taskContext, *nextTask, cancelTask, leaseDone, leaseLost)
+	if nextTask.CredentialID != 0 {
+		credential, resolveErr := s.taskPort.ResolveTaskCredential(taskContext, nextTask.TaskID,
+			nextTask.ExecutionAttempt)
+		if resolveErr != nil {
+			cancelTask()
+			<-leaseDone
+			if errors.Is(resolveErr, port.ErrTaskExecutionConflict) {
+				return nil
+			}
+			return resolveErr
+		}
+		if err := addCredentialToParameters(nextTask, credential); err != nil {
+			cancelTask()
+			<-leaseDone
+			return err
+		}
 	}
-
 	resultPayload, err := s.taskDispatcher.Dispatch(
-		ctx,
+		taskContext,
 		*nextTask,
 	)
+	cancelTask()
+	<-leaseDone
+	select {
+	case <-leaseLost:
+		log.Printf("agent_task_abandoned taskId=%d executionAttempt=%d",
+			nextTask.TaskID, nextTask.ExecutionAttempt)
+		return nil
+	default:
+	}
 
 	if err != nil {
+		resultReportID, idErr := newResultReportID()
+		if idErr != nil {
+			return idErr
+		}
 		failErr := s.taskPort.FailTask(
 			ctx,
 			nextTask.TaskID,
+			nextTask.ExecutionAttempt,
+			resultReportID,
 			"TASK_EXECUTION_FAILED",
 			err.Error(),
 		)
@@ -209,9 +248,15 @@ func (s *AgentService) PollAndHandleTask(
 		return err
 	}
 
+	resultReportID, err := newResultReportID()
+	if err != nil {
+		return err
+	}
 	if err := s.taskPort.CompleteTask(
 		ctx,
 		nextTask.TaskID,
+		nextTask.ExecutionAttempt,
+		resultReportID,
 		resultPayload,
 	); err != nil {
 		return err
@@ -224,6 +269,48 @@ func (s *AgentService) PollAndHandleTask(
 	)
 
 	return nil
+}
+
+func addCredentialToParameters(task *port.Task, credential port.TaskCredential) error {
+	var parameters map[string]any
+	if err := json.Unmarshal([]byte(task.ParametersJSON), &parameters); err != nil {
+		return err
+	}
+	parameters["username"] = credential.Username
+	parameters["password"] = credential.Password
+	encoded, err := json.Marshal(parameters)
+	if err != nil {
+		return err
+	}
+	task.ParametersJSON = string(encoded)
+	return nil
+}
+
+func (s *AgentService) maintainTaskLease(ctx context.Context, task port.Task,
+	cancelTask context.CancelFunc, done chan<- struct{}, leaseLost chan<- struct{}) {
+	defer close(done)
+	ticker := time.NewTicker(s.leaseRenewalInterval)
+	defer ticker.Stop()
+	lastSuccess := time.Now()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			err := s.taskPort.RenewTaskLease(ctx, task.TaskID, task.ExecutionAttempt)
+			if err == nil {
+				lastSuccess = time.Now()
+				continue
+			}
+			if errors.Is(err, port.ErrTaskExecutionConflict) || time.Since(lastSuccess) >= s.taskLeaseDuration {
+				leaseLost <- struct{}{}
+				cancelTask()
+				return
+			}
+			log.Printf("task_lease_renewal_failed taskId=%d executionAttempt=%d error=%v",
+				task.TaskID, task.ExecutionAttempt, err)
+		}
+	}
 }
 
 func NewStaticAgentInfo(
@@ -248,16 +335,17 @@ func (s *AgentService) Run(
 	ctx context.Context,
 	heartbeatInterval time.Duration,
 	pollInterval time.Duration,
+	leaseRenewalInterval time.Duration,
+	taskLeaseDuration time.Duration,
 ) error {
-	heartbeatTicker := time.NewTicker(heartbeatInterval)
+	s.leaseRenewalInterval = leaseRenewalInterval
+	s.taskLeaseDuration = taskLeaseDuration
+	heartbeatContext, stopHeartbeat := context.WithCancel(ctx)
+	defer stopHeartbeat()
+	go s.runHeartbeatLoop(heartbeatContext, heartbeatInterval)
 	pollTicker := time.NewTicker(pollInterval)
 
-	defer heartbeatTicker.Stop()
 	defer pollTicker.Stop()
-
-	if err := s.SendHeartbeat(ctx); err != nil {
-		return err
-	}
 
 	if err := s.PollAndHandleTask(ctx); err != nil {
 		return err
@@ -269,14 +357,27 @@ func (s *AgentService) Run(
 			log.Print("agent_runtime_stopped")
 			return nil
 
-		case <-heartbeatTicker.C:
-			if err := s.SendHeartbeat(ctx); err != nil {
-				log.Printf("heartbeat_failed error=%v", err)
-			}
-
 		case <-pollTicker.C:
 			if err := s.PollAndHandleTask(ctx); err != nil {
 				log.Printf("task_polling_failed error=%v", err)
+			}
+		}
+	}
+}
+
+func (s *AgentService) runHeartbeatLoop(ctx context.Context, interval time.Duration) {
+	if err := s.SendHeartbeat(ctx); err != nil {
+		log.Printf("heartbeat_failed error=%v", err)
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := s.SendHeartbeat(ctx); err != nil {
+				log.Printf("heartbeat_failed error=%v", err)
 			}
 		}
 	}

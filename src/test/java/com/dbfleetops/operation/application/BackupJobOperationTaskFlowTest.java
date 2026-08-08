@@ -43,6 +43,11 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class BackupJobOperationTaskFlowTest {
 
+        private static void claim(OperationTask task) {
+                LocalDateTime now = LocalDateTime.now();
+                task.claim(now, now.plusMinutes(5));
+        }
+
         @Mock
         private OperationJobRepository jobRepository;
 
@@ -94,14 +99,13 @@ class BackupJobOperationTaskFlowTest {
                                                 eq(JobStatus.QUEUED), any(LocalDateTime.class)))
                                                                 .thenReturn(List.of(job));
 
-                when(agentRepository
-                                .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
-                                                .thenReturn(Optional.of(agent));
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
                 when(databaseRepository.findById(1L)).thenReturn(Optional.of(newManagedDatabase()));
 
-                when(credentialRepository.findByDatabaseId(1L))
-                                .thenReturn(Optional.of(new DatabaseCredential(1L, "root", "rootpw")));
+                DatabaseCredential credential = new DatabaseCredential(1L, "root", "encrypted");
+                ReflectionTestUtils.setField(credential, "id", 7L);
+                when(credentialRepository.findByDatabaseId(1L)).thenReturn(Optional.of(credential));
 
                 when(taskRepository.save(any(OperationTask.class))).thenAnswer(invocation -> {
                         OperationTask task = invocation.getArgument(0);
@@ -142,15 +146,16 @@ class BackupJobOperationTaskFlowTest {
                 assertThat(task.getTaskType()).isEqualTo(OperationTaskType.MYSQL_LOGICAL_BACKUP);
 
                 assertThat(task.getParametersJson()).contains("\"host\": \"target-mysql\"",
-                                "\"databaseName\": \"orders\"", "\"username\": \"root\"",
-                                "\"password\": \"rootpw\"", "\"verifyAfterBackup\": true",
+                                "\"databaseName\": \"orders\"", "\"verifyAfterBackup\": true",
                                 "\"verifyRowCount\": true", "\"cleanup\": true");
+                assertThat(task.getParametersJson()).doesNotContain("username", "password");
+                assertThat(task.getCredentialId()).isEqualTo(7L);
 
                 assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.QUEUED);
 
                 assertThat(task.getOperationJobId()).isEqualTo(job.getId());
 
-                task.start();
+                claim(task);
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
@@ -205,7 +210,7 @@ class BackupJobOperationTaskFlowTest {
                 OperationTask task = OperationTask.createForJob(1L, 100L,
                                 OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
 
-                task.start();
+                claim(task);
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
@@ -240,9 +245,12 @@ class BackupJobOperationTaskFlowTest {
         }
 
         private ManagedDatabase newManagedDatabase() {
-                return ManagedDatabase.register(new RegisterManagedDatabaseRequest("target-mysql",
+                ManagedDatabase database = ManagedDatabase.register(new RegisterManagedDatabaseRequest("target-mysql",
                                 "target-mysql", 3306, "orders",
                                 DatabaseEngine.MYSQL, "LOCAL", "target-mysql", "platform-team",
                                 "local target database"));
+                ReflectionTestUtils.setField(database, "id", 1L);
+                database.assignAgent(1L);
+                return database;
         }
 }

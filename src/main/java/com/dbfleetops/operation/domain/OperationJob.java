@@ -151,12 +151,39 @@ public class OperationJob {
         }
 
         public void timeout() {
+                timeout("TIMED_OUT", "Operation timed out.");
+        }
+
+        public void timeout(String resultCode, String resultMessage) {
                 state(status == JobStatus.RUNNING,
                                 "실행 중인 작업만 시간 초과 처리할 수 있습니다. 현재 상태=" + status);
 
                 this.status = JobStatus.TIMED_OUT;
+                this.resultCode = resultCode;
+                this.resultMessage = resultMessage;
                 this.finishedAt = LocalDateTime.now();
                 this.updatedAt = LocalDateTime.now();
+        }
+
+        public void extendLease(LocalDateTime now, LocalDateTime newLeaseUntil) {
+                state(status == JobStatus.RUNNING, "실행 중인 Job만 Lease를 연장할 수 있습니다.");
+                state(leaseUntil != null && !leaseUntil.isAfter(now), "Job Lease가 아직 유효합니다.");
+                state(newLeaseUntil.isAfter(now), "새 Lease 만료 시각은 현재보다 뒤여야 합니다.");
+                this.leaseUntil = newLeaseUntil;
+                this.updatedAt = now;
+        }
+
+        public void requeueExpiredLease(LocalDateTime now, LocalDateTime availableAt) {
+                state(status == JobStatus.RUNNING, "실행 중인 Job만 재대기할 수 있습니다.");
+                state(leaseUntil != null && !leaseUntil.isAfter(now), "Job Lease가 아직 유효합니다.");
+                state(retryCount < maxRetryCount, "최대 재시도 횟수에 도달했습니다.");
+                retryCount++;
+                status = JobStatus.QUEUED;
+                this.availableAt = availableAt;
+                leaseOwner = null;
+                leaseUntil = null;
+                startedAt = null;
+                updatedAt = now;
         }
 
 }

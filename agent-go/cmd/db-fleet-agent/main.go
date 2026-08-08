@@ -83,6 +83,8 @@ func main() {
 		ctx,
 		cfg.HeartbeatInterval(),
 		cfg.PollInterval(),
+		cfg.LeaseRenewalInterval(),
+		cfg.TaskLeaseDuration(),
 	); err != nil {
 		log.Fatalf(
 			"agent runtime failed: %v",

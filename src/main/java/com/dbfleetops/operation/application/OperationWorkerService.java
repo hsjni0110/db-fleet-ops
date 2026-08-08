@@ -16,8 +16,10 @@ import com.dbfleetops.worker.application.WorkerShutdownState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -26,28 +28,43 @@ public class OperationWorkerService {
 
         private static final Logger log = LoggerFactory.getLogger(OperationWorkerService.class);
 
-        private static final long LEASE_SECONDS = 60L;
-        private static final long RETRY_DELAY_SECONDS = 30L;
-
         private final OperationJobRepository jobRepository;
         private final AuditRecorderPort auditRecorderPort;
         private final OperationTaskService operationTaskService;
         private final ConfigurationCheckJobExecutor configurationCheckJobExecutor;
         private final ConfigurationApplyJobExecutor configurationApplyJobExecutor;
         private final WorkerShutdownState workerShutdownState;
+        private final Clock clock;
+        private final OperationJobLeaseProperties leaseProperties;
 
+        @Autowired
         public OperationWorkerService(OperationJobRepository jobRepository,
                         AuditRecorderPort auditRecorderPort,
                         OperationTaskService operationTaskService,
                         ConfigurationCheckJobExecutor configurationCheckJobExecutor,
                         ConfigurationApplyJobExecutor configurationApplyJobExecutor,
-                        WorkerShutdownState workerShutdownState) {
+                        WorkerShutdownState workerShutdownState, Clock clock,
+                        OperationJobLeaseProperties leaseProperties) {
                 this.jobRepository = jobRepository;
                 this.auditRecorderPort = auditRecorderPort;
                 this.operationTaskService = operationTaskService;
                 this.configurationCheckJobExecutor = configurationCheckJobExecutor;
                 this.configurationApplyJobExecutor = configurationApplyJobExecutor;
                 this.workerShutdownState = workerShutdownState;
+                this.clock = clock;
+                this.leaseProperties = leaseProperties;
+        }
+
+        OperationWorkerService(OperationJobRepository jobRepository,
+                        AuditRecorderPort auditRecorderPort,
+                        OperationTaskService operationTaskService,
+                        ConfigurationCheckJobExecutor configurationCheckJobExecutor,
+                        ConfigurationApplyJobExecutor configurationApplyJobExecutor,
+                        WorkerShutdownState workerShutdownState) {
+                this(jobRepository, auditRecorderPort, operationTaskService,
+                                configurationCheckJobExecutor, configurationApplyJobExecutor,
+                                workerShutdownState, Clock.systemUTC(),
+                                new OperationJobLeaseProperties(null, null, null, 100, true));
         }
 
         @Transactional
@@ -64,7 +81,7 @@ public class OperationWorkerService {
 
                 List<OperationJob> jobs = jobRepository
                                 .findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(
-                                                JobStatus.QUEUED, LocalDateTime.now());
+                                                JobStatus.QUEUED, LocalDateTime.now(clock));
 
                 if (jobs.isEmpty()) {
                         return ClaimJobResponse.empty();
@@ -83,7 +100,8 @@ public class OperationWorkerService {
                         return ClaimJobResponse.empty();
                 }
 
-                job.start(workerId, LocalDateTime.now().plusSeconds(LEASE_SECONDS));
+                LocalDateTime now = LocalDateTime.now(clock);
+                job.start(workerId, now.plus(leaseProperties.duration()));
 
                 auditRecorderPort.record(workerId, "JOB_CLAIMED", "OPERATION_JOB",
                                 String.valueOf(job.getId()), "SUCCESS",
@@ -202,7 +220,7 @@ public class OperationWorkerService {
                                 String.valueOf(job.getId()), "FAILED", resultMessage);
 
                 if (retryable && job.getRetryCount() < job.getMaxRetryCount()) {
-                        job.retry(LocalDateTime.now().plusSeconds(RETRY_DELAY_SECONDS));
+                        job.retry(LocalDateTime.now(clock).plus(leaseProperties.retryDelay()));
 
                         auditRecorderPort.record(workerId, "JOB_RETRIED", "OPERATION_JOB",
                                         String.valueOf(job.getId()), "SUCCESS",

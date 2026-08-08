@@ -24,6 +24,8 @@ server:
   port: ${SERVER_PORT:8080}
 
 db-fleetops:
+  credential:
+    encryption-key: ${DB_FLEETOPS_CREDENTIAL_ENCRYPTION_KEY}
   target:
     host: ${DB_TARGET_HOST:127.0.0.1}
     port: ${DB_TARGET_PORT:3306}
@@ -34,6 +36,19 @@ db-fleetops:
     socket-timeout: ${DB_SOCKET_TIMEOUT:2s}
   cors:
     allowed-origins: ${DB_FLEETOPS_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  task-lease:
+    duration: ${DB_FLEETOPS_TASK_LEASE_DURATION:60s}
+    renewal-interval: ${DB_FLEETOPS_TASK_LEASE_RENEWAL_INTERVAL:20s}
+    expiration-check-interval: ${DB_FLEETOPS_TASK_LEASE_EXPIRATION_CHECK_INTERVAL:5s}
+    maximum-attempts: ${DB_FLEETOPS_TASK_MAXIMUM_ATTEMPTS:3}
+    expiration-batch-size: ${DB_FLEETOPS_TASK_EXPIRATION_BATCH_SIZE:100}
+    reaper-enabled: ${DB_FLEETOPS_TASK_LEASE_REAPER_ENABLED:true}
+  job-lease:
+    duration: ${DB_FLEETOPS_JOB_LEASE_DURATION:60s}
+    expiration-check-interval: ${DB_FLEETOPS_JOB_LEASE_EXPIRATION_CHECK_INTERVAL:5s}
+    retry-delay: ${DB_FLEETOPS_JOB_RETRY_DELAY:30s}
+    expiration-batch-size: ${DB_FLEETOPS_JOB_EXPIRATION_BATCH_SIZE:100}
+    reaper-enabled: ${DB_FLEETOPS_JOB_LEASE_REAPER_ENABLED:true}
 
 logging:
   pattern:

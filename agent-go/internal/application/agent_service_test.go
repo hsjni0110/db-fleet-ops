@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -52,12 +53,17 @@ func (f *fakeLinuxInfoPort) CollectAgentInfo(
 }
 
 type fakeTaskPort struct {
-	fetchCalled    bool
-	startCalled    bool
-	completeCalled bool
-	failCalled     bool
-	task           *port.Task
-	resultPayload  string
+	fetchCalled      bool
+	renewCalled      bool
+	renewCount       int
+	renewError       error
+	completeCalled   bool
+	failCalled       bool
+	task             *port.Task
+	resultPayload    string
+	resultReportID   string
+	credentialCalled bool
+	credentialError  error
 }
 
 func (f *fakeTaskPort) FetchNextTask(
@@ -67,43 +73,134 @@ func (f *fakeTaskPort) FetchNextTask(
 	return f.task, nil
 }
 
-func (f *fakeTaskPort) StartTask(
+func (f *fakeTaskPort) RenewTaskLease(
 	ctx context.Context,
 	taskID int64,
+	executionAttempt int,
 ) error {
-	f.startCalled = true
-	return nil
+	f.renewCalled = true
+	f.renewCount++
+	return f.renewError
+}
+
+func (f *fakeTaskPort) ResolveTaskCredential(ctx context.Context, taskID int64,
+	executionAttempt int) (port.TaskCredential, error) {
+	f.credentialCalled = true
+	if f.credentialError != nil {
+		return port.TaskCredential{}, f.credentialError
+	}
+	return port.TaskCredential{Username: "root", Password: "secret"}, nil
 }
 
 func (f *fakeTaskPort) CompleteTask(
 	ctx context.Context,
 	taskID int64,
+	executionAttempt int,
+	resultReportID string,
 	resultPayloadJSON string,
 ) error {
 	f.completeCalled = true
 	f.resultPayload = resultPayloadJSON
+	f.resultReportID = resultReportID
 	return nil
 }
 
 func (f *fakeTaskPort) FailTask(
 	ctx context.Context,
 	taskID int64,
+	executionAttempt int,
+	resultReportID string,
 	errorCode string,
 	errorMessage string,
 ) error {
 	f.failCalled = true
+	f.resultReportID = resultReportID
 	return nil
 }
 
 type fakeDispatcher struct {
-	resultPayload string
+	resultPayload       string
+	waitForCancellation bool
+	called              bool
+	task                port.Task
 }
 
 func (f *fakeDispatcher) Dispatch(
 	ctx context.Context,
 	task port.Task,
 ) (string, error) {
+	f.called = true
+	f.task = task
+	if f.waitForCancellation {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
 	return f.resultPayload, nil
+}
+
+func TestPollAndHandleTaskResolvesCredentialJustBeforeDispatch(t *testing.T) {
+	taskPort := &fakeTaskPort{task: &port.Task{TaskID: 10, TaskType: "MYSQL_LOGICAL_BACKUP",
+		ParametersJSON: `{"host":"mysql"}`, ExecutionAttempt: 1, CredentialID: 7}}
+	dispatcher := &fakeDispatcher{resultPayload: `{}`}
+	service := NewAgentService(&fakeRegistrationPort{}, &fakeHeartbeatPort{}, taskPort,
+		&fakeLinuxInfoPort{}, dispatcher, &fakeStateStorePort{}, &fakeIdentityPort{})
+
+	if err := service.PollAndHandleTask(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !taskPort.credentialCalled || !dispatcher.called {
+		t.Fatal("expected credential lookup before task dispatch")
+	}
+	if dispatcher.task.ParametersJSON != `{"host":"mysql","password":"secret","username":"root"}` {
+		t.Fatalf("credential was not added to in-memory task: %s", dispatcher.task.ParametersJSON)
+	}
+}
+
+func TestPollAndHandleTaskStopsOnCredentialConflict(t *testing.T) {
+	taskPort := &fakeTaskPort{task: &port.Task{TaskID: 10, TaskType: "MYSQL_LOGICAL_BACKUP",
+		ParametersJSON: `{}`, ExecutionAttempt: 1, CredentialID: 7},
+		credentialError: port.ErrTaskExecutionConflict}
+	dispatcher := &fakeDispatcher{}
+	service := NewAgentService(&fakeRegistrationPort{}, &fakeHeartbeatPort{}, taskPort,
+		&fakeLinuxInfoPort{}, dispatcher, &fakeStateStorePort{}, &fakeIdentityPort{})
+
+	if err := service.PollAndHandleTask(context.Background()); err != nil {
+		t.Fatalf("credential conflict should end stale execution quietly: %v", err)
+	}
+	if dispatcher.called || taskPort.completeCalled || taskPort.failCalled {
+		t.Fatal("stale execution must not run or report a result")
+	}
+}
+
+func TestPollAndHandleTaskRenewsLeaseDuringLongTask(t *testing.T) {
+	taskPort := &fakeTaskPort{task: &port.Task{
+		TaskID: 10, TaskType: "COLLECT_LINUX_STATUS", ParametersJSON: "{}", ExecutionAttempt: 1,
+	}}
+	service := NewAgentService(&fakeRegistrationPort{}, &fakeHeartbeatPort{}, taskPort,
+		&fakeLinuxInfoPort{}, &fakeDispatcher{waitForCancellation: true},
+		&fakeStateStorePort{}, &fakeIdentityPort{})
+	service.leaseRenewalInterval = 5 * time.Millisecond
+	service.taskLeaseDuration = 30 * time.Millisecond
+
+	done := make(chan error, 1)
+	go func() { done <- service.PollAndHandleTask(context.Background()) }()
+	time.Sleep(18 * time.Millisecond)
+	if taskPort.renewCount < 2 {
+		t.Fatalf("expected multiple lease renewals, got %d", taskPort.renewCount)
+	}
+	// A conflict proves the server no longer owns this execution and cancels the handler.
+	taskPort.renewError = port.ErrTaskExecutionConflict
+	select {
+	case err := <-done:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected stale task execution to be cancelled")
+	}
+	if taskPort.completeCalled || taskPort.failCalled {
+		t.Fatal("stale execution must not report completion or failure")
+	}
 }
 
 type fakeStateStorePort struct {
@@ -346,9 +443,10 @@ func TestSendHeartbeatCollectsAgentInfoAndSendsHeartbeat(t *testing.T) {
 func TestPollAndHandleTaskCompletesTask(t *testing.T) {
 	taskPort := &fakeTaskPort{
 		task: &port.Task{
-			TaskID:         10,
-			TaskType:       "COLLECT_LINUX_STATUS",
-			ParametersJSON: "{}",
+			TaskID:           10,
+			TaskType:         "COLLECT_LINUX_STATUS",
+			ParametersJSON:   "{}",
+			ExecutionAttempt: 1,
 		},
 	}
 
@@ -374,10 +472,6 @@ func TestPollAndHandleTaskCompletesTask(t *testing.T) {
 		t.Fatal("expected FetchNextTask to be called")
 	}
 
-	if !taskPort.startCalled {
-		t.Fatal("expected StartTask to be called")
-	}
-
 	if !taskPort.completeCalled {
 		t.Fatal("expected CompleteTask to be called")
 	}
@@ -387,6 +481,9 @@ func TestPollAndHandleTaskCompletesTask(t *testing.T) {
 			"unexpected result payload: %s",
 			taskPort.resultPayload,
 		)
+	}
+	if taskPort.resultReportID == "" {
+		t.Fatal("expected result report ID to be generated")
 	}
 }
 
@@ -415,9 +512,6 @@ func TestPollAndHandleTaskDoesNothingWhenTaskIsEmpty(t *testing.T) {
 		t.Fatal("expected FetchNextTask to be called")
 	}
 
-	if taskPort.startCalled {
-		t.Fatal("expected StartTask not to be called")
-	}
 }
 
 func TestRunStopsWhenContextIsCancelled(t *testing.T) {
@@ -453,6 +547,8 @@ func TestRunStopsWhenContextIsCancelled(t *testing.T) {
 			ctx,
 			10*time.Millisecond,
 			10*time.Millisecond,
+			10*time.Millisecond,
+			30*time.Millisecond,
 		)
 	}()
 

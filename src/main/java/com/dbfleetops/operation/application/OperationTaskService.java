@@ -1,5 +1,10 @@
 package com.dbfleetops.operation.application;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.dbfleetops.agent.domain.Agent;
 import com.dbfleetops.agent.domain.AgentHostMetric;
 import com.dbfleetops.agent.domain.AgentStatus;
@@ -12,22 +17,19 @@ import com.dbfleetops.database.infra.DatabaseCredentialRepository;
 import com.dbfleetops.database.infra.ManagedDatabaseRepository;
 import com.dbfleetops.operation.domain.OperationJob;
 import com.dbfleetops.operation.domain.OperationTask;
-import com.dbfleetops.operation.domain.OperationTaskStatus;
 import com.dbfleetops.operation.domain.OperationTaskType;
+import com.dbfleetops.operation.domain.ResultReportAcceptance;
 import com.dbfleetops.operation.dto.CompleteOperationTaskRequest;
 import com.dbfleetops.operation.dto.CreateOperationTaskRequest;
 import com.dbfleetops.operation.dto.FailOperationTaskRequest;
 import com.dbfleetops.operation.dto.MysqlBackupTaskPayload;
 import com.dbfleetops.operation.dto.MysqlRestoreVerifyTaskResultPayload;
-import com.dbfleetops.operation.dto.NextOperationTaskResponse;
 import com.dbfleetops.operation.dto.OperationTaskResponse;
-import com.dbfleetops.operation.dto.StartOperationTaskRequest;
+import com.dbfleetops.operation.exception.TaskExecutionConflictException;
 import com.dbfleetops.operation.infra.OperationJobRepository;
 import com.dbfleetops.operation.infra.OperationTaskRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class OperationTaskService {
@@ -40,15 +42,19 @@ public class OperationTaskService {
     private final AgentHostMetricRepository agentHostMetricRepository;
     private final RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory;
     private final BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder;
+    private final Clock clock;
+    private final OperationTaskResultFingerprint resultFingerprint;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    @Autowired
     public OperationTaskService(AgentRepository agentRepository,
             OperationTaskRepository taskRepository, OperationJobRepository jobRepository,
             ManagedDatabaseRepository databaseRepository,
             DatabaseCredentialRepository credentialRepository,
             AgentHostMetricRepository agentHostMetricRepository,
             RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory,
-            BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder) {
+            BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder,
+            Clock clock, OperationTaskResultFingerprint resultFingerprint) {
         this.agentRepository = agentRepository;
         this.taskRepository = taskRepository;
         this.jobRepository = jobRepository;
@@ -57,6 +63,20 @@ public class OperationTaskService {
         this.agentHostMetricRepository = agentHostMetricRepository;
         this.restoreVerifyTaskPayloadFactory = restoreVerifyTaskPayloadFactory;
         this.backupRestoreVerificationResultRecorder = backupRestoreVerificationResultRecorder;
+        this.clock = clock;
+        this.resultFingerprint = resultFingerprint;
+    }
+
+    OperationTaskService(AgentRepository agentRepository, OperationTaskRepository taskRepository,
+            OperationJobRepository jobRepository, ManagedDatabaseRepository databaseRepository,
+            DatabaseCredentialRepository credentialRepository,
+            AgentHostMetricRepository agentHostMetricRepository,
+            RestoreVerifyTaskPayloadFactory restoreVerifyTaskPayloadFactory,
+            BackupRestoreVerificationResultRecorder backupRestoreVerificationResultRecorder) {
+        this(agentRepository, taskRepository, jobRepository, databaseRepository,
+                credentialRepository, agentHostMetricRepository, restoreVerifyTaskPayloadFactory,
+                backupRestoreVerificationResultRecorder, Clock.systemUTC(),
+                new OperationTaskResultFingerprint());
     }
 
     @Transactional
@@ -80,36 +100,20 @@ public class OperationTaskService {
         return OperationTaskResponse.from(savedTask);
     }
 
-    @Transactional(readOnly = true)
-    public NextOperationTaskResponse nextTask(Long agentId, String agentToken) {
-        getAgentAndValidateToken(agentId, agentToken);
-
-        return taskRepository
-                .findTop1ByAgentIdAndStatusOrderByCreatedAtAsc(agentId, OperationTaskStatus.QUEUED)
-                .stream().findFirst().map(NextOperationTaskResponse::from)
-                .orElseGet(NextOperationTaskResponse::empty);
-    }
-
-    @Transactional
-    public OperationTaskResponse startTask(Long agentId, Long taskId,
-            StartOperationTaskRequest request) {
-        getAgentAndValidateToken(agentId, request.agentToken());
-
-        OperationTask task = getTaskOwnedByAgent(agentId, taskId);
-
-        task.start();
-
-        return OperationTaskResponse.from(task);
-    }
-
     @Transactional
     public OperationTaskResponse completeTask(Long agentId, Long taskId,
             CompleteOperationTaskRequest request) {
         getAgentAndValidateToken(agentId, request.agentToken());
 
-        OperationTask task = getTaskOwnedByAgent(agentId, taskId);
+        OperationTask task = getTaskOwnedByAgentForUpdate(agentId, taskId);
 
-        task.succeed(request.resultPayloadJson());
+        ResultReportAcceptance acceptance = executeOrConflict(
+                () -> task.acceptSuccessReport(request.executionAttempt(), request.resultReportId(),
+                        resultFingerprint.success(request.resultPayloadJson()),
+                        request.resultPayloadJson(), LocalDateTime.now(clock)));
+        if (acceptance == ResultReportAcceptance.DUPLICATE) {
+            return OperationTaskResponse.from(task);
+        }
 
         persistLinuxStatusMetricIfNeeded(task, request.resultPayloadJson());
 
@@ -151,20 +155,14 @@ public class OperationTaskService {
                 .createRestoreVerifyTaskPayloadJson(backupTask.getOperationJobId(),
                         backupTask.getId(), backupTask.getParametersJson(), resultPayloadJson);
 
-        OperationTask restoreVerifyTask =
-                OperationTask.createForJob(backupTask.getAgentId(), backupTask.getOperationJobId(),
-                        OperationTaskType.MYSQL_RESTORE_VERIFY, restoreVerifyTaskPayloadJson);
+        OperationTask restoreVerifyTask = backupTask.getCredentialId() == null
+                ? OperationTask.createForJob(backupTask.getAgentId(), backupTask.getOperationJobId(),
+                        OperationTaskType.MYSQL_RESTORE_VERIFY, restoreVerifyTaskPayloadJson)
+                : OperationTask.createForJob(backupTask.getAgentId(), backupTask.getOperationJobId(),
+                        backupTask.getCredentialId(), OperationTaskType.MYSQL_RESTORE_VERIFY,
+                        restoreVerifyTaskPayloadJson);
 
         taskRepository.save(restoreVerifyTask);
-
-        /*
-         * 중요: 여기서 OperationJob을 성공 처리하지 않는다.
-         *
-         * 기존: MYSQL_LOGICAL_BACKUP 성공 -> OperationJob SUCCEEDED
-         *
-         * 변경: MYSQL_LOGICAL_BACKUP 성공 -> MYSQL_RESTORE_VERIFY Task 생성 -> OperationJob은 RUNNING 유지
-         * -> MYSQL_RESTORE_VERIFY 성공 시 OperationJob SUCCEEDED
-         */
     }
 
     private void persistLinuxStatusMetricIfNeeded(OperationTask task, String resultPayloadJson) {
@@ -191,9 +189,15 @@ public class OperationTaskService {
             FailOperationTaskRequest request) {
         getAgentAndValidateToken(agentId, request.agentToken());
 
-        OperationTask task = getTaskOwnedByAgent(agentId, taskId);
+        OperationTask task = getTaskOwnedByAgentForUpdate(agentId, taskId);
 
-        task.fail(request.errorCode(), request.errorMessage());
+        ResultReportAcceptance acceptance = executeOrConflict(
+                () -> task.acceptFailureReport(request.executionAttempt(), request.resultReportId(),
+                        resultFingerprint.failure(request.errorCode(), request.errorMessage()),
+                        request.errorCode(), request.errorMessage(), LocalDateTime.now(clock)));
+        if (acceptance == ResultReportAcceptance.DUPLICATE) {
+            return OperationTaskResponse.from(task);
+        }
 
         OperationJob job = getLinkedOperationJob(task);
 
@@ -215,29 +219,40 @@ public class OperationTaskService {
         return agent;
     }
 
-    private OperationTask getTaskOwnedByAgent(Long agentId, Long taskId) {
+    private OperationTask getTaskOwnedByAgentForUpdate(Long agentId, Long taskId) {
         OperationTask task = taskRepository.findById(taskId).orElseThrow(
                 () -> new IllegalArgumentException("Operation task not found. taskId=" + taskId));
-
         if (!agentId.equals(task.getAgentId())) {
-            throw new IllegalStateException("Task does not belong to agent. agentId=" + agentId
-                    + ", taskAgentId=" + task.getAgentId());
+            throw new TaskExecutionConflictException("Task does not belong to agent. agentId="
+                    + agentId + ", taskAgentId=" + task.getAgentId());
         }
-
         return task;
+    }
+
+    private <T> T executeOrConflict(java.util.function.Supplier<T> operation) {
+        try {
+            return operation.get();
+        } catch (IllegalStateException exception) {
+            throw new TaskExecutionConflictException(exception.getMessage(), exception);
+        }
     }
 
     @Transactional
     public OperationTaskResponse createBackupTaskForOperationJob(Long operationJobId,
             Long databaseId) {
-        Agent agent =
-                agentRepository.findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE)
-                        .orElseThrow(() -> new IllegalStateException(
-                                "No ONLINE agent available for backup task."));
+        ManagedDatabase database = databaseRepository.findById(databaseId).orElseThrow(
+                () -> new IllegalArgumentException("Database not found. databaseId=" + databaseId));
 
-        ManagedDatabase database = databaseRepository.findById(databaseId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Database not found. databaseId=" + databaseId));
+        if (database.getAssignedAgentId() == null) {
+            throw new IllegalStateException("Database has no assigned Agent. databaseId=" + databaseId);
+        }
+        Agent agent = agentRepository.findById(database.getAssignedAgentId()).orElseThrow(
+                () -> new IllegalStateException(
+                        "Assigned Agent not found. agentId=" + database.getAssignedAgentId()));
+        if (agent.getStatus() != AgentStatus.ONLINE) {
+            throw new IllegalStateException(
+                    "Assigned Agent is not ONLINE. agentId=" + agent.getId());
+        }
 
         DatabaseCredential credential = credentialRepository.findByDatabaseId(databaseId)
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -250,8 +265,6 @@ public class OperationTaskService {
                   "databaseName": "%s",
                   "host": "%s",
                   "port": %d,
-                  "username": "%s",
-                  "password": "%s",
                   "backupType": "LOGICAL",
                   "compression": true,
                   "verifyAfterBackup": true,
@@ -259,10 +272,10 @@ public class OperationTaskService {
                   "cleanup": true
                 }
                 """.formatted(operationJobId, databaseId, escapeJson(database.getDatabaseName()),
-                escapeJson(database.getHost()), database.getPort(), escapeJson(credential.getUsername()),
-                escapeJson(credential.getPassword()));
+                escapeJson(database.getHost()), database.getPort());
 
         OperationTask task = OperationTask.createForJob(agent.getId(), operationJobId,
+                credential.getId(),
                 OperationTaskType.MYSQL_LOGICAL_BACKUP, parametersJson);
 
         OperationTask savedTask = taskRepository.save(task);
@@ -275,9 +288,7 @@ public class OperationTaskService {
             return "";
         }
 
-        return value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"");
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private OperationJob getLinkedOperationJob(OperationTask task) {

@@ -22,9 +22,7 @@ import com.dbfleetops.operation.dto.CompleteOperationTaskRequest;
 import com.dbfleetops.operation.dto.CreateOperationTaskRequest;
 import com.dbfleetops.operation.dto.FailOperationTaskRequest;
 import com.dbfleetops.operation.dto.MysqlRestoreVerifyTaskResultPayload;
-import com.dbfleetops.operation.dto.NextOperationTaskResponse;
 import com.dbfleetops.operation.dto.OperationTaskResponse;
-import com.dbfleetops.operation.dto.StartOperationTaskRequest;
 import com.dbfleetops.operation.infra.OperationJobRepository;
 import com.dbfleetops.operation.infra.OperationTaskRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,10 +41,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class OperationTaskServiceTest {
+
+        private static void claim(OperationTask task) {
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                task.claim(now, now.plusMinutes(5));
+        }
 
         @Mock
         private AgentRepository agentRepository;
@@ -98,53 +102,13 @@ class OperationTaskServiceTest {
         }
 
         @Test
-        void nextTaskReturnsQueuedTask() {
-                Agent agent = newAgent();
-
-                OperationTask task = OperationTask.create(1L,
-                                OperationTaskType.COLLECT_LINUX_STATUS, "{}");
-
-                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
-
-                when(taskRepository.findTop1ByAgentIdAndStatusOrderByCreatedAtAsc(1L,
-                                OperationTaskStatus.QUEUED)).thenReturn(List.of(task));
-
-                OperationTaskService service = newService();
-
-                NextOperationTaskResponse response = service.nextTask(1L, "agent-token-001");
-
-                assertThat(response.hasTask()).isTrue();
-
-                assertThat(response.taskType()).isEqualTo(OperationTaskType.COLLECT_LINUX_STATUS);
-        }
-
-        @Test
-        void startTaskChangesQueuedTaskToRunning() {
-                Agent agent = newAgent();
-
-                OperationTask task = OperationTask.create(1L,
-                                OperationTaskType.COLLECT_LINUX_STATUS, "{}");
-
-                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
-
-                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
-
-                OperationTaskService service = newService();
-
-                var response = service.startTask(1L, 10L,
-                                new StartOperationTaskRequest("agent-token-001"));
-
-                assertThat(response.status()).isEqualTo(OperationTaskStatus.RUNNING);
-        }
-
-        @Test
         void completeTaskChangesRunningTaskToSucceeded() {
                 Agent agent = newAgent();
 
                 OperationTask task = OperationTask.create(1L,
                                 OperationTaskType.COLLECT_LINUX_STATUS, "{}");
 
-                task.start();
+                claim(task);
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
@@ -167,7 +131,7 @@ class OperationTaskServiceTest {
                 OperationTask task = OperationTask.create(1L,
                                 OperationTaskType.COLLECT_LINUX_STATUS, "{}");
 
-                task.start();
+                claim(task);
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
@@ -186,29 +150,16 @@ class OperationTaskServiceTest {
         }
 
         @Test
-        void nextTaskThrowsExceptionWhenTokenIsInvalid() {
+        void createBackupTaskForOperationJobCreatesMySQLBackupTaskOnOnlineAgent() {
                 Agent agent = newAgent();
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
-                OperationTaskService service = newService();
-
-                assertThrows(IllegalArgumentException.class,
-                                () -> service.nextTask(1L, "wrong-token"));
-        }
-
-        @Test
-        void createBackupTaskForOperationJobCreatesMySQLBackupTaskOnOnlineAgent() {
-                Agent agent = newAgent();
-
-                when(agentRepository
-                                .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
-                                                .thenReturn(Optional.of(agent));
-
                 when(databaseRepository.findById(1L)).thenReturn(Optional.of(newManagedDatabase()));
 
-                when(credentialRepository.findByDatabaseId(1L))
-                                .thenReturn(Optional.of(new DatabaseCredential(1L, "root", "rootpw")));
+                DatabaseCredential credential = new DatabaseCredential(1L, "root", "encrypted");
+                ReflectionTestUtils.setField(credential, "id", 11L);
+                when(credentialRepository.findByDatabaseId(1L)).thenReturn(Optional.of(credential));
 
                 when(taskRepository.save(any(OperationTask.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -226,16 +177,19 @@ class OperationTaskServiceTest {
                 assertThat(response.parametersJson()).contains("\"operationJobId\": 100",
                                 "\"databaseId\": 1", "\"databaseName\": \"orders\"",
                                 "\"host\": \"target-mysql\"", "\"port\": 3306",
-                                "\"username\": \"root\"", "\"password\": \"rootpw\"",
                                 "\"backupType\": \"LOGICAL\"", "\"verifyAfterBackup\": true",
                                 "\"verifyRowCount\": true", "\"cleanup\": true");
+                assertThat(response.credentialId()).isEqualTo(11L);
+                assertThat(response.parametersJson()).doesNotContain("username", "password");
         }
 
         @Test
         void createBackupTaskForOperationJobThrowsExceptionWhenNoOnlineAgentExists() {
-                when(agentRepository
-                                .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
-                                                .thenReturn(Optional.empty());
+                ManagedDatabase database = newManagedDatabase();
+                when(databaseRepository.findById(1L)).thenReturn(Optional.of(database));
+                Agent agent = newAgent();
+                agent.markOffline();
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
                 OperationTaskService service = newService();
 
@@ -245,12 +199,6 @@ class OperationTaskServiceTest {
 
         @Test
         void createBackupTaskForOperationJobThrowsExceptionWhenDatabaseDoesNotExist() {
-                Agent agent = newAgent();
-
-                when(agentRepository
-                                .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
-                                                .thenReturn(Optional.of(agent));
-
                 when(databaseRepository.findById(1L)).thenReturn(Optional.empty());
 
                 OperationTaskService service = newService();
@@ -263,9 +211,7 @@ class OperationTaskServiceTest {
         void createBackupTaskForOperationJobThrowsExceptionWhenCredentialDoesNotExist() {
                 Agent agent = newAgent();
 
-                when(agentRepository
-                                .findFirstByStatusOrderByLastHeartbeatAtDesc(AgentStatus.ONLINE))
-                                                .thenReturn(Optional.of(agent));
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
                 when(databaseRepository.findById(1L)).thenReturn(Optional.of(newManagedDatabase()));
 
@@ -281,7 +227,7 @@ class OperationTaskServiceTest {
         void completeTaskChangesLinkedOperationJobToSucceeded() {
                 Agent agent = newAgent();
 
-                OperationTask task = OperationTask.createForJob(1L, 100L,
+                OperationTask task = OperationTask.createForJob(1L, 100L, 11L,
                                 OperationTaskType.MYSQL_LOGICAL_BACKUP, """
                                                 {
                                                   "operationJobId": 100,
@@ -292,7 +238,7 @@ class OperationTaskServiceTest {
                                                 }
                                                 """);
 
-                task.start();
+                claim(task);
 
                 OperationJob job =
                                 OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
@@ -323,7 +269,7 @@ class OperationTaskServiceTest {
         void completeBackupTaskCreatesRestoreVerifyTaskWhenVerifyAfterBackupTrue() {
                 Agent agent = newAgent();
 
-                OperationTask task = OperationTask.createForJob(1L, 100L,
+                OperationTask task = OperationTask.createForJob(1L, 100L, 11L,
                                 OperationTaskType.MYSQL_LOGICAL_BACKUP, """
                                                 {
                                                   "operationJobId": 100,
@@ -331,8 +277,6 @@ class OperationTaskServiceTest {
                                                   "databaseName": "orders",
                                                   "host": "127.0.0.1",
                                                   "port": 3306,
-                                                  "username": "backup_user",
-                                                  "password": "secret",
                                                   "backupType": "LOGICAL",
                                                   "compression": false,
                                                   "verifyAfterBackup": true,
@@ -342,7 +286,7 @@ class OperationTaskServiceTest {
                                                 }
                                                 """);
 
-                task.start();
+                claim(task);
 
                 OperationJob job =
                                 OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
@@ -383,10 +327,10 @@ class OperationTaskServiceTest {
         void failTaskChangesLinkedOperationJobToFailed() {
                 Agent agent = newAgent();
 
-                OperationTask task = OperationTask.createForJob(1L, 100L,
+                OperationTask task = OperationTask.createForJob(1L, 100L, 11L,
                                 OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
 
-                task.start();
+                claim(task);
 
                 OperationJob job =
                                 OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
@@ -420,7 +364,7 @@ class OperationTaskServiceTest {
                 OperationTask task = OperationTask.create(1L,
                                 OperationTaskType.COLLECT_LINUX_STATUS, "{}");
 
-                task.start();
+                claim(task);
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
@@ -443,7 +387,7 @@ class OperationTaskServiceTest {
                 OperationTask task = OperationTask.create(1L,
                                 OperationTaskType.COLLECT_LINUX_STATUS, "{}");
 
-                task.start();
+                claim(task);
 
                 when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
 
@@ -470,7 +414,7 @@ class OperationTaskServiceTest {
                 OperationTask task = OperationTask.createForJob(1L, 100L,
                                 OperationTaskType.MYSQL_RESTORE_VERIFY, "{}");
 
-                task.start();
+                claim(task);
 
                 OperationJob job =
                                 OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
@@ -525,7 +469,7 @@ class OperationTaskServiceTest {
                 OperationTask task = OperationTask.createForJob(1L, 100L,
                                 OperationTaskType.MYSQL_RESTORE_VERIFY, "{}");
 
-                task.start();
+                claim(task);
 
                 OperationJob job =
                                 OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
@@ -601,7 +545,7 @@ class OperationTaskServiceTest {
                                                 }
                                                 """);
 
-                task.start();
+                claim(task);
 
                 OperationJob job =
                                 OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
@@ -647,7 +591,7 @@ class OperationTaskServiceTest {
                 OperationTask restoreVerifyTask = OperationTask.createForJob(1L, 100L,
                                 OperationTaskType.MYSQL_RESTORE_VERIFY, "{}");
 
-                restoreVerifyTask.start();
+                claim(restoreVerifyTask);
 
                 OperationJob job =
                                 OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
@@ -711,7 +655,7 @@ class OperationTaskServiceTest {
                 OperationTask restoreVerifyTask = OperationTask.createForJob(1L, 100L,
                                 OperationTaskType.MYSQL_RESTORE_VERIFY, "{}");
 
-                restoreVerifyTask.start();
+                claim(restoreVerifyTask);
 
                 OperationJob job =
                                 OperationJob.create(JobType.BACKUP, 1L, "local-user", "idem-001");
@@ -763,10 +707,41 @@ class OperationTaskServiceTest {
                 assertThat(job.getResultMessage()).isEqualTo("drop database failed");
         }
 
+        @Test
+        void duplicateBackupSuccessDoesNotCreateSecondRestoreTask() {
+                Agent agent = newAgent();
+                OperationTask task = OperationTask.createForJob(1L, 100L, 11L,
+                                OperationTaskType.MYSQL_LOGICAL_BACKUP, """
+                                                {"operationJobId":100,"databaseId":1,
+                                                 "backupType":"LOGICAL","verifyAfterBackup":true}
+                                                """);
+                claim(task);
+                OperationJob job = OperationJob.create(JobType.BACKUP, 1L, "user", "idem-duplicate");
+                job.start("worker-1", java.time.LocalDateTime.now().plusSeconds(60));
+                when(agentRepository.findById(1L)).thenReturn(Optional.of(agent));
+                when(taskRepository.findById(10L)).thenReturn(Optional.of(task));
+                when(jobRepository.findById(100L)).thenReturn(Optional.of(job));
+                CompleteOperationTaskRequest request = new CompleteOperationTaskRequest(
+                                "agent-token-001", 1,
+                                "8d77288c-cf64-4ae8-a5be-a4010192fc6e",
+                                "{\"status\":\"VERIFIED\",\"backupFile\":\"/tmp/backup.sql\"}");
+                OperationTaskService service = newService();
+
+                OperationTaskResponse first = service.completeTask(1L, 10L, request);
+                OperationTaskResponse duplicate = service.completeTask(1L, 10L, request);
+
+                assertThat(first.status()).isEqualTo(OperationTaskStatus.SUCCEEDED);
+                assertThat(duplicate).isEqualTo(first);
+                verify(taskRepository, times(1)).save(any(OperationTask.class));
+        }
+
         private ManagedDatabase newManagedDatabase() {
-                return ManagedDatabase.register(new RegisterManagedDatabaseRequest("target-mysql",
+                ManagedDatabase database = ManagedDatabase.register(new RegisterManagedDatabaseRequest("target-mysql",
                                 "target-mysql", 3306, "orders",
                                 DatabaseEngine.MYSQL, "LOCAL", "target-mysql", "platform-team",
                                 "local target database"));
+                ReflectionTestUtils.setField(database, "id", 1L);
+                database.assignAgent(1L);
+                return database;
         }
 }

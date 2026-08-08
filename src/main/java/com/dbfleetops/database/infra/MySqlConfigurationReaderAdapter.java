@@ -1,6 +1,7 @@
 package com.dbfleetops.database.infra;
 
 import com.dbfleetops.database.application.DatabaseConfigurationReaderPort;
+import com.dbfleetops.database.application.CredentialCipher;
 import com.dbfleetops.database.domain.DatabaseCredential;
 import com.dbfleetops.database.domain.ManagedDatabase;
 import com.dbfleetops.database.dto.DatabaseConfigurationItem;
@@ -17,11 +18,14 @@ public class MySqlConfigurationReaderAdapter implements DatabaseConfigurationRea
 
     private final ManagedDatabaseRepository managedDatabaseRepository;
     private final DatabaseCredentialRepository databaseCredentialRepository;
+    private final CredentialCipher credentialCipher;
 
     public MySqlConfigurationReaderAdapter(ManagedDatabaseRepository managedDatabaseRepository,
-            DatabaseCredentialRepository databaseCredentialRepository) {
+            DatabaseCredentialRepository databaseCredentialRepository,
+            CredentialCipher credentialCipher) {
         this.managedDatabaseRepository = managedDatabaseRepository;
         this.databaseCredentialRepository = databaseCredentialRepository;
+        this.credentialCipher = credentialCipher;
     }
 
     @Override
@@ -57,7 +61,7 @@ public class MySqlConfigurationReaderAdapter implements DatabaseConfigurationRea
         dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
         dataSource.setUrl(buildJdbcUrl(database));
         dataSource.setUsername(credential.getUsername());
-        dataSource.setPassword(credential.getPassword());
+        dataSource.setPassword(credential.revealPassword(credentialCipher));
 
         return dataSource;
     }

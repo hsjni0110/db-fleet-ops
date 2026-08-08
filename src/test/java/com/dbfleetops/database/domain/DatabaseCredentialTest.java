@@ -13,7 +13,7 @@ class DatabaseCredentialTest {
 
         assertThat(credential.getDatabaseId()).isEqualTo(1L);
         assertThat(credential.getUsername()).isEqualTo("operator");
-        assertThat(credential.getPassword()).isEqualTo("password");
+        assertThat(credential.getEncryptedPassword()).isEqualTo("password");
         assertThat(credential.getCreatedAt()).isNotNull();
         assertThat(credential.getUpdatedAt()).isNotNull();
     }
@@ -46,7 +46,7 @@ class DatabaseCredentialTest {
         credential.changeCredentials("new-operator", "new-password");
 
         assertThat(credential.getUsername()).isEqualTo("new-operator");
-        assertThat(credential.getPassword()).isEqualTo("new-password");
+        assertThat(credential.getEncryptedPassword()).isEqualTo("new-password");
         assertThat(credential.getUpdatedAt()).isNotNull();
     }
 
@@ -59,6 +59,6 @@ class DatabaseCredentialTest {
                 .withMessage("데이터베이스 비밀번호는 필수입니다.");
 
         assertThat(credential.getUsername()).isEqualTo("operator");
-        assertThat(credential.getPassword()).isEqualTo("password");
+        assertThat(credential.getEncryptedPassword()).isEqualTo("password");
     }
 }

@@ -270,12 +270,16 @@ POST /internal/v1/agents/tasks
   "operationJobId": 100,
   "taskType": "MYSQL_LOGICAL_BACKUP",
   "status": "QUEUED",
-  "parametersJson": "{\"databaseName\":\"orders\",\"host\":\"127.0.0.1\",\"port\":3306,\"username\":\"backup_user\",\"password\":\"secret\",\"backupType\":\"LOGICAL\",\"compression\":true}",
+  "credentialId": 7,
+  "parametersJson": "{\"databaseName\":\"orders\",\"host\":\"127.0.0.1\",\"port\":3306,\"backupType\":\"LOGICAL\",\"compression\":true}",
   "resultPayloadJson": null,
   "errorCode": null,
   "errorMessage": null,
   "startedAt": null,
   "completedAt": null,
+  "executionAttempt": 0,
+  "leaseExpiresAt": null,
+  "lastProgressAt": null,
   "createdAt": "2026-07-06T17:30:00"
 }
 ```
@@ -300,10 +304,10 @@ Go Agent
 
 ---
 
-## 4. 다음 OperationTask 조회
+## 4. 다음 OperationTask 선점
 
 ```http
-GET /internal/v1/agents/{agentId}/tasks/next?agentToken={agentToken}
+POST /internal/v1/agents/{agentId}/tasks/next?agentToken={agentToken}
 ```
 
 ### Task 있음
@@ -313,7 +317,9 @@ GET /internal/v1/agents/{agentId}/tasks/next?agentToken={agentToken}
   "hasTask": true,
   "taskId": 15,
   "taskType": "MYSQL_LOGICAL_BACKUP",
-  "parametersJson": "{\"databaseName\":\"orders\",\"host\":\"127.0.0.1\",\"port\":3306,\"username\":\"backup_user\",\"password\":\"secret\",\"backupType\":\"LOGICAL\",\"compression\":true}"
+  "parametersJson": "{\"databaseName\":\"orders\",\"host\":\"127.0.0.1\",\"port\":3306,\"username\":\"backup_user\",\"password\":\"secret\",\"backupType\":\"LOGICAL\",\"compression\":true}",
+  "executionAttempt": 1,
+  "leaseExpiresAt": "2026-07-06T17:32:00"
 }
 ```
 
@@ -324,13 +330,15 @@ GET /internal/v1/agents/{agentId}/tasks/next?agentToken={agentToken}
   "hasTask": false,
   "taskId": null,
   "taskType": null,
-  "parametersJson": null
+  "parametersJson": null,
+  "executionAttempt": null,
+  "leaseExpiresAt": null
 }
 ```
 
 ### 설명
 
-Go Agent는 주기적으로 다음 Task를 조회합니다.
+Go Agent는 주기적으로 다음 Task를 조회하고 즉시 선점합니다. 조회와 선점은 하나의 DB 트랜잭션에서 처리되므로 두 요청이 같은 Task를 받을 수 없습니다.
 
 현재는 즉시 응답 방식이며, 실제 Long Polling 대기 처리는 아직 구현하지 않았습니다.
 
@@ -343,22 +351,27 @@ status = QUEUED
   ↓
 createdAt 오름차순
   ↓
-가장 오래된 Task 1건 반환
+가장 오래된 Task 1건을 Lock
+  ↓
+RUNNING 전환, executionAttempt 증가, 60초 Lease 설정
+  ↓
+선점한 Task 반환
 ```
 
 ---
 
-## 5. OperationTask 시작
+## 5. OperationTask Lease 갱신
 
 ```http
-POST /internal/v1/agents/{agentId}/tasks/{taskId}/start
+POST /internal/v1/agents/{agentId}/tasks/{taskId}/lease
 ```
 
 ### Request
 
 ```json
 {
-  "agentToken": "agent-token-..."
+  "agentToken": "agent-token-...",
+  "executionAttempt": 1
 }
 ```
 
@@ -367,31 +380,15 @@ POST /internal/v1/agents/{agentId}/tasks/{taskId}/start
 ```json
 {
   "taskId": 15,
-  "agentId": 1,
-  "operationJobId": 100,
-  "taskType": "MYSQL_LOGICAL_BACKUP",
-  "status": "RUNNING",
-  "parametersJson": "{\"databaseName\":\"orders\",\"host\":\"127.0.0.1\",\"port\":3306,\"username\":\"backup_user\",\"password\":\"secret\",\"backupType\":\"LOGICAL\",\"compression\":true}",
-  "resultPayloadJson": null,
-  "errorCode": null,
-  "errorMessage": null,
-  "startedAt": "2026-07-06T17:31:00",
-  "completedAt": null,
-  "createdAt": "2026-07-06T17:30:00"
+  "executionAttempt": 1,
+  "leaseExpiresAt": "2026-07-06T17:32:20",
+  "lastProgressAt": "2026-07-06T17:31:20"
 }
 ```
 
 ### 설명
 
-Task 상태를 `QUEUED`에서 `RUNNING`으로 변경합니다.
-
-```text
-QUEUED
-  ↓
-RUNNING
-```
-
-Agent Token이 일치하지 않거나, 해당 Agent의 Task가 아니면 처리할 수 없습니다.
+Go Agent는 실행 중인 Task의 Lease를 기본 20초마다 갱신합니다. Agent Token, Task 소유 Agent, 현재 실행 번호가 모두 일치하고 기존 Lease가 아직 유효할 때만 갱신됩니다. 이전 실행 번호나 만료된 Lease는 HTTP 409 `DBOPS-TASK-40901`을 반환합니다.
 
 ---
 
@@ -406,6 +403,8 @@ POST /internal/v1/agents/{agentId}/tasks/{taskId}/complete
 ```json
 {
   "agentToken": "agent-token-...",
+  "executionAttempt": 1,
+  "resultReportId": "8d77288c-cf64-4ae8-a5be-a4010192fc6e",
   "resultPayloadJson": "{\"cpuUsagePercent\":14.2,\"memoryUsagePercent\":53.7,\"diskUsagePercent\":61.4}"
 }
 ```
@@ -434,6 +433,8 @@ POST /internal/v1/agents/{agentId}/tasks/{taskId}/complete
 ```json
 {
   "agentToken": "agent-token-...",
+  "executionAttempt": 1,
+  "resultReportId": "8d77288c-cf64-4ae8-a5be-a4010192fc6e",
   "resultPayloadJson": "{\"status\":\"VERIFIED\",\"backupFile\":\"/tmp/db-fleetops-backups/orders-20260706-173000.sql\",\"fileSizeBytes\":182731,\"checksumSha256\":\"5f70bf18a086007016ddcafcdb2934c567b38b354b77bb636c4f8f15e3f3c8ab\",\"createdAt\":\"2026-07-06T17:30:00+09:00\",\"message\":\"backup artifact verified\"}"
 }
 ```
@@ -484,6 +485,8 @@ POST /internal/v1/agents/{agentId}/tasks/{taskId}/fail
 ```json
 {
   "agentToken": "agent-token-...",
+  "executionAttempt": 1,
+  "resultReportId": "3b42dbed-c531-4dc8-b235-e2945dd52c90",
   "errorCode": "MYSQL_BACKUP_FAILED",
   "errorMessage": "mysqldump exited with code 2"
 }
@@ -517,6 +520,39 @@ RUNNING
   ↓
 FAILED
 ```
+
+완료와 실패 요청의 `resultReportId`는 Agent가 결과마다 한 번 생성한 UUID입니다. 같은 실행 번호, UUID, 결과 종류와 내용이 다시 오면 기존 결과를 HTTP 200으로 반환하고 Metric, Job 변경과 후속 Task 생성을 반복하지 않습니다. 하나라도 다르거나 Lease가 만료되었으면 HTTP 409를 반환합니다.
+
+---
+
+## 8. OperationTask Lease 운영 DDL
+
+애플리케이션 배포 전에 운영 MySQL에 다음 DDL을 적용합니다. 기존 Task는 실행 전 상태와 호환되도록 실행 번호 0, Lease 시각 `NULL`로 시작합니다.
+
+```sql
+ALTER TABLE operation_task
+    ADD COLUMN execution_attempt INT NOT NULL DEFAULT 0,
+    ADD COLUMN lease_expires_at DATETIME(6) NULL,
+    ADD COLUMN last_progress_at DATETIME(6) NULL;
+
+ALTER TABLE operation_task
+    ADD COLUMN result_report_id VARCHAR(36) NULL,
+    ADD COLUMN result_report_type VARCHAR(16) NULL,
+    ADD COLUMN result_report_fingerprint CHAR(64) NULL,
+    ADD COLUMN credential_id BIGINT NULL;
+
+ALTER TABLE managed_database
+    ADD COLUMN assigned_agent_id BIGINT NULL;
+
+CREATE INDEX idx_operation_task_status_lease_expires_at
+    ON operation_task (status, lease_expires_at);
+
+CREATE INDEX idx_operation_task_credential_id ON operation_task (credential_id);
+CREATE INDEX idx_managed_database_assigned_agent_id
+    ON managed_database (assigned_agent_id);
+```
+
+Lease가 만료되면 최초 실행을 포함해 최대 3회까지 같은 Task ID를 다시 `QUEUED`로 전환합니다. 세 번째 실행도 만료되면 Task와 실행 중인 상위 OperationJob을 `TIMED_OUT`으로 종료합니다.
 
 `operationJobId`가 존재하면 연결된 OperationJob도 `FAILED`로 변경됩니다.
 
@@ -591,6 +627,23 @@ agent-go/agent-state.json
 
 ---
 
+## Task Credential 조회
+
+```http
+POST /internal/v1/agents/{agentId}/tasks/{taskId}/credential
+```
+
+```json
+{
+  "agentToken": "agent-token-...",
+  "executionAttempt": 1
+}
+```
+
+Control Plane은 현재 Task를 실행할 권한이 있는 Agent에만 username과 password를 반환합니다. Task 소유 Agent, 실행 번호, 유효한 Lease와 Database의 `assignedAgentId`를 모두 확인하며, 조건이 맞지 않으면 HTTP 409를 반환합니다. Credential은 Task Payload, 일반 Database 응답, Audit와 오류 응답에 넣지 않습니다.
+
+Credential 비밀번호 컬럼에는 AES-256-GCM 결과인 `v1:<nonce>:<ciphertext>`만 저장합니다. 배포 전에 기존 평문 Credential을 새 API로 다시 저장하고 비밀번호가 포함된 기존 대기 Task를 정리해야 합니다. 암호화 Key는 `DB_FLEETOPS_CREDENTIAL_ENCRYPTION_KEY`에 Base64 32-byte 값으로 제공합니다.
+
 ## 현재 한계
 
 아직 다음 기능은 없습니다.
@@ -599,9 +652,7 @@ agent-go/agent-state.json
 - Agent Token 암호화 저장
 - Authorization Header 기반 인증
 - 실제 Long Polling 대기 처리
-- Task 동시 Claim 제어
-- ManagedDatabase와 Agent 직접 매핑
-- Credential Reference 기반 비밀번호 전달
 - 백업 압축 처리
 - 백업 파일 외부 저장소 업로드
-- Restore Verification
+- Database별 대체 Agent 자동 선택
+- Agent 재시작 뒤 Credential/결과 보고 Outbox 복구

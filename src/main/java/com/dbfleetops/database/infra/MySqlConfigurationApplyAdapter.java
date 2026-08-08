@@ -1,6 +1,7 @@
 package com.dbfleetops.database.infra;
 
 import com.dbfleetops.database.application.DatabaseConfigurationApplyPort;
+import com.dbfleetops.database.application.CredentialCipher;
 import com.dbfleetops.database.domain.DatabaseCredential;
 import com.dbfleetops.database.domain.ManagedDatabase;
 import com.dbfleetops.database.dto.ConfigurationApplyCommandResult;
@@ -28,11 +29,14 @@ public class MySqlConfigurationApplyAdapter implements DatabaseConfigurationAppl
 
     private final ManagedDatabaseRepository managedDatabaseRepository;
     private final DatabaseCredentialRepository databaseCredentialRepository;
+    private final CredentialCipher credentialCipher;
 
     public MySqlConfigurationApplyAdapter(ManagedDatabaseRepository managedDatabaseRepository,
-            DatabaseCredentialRepository databaseCredentialRepository) {
+            DatabaseCredentialRepository databaseCredentialRepository,
+            CredentialCipher credentialCipher) {
         this.managedDatabaseRepository = managedDatabaseRepository;
         this.databaseCredentialRepository = databaseCredentialRepository;
+        this.credentialCipher = credentialCipher;
     }
 
     @Override
@@ -162,7 +166,7 @@ public class MySqlConfigurationApplyAdapter implements DatabaseConfigurationAppl
 
         dataSource.setUsername(credential.getUsername());
 
-        dataSource.setPassword(credential.getPassword());
+        dataSource.setPassword(credential.revealPassword(credentialCipher));
 
         return dataSource;
     }

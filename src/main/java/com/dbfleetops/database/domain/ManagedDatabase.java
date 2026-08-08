@@ -47,6 +47,8 @@ public class ManagedDatabase {
 
     private String description;
 
+    private Long assignedAgentId;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -96,6 +98,11 @@ public class ManagedDatabase {
         this.serviceName = serviceName;
         this.owner = owner;
         this.description = description;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void assignAgent(Long agentId) {
+        this.assignedAgentId = agentId;
         this.updatedAt = LocalDateTime.now();
     }
 

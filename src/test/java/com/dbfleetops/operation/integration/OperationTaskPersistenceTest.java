@@ -9,12 +9,21 @@ import com.dbfleetops.operation.domain.OperationTaskStatus;
 import com.dbfleetops.operation.domain.OperationTaskType;
 import com.dbfleetops.operation.infra.OperationTaskRepository;
 import java.util.List;
+import java.util.Optional;
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 @ActiveProfiles("test")
 class OperationTaskPersistenceTest {
+
+        private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 7, 12, 0);
+        private static final String REPORT_ID = "8d77288c-cf64-4ae8-a5be-a4010192fc6e";
+
+        private static void claim(OperationTask task) {
+                task.claim(NOW, NOW.plusMinutes(1));
+        }
 
         @Autowired
         private OperationTaskRepository taskRepository;
@@ -45,13 +54,13 @@ class OperationTaskPersistenceTest {
 
                 taskRepository.save(task);
 
-                List<OperationTask> foundTasks =
+                Optional<OperationTask> foundTask =
                                 taskRepository.findTop1ByAgentIdAndStatusOrderByCreatedAtAsc(1L,
                                                 OperationTaskStatus.QUEUED);
 
-                assertThat(foundTasks).hasSize(1);
+                assertThat(foundTask).isPresent();
 
-                assertThat(foundTasks.getFirst().getTaskType())
+                assertThat(foundTask.orElseThrow().getTaskType())
                                 .isEqualTo(OperationTaskType.COLLECT_LINUX_STATUS);
         }
 
@@ -76,7 +85,7 @@ class OperationTaskPersistenceTest {
 
                 OperationTask savedTask = taskRepository.save(task);
 
-                savedTask.start();
+                claim(savedTask);
 
                 taskRepository.flush();
 
@@ -94,8 +103,9 @@ class OperationTaskPersistenceTest {
 
                 OperationTask savedTask = taskRepository.save(task);
 
-                savedTask.start();
-                savedTask.succeed("{\"cpuUsagePercent\":12.5}");
+                claim(savedTask);
+                savedTask.acceptSuccessReport(1, REPORT_ID, "success-fingerprint",
+                                "{\"cpuUsagePercent\":12.5}", NOW.plusSeconds(10));
 
                 taskRepository.flush();
 
@@ -116,8 +126,10 @@ class OperationTaskPersistenceTest {
 
                 OperationTask savedTask = taskRepository.save(task);
 
-                savedTask.start();
-                savedTask.fail("LINUX_STATUS_FAILED", "failed to read /proc/stat");
+                claim(savedTask);
+                savedTask.acceptFailureReport(1, REPORT_ID, "failure-fingerprint",
+                                "LINUX_STATUS_FAILED", "failed to read /proc/stat",
+                                NOW.plusSeconds(10));
 
                 taskRepository.flush();
 

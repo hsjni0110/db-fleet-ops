@@ -7,29 +7,41 @@ import (
 )
 
 type Config struct {
-	ControlPlaneURL          string
-	AgentID                  string
-	AgentToken               string
-	AgentName                string
-	AgentVersion             string
-	AgentStateFile           string
-	BackupDirectory          string
-	HeartbeatIntervalSeconds int
-	PollIntervalSeconds      int
+	ControlPlaneURL             string
+	AgentID                     string
+	AgentToken                  string
+	AgentName                   string
+	AgentVersion                string
+	AgentStateFile              string
+	BackupDirectory             string
+	HeartbeatIntervalSeconds    int
+	PollIntervalSeconds         int
+	LeaseRenewalIntervalSeconds int
+	TaskLeaseDurationSeconds    int
 }
 
 func Load() Config {
 	return Config{
-		ControlPlaneURL:          getEnv("CONTROL_PLANE_URL", "http://localhost:8080"),
-		AgentID:                  getEnv("AGENT_ID", ""),
-		AgentToken:               getEnv("AGENT_TOKEN", ""),
-		AgentName:                getEnv("AGENT_NAME", "local-agent"),
-		AgentVersion:             getEnv("AGENT_VERSION", "0.1.0"),
-		AgentStateFile:           getEnv("AGENT_STATE_FILE", "./agent-state.json"),
-		BackupDirectory:          getEnv("BACKUP_DIRECTORY", "/tmp/db-fleetops-backups"),
-		HeartbeatIntervalSeconds: getEnvInt("HEARTBEAT_INTERVAL_SECONDS", 10),
-		PollIntervalSeconds:      getEnvInt("POLL_INTERVAL_SECONDS", 5),
+		ControlPlaneURL:             getEnv("CONTROL_PLANE_URL", "http://localhost:8080"),
+		AgentID:                     getEnv("AGENT_ID", ""),
+		AgentToken:                  getEnv("AGENT_TOKEN", ""),
+		AgentName:                   getEnv("AGENT_NAME", "local-agent"),
+		AgentVersion:                getEnv("AGENT_VERSION", "0.1.0"),
+		AgentStateFile:              getEnv("AGENT_STATE_FILE", "./agent-state.json"),
+		BackupDirectory:             getEnv("BACKUP_DIRECTORY", "/tmp/db-fleetops-backups"),
+		HeartbeatIntervalSeconds:    getEnvInt("HEARTBEAT_INTERVAL_SECONDS", 10),
+		PollIntervalSeconds:         getEnvInt("POLL_INTERVAL_SECONDS", 5),
+		LeaseRenewalIntervalSeconds: getEnvInt("LEASE_RENEWAL_INTERVAL_SECONDS", 20),
+		TaskLeaseDurationSeconds:    getEnvInt("TASK_LEASE_DURATION_SECONDS", 60),
 	}
+}
+
+func (c Config) LeaseRenewalInterval() time.Duration {
+	return time.Duration(c.LeaseRenewalIntervalSeconds) * time.Second
+}
+
+func (c Config) TaskLeaseDuration() time.Duration {
+	return time.Duration(c.TaskLeaseDurationSeconds) * time.Second
 }
 
 func (c Config) HeartbeatInterval() time.Duration {

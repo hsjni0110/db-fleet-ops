@@ -23,6 +23,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.dbfleetops.common.web.RequestIdFilter;
 import com.dbfleetops.database.exception.DatabaseConnectionValidationException;
+import com.dbfleetops.operation.exception.TaskExecutionConflictException;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestControllerAdvice
@@ -127,6 +128,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
                 problem.setDetail(exception.getMessage());
 
+                return ResponseEntity.status(errorCode.status()).body(problem);
+        }
+
+        @ExceptionHandler(TaskExecutionConflictException.class)
+        public ResponseEntity<Object> handleTaskExecutionConflict(
+                        TaskExecutionConflictException exception, HttpServletRequest request) {
+                ApiErrorCode errorCode = ApiErrorCode.TASK_EXECUTION_CONFLICT;
+                ProblemDetail problem = createProblemDetail(errorCode, request);
+                problem.setDetail(exception.getMessage());
                 return ResponseEntity.status(errorCode.status()).body(problem);
         }
 

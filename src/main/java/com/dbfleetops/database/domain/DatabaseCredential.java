@@ -20,7 +20,8 @@ public class DatabaseCredential {
 
     private String username;
 
-    private String password;
+    @Column(name = "password", length = 1000)
+    private String encryptedPassword;
 
     private LocalDateTime createdAt;
 
@@ -28,27 +29,31 @@ public class DatabaseCredential {
 
     protected DatabaseCredential() {}
 
-    public DatabaseCredential(Long databaseId, String username, String password) {
+    public DatabaseCredential(Long databaseId, String username, String encryptedPassword) {
         validateDatabaseId(databaseId);
-        validateCredentials(username, password);
+        validateCredentials(username, encryptedPassword);
 
         this.databaseId = databaseId;
         this.username = username;
-        this.password = password;
+        this.encryptedPassword = encryptedPassword;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void changeCredentials(String username, String password) {
-        validateCredentials(username, password);
+    public void changeCredentials(String username, String encryptedPassword) {
+        validateCredentials(username, encryptedPassword);
 
         this.username = username;
-        this.password = password;
+        this.encryptedPassword = encryptedPassword;
         this.updatedAt = LocalDateTime.now();
     }
 
     private static void validateDatabaseId(Long databaseId) {
         notNull(databaseId, "데이터베이스 ID는 필수입니다.");
+    }
+
+    public String revealPassword(com.dbfleetops.database.application.CredentialCipher cipher) {
+        return cipher.decrypt(encryptedPassword);
     }
 
     private static void validateCredentials(String username, String password) {
