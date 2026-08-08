@@ -1,6 +1,6 @@
 package com.dbfleetops.agent.dto;
 
-import com.dbfleetops.operation.dto.OperationTaskResponse;
+import com.dbfleetops.operation.task.dto.OperationTaskResponse;
 
 import java.util.List;
 

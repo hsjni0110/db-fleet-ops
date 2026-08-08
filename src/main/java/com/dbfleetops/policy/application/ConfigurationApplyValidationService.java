@@ -1,13 +1,13 @@
 package com.dbfleetops.policy.application;
 
-import com.dbfleetops.operation.dto.ConfigurationApplyParameterRequest;
-import com.dbfleetops.operation.dto.CreateConfigurationApplyJobRequest;
 import com.dbfleetops.policy.domain.ConfigurationApplyStatus;
 import com.dbfleetops.policy.domain.ConfigurationProfile;
 import com.dbfleetops.policy.domain.ConfigurationProfileParameter;
 import com.dbfleetops.policy.domain.ParameterValueType;
 import com.dbfleetops.policy.dto.ConfigurationApplyValidationItem;
 import com.dbfleetops.policy.dto.ConfigurationApplyValidationResult;
+import com.dbfleetops.policy.dto.ConfigurationChangeItem;
+import com.dbfleetops.policy.dto.ConfigurationChangeRequest;
 import com.dbfleetops.policy.infra.ConfigurationApplyRepository;
 import com.dbfleetops.policy.infra.ConfigurationProfileParameterRepository;
 import com.dbfleetops.policy.infra.ConfigurationProfileRepository;
@@ -37,27 +37,27 @@ public class ConfigurationApplyValidationService {
 
     @Transactional(readOnly = true)
     public ConfigurationApplyValidationResult validate(Long databaseId,
-            CreateConfigurationApplyJobRequest request) {
+            ConfigurationChangeRequest request) {
         if (databaseId == null) {
             throw new IllegalArgumentException("databaseId is required.");
         }
 
         validateRequestShape(request);
         validateNoRunningApply(databaseId);
-        validateDuplicateParameters(request.parameters());
+        validateDuplicateParameters(request.items());
 
         ConfigurationProfile profile = profileRepository.findById(request.profileId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Configuration profile not found. profileId=" + request.profileId()));
 
-        List<ConfigurationApplyValidationItem> items = request.parameters().stream()
+        List<ConfigurationApplyValidationItem> items = request.items().stream()
                 .map(parameter -> validateParameter(profile.getId(), parameter)).toList();
 
         return new ConfigurationApplyValidationResult(databaseId, profile.getId(), items);
     }
 
     private ConfigurationApplyValidationItem validateParameter(Long profileId,
-            ConfigurationApplyParameterRequest requestParameter) {
+            ConfigurationChangeItem requestParameter) {
         String parameterName = normalizeParameterName(requestParameter.parameterName());
 
         ConfigurationProfileParameter profileParameter =
@@ -75,7 +75,7 @@ public class ConfigurationApplyValidationService {
                 profileParameter.getDynamic(), profileParameter.getApplyAllowed());
     }
 
-    private void validateRequestShape(CreateConfigurationApplyJobRequest request) {
+    private void validateRequestShape(ConfigurationChangeRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("request is required.");
         }
@@ -88,11 +88,11 @@ public class ConfigurationApplyValidationService {
             throw new IllegalArgumentException("requestedBy is required.");
         }
 
-        if (request.parameters() == null || request.parameters().isEmpty()) {
+        if (request.items() == null || request.items().isEmpty()) {
             throw new IllegalArgumentException("parameters is required.");
         }
 
-        for (ConfigurationApplyParameterRequest parameter : request.parameters()) {
+        for (ConfigurationChangeItem parameter : request.items()) {
             if (parameter == null) {
                 throw new IllegalArgumentException("parameter is required.");
             }
@@ -118,10 +118,10 @@ public class ConfigurationApplyValidationService {
         }
     }
 
-    private void validateDuplicateParameters(List<ConfigurationApplyParameterRequest> parameters) {
+    private void validateDuplicateParameters(List<ConfigurationChangeItem> parameters) {
         Set<String> names = new HashSet<>();
 
-        for (ConfigurationApplyParameterRequest parameter : parameters) {
+        for (ConfigurationChangeItem parameter : parameters) {
             String normalizedName = normalizeParameterName(parameter.parameterName());
 
             if (!names.add(normalizedName)) {

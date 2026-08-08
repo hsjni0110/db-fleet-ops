@@ -1,16 +1,17 @@
 package com.dbfleetops.operation.integration;
 
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import com.dbfleetops.operation.domain.OperationTask;
-import com.dbfleetops.operation.domain.OperationTaskStatus;
-import com.dbfleetops.operation.domain.OperationTaskType;
-import com.dbfleetops.operation.application.required.TaskStore;
-import com.dbfleetops.operation.adapter.persistence.TaskStoreAdapter;
+import com.dbfleetops.operation.task.domain.OperationTask;
+import com.dbfleetops.operation.task.domain.OperationTaskStatus;
+import com.dbfleetops.operation.task.domain.OperationTaskType;
+import com.dbfleetops.operation.task.application.required.TaskStore;
+import com.dbfleetops.operation.task.adapter.persistence.TaskStoreAdapter;
 import java.util.List;
 import java.util.Optional;
 import java.time.LocalDateTime;

@@ -83,12 +83,13 @@ Scheduler는 주기적 호출만 담당하고, 판정과 Transaction은 Service,
 
 | 코드 | 책임 |
 |---|---|
-| `OperationWorkerService` | BACKUP Job의 첫 Task 생성 지시 |
-| `OperationTaskService` | Task 결과로 Job 판정, 복원 검증 Task 생성 |
+| `BackupJobExecution` | BACKUP Job의 첫 Task 생성 지시 |
+| `TaskReportService` | Task 결과를 한 번만 접수하고 후속 처리로 전달 |
+| `BackupWorkflow` | 백업 결과로 Job을 판정하고 복원 검증 Task 생성 |
 | `TaskCredentialService` | 실행 권한 검증 후 Credential 제공 |
 | `CredentialCipher` | Credential AES-256-GCM 암·복호화 |
-| `ExpiredOperationJobService` | 만료 Job과 연결 Task 상태 조정 |
-| `RestoreVerifyTaskPayloadFactory` | 백업 결과를 복원 검증 입력으로 변환 |
+| `ExpiredJobService` | 만료 Job과 연결 Task 상태 조정 |
+| `BackupPayloadBuilder` | 백업 결과를 복원 검증 입력으로 변환 |
 | Go Backup/Restore Handler | Credential 조회, 백업·복원 실행과 정리 |
 
 ## 9. 자동 테스트로 확인한 내용

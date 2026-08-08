@@ -1,7 +1,7 @@
 package com.dbfleetops.policy.integration;
 
-import com.dbfleetops.operation.dto.ConfigurationApplyParameterRequest;
-import com.dbfleetops.operation.dto.CreateConfigurationApplyJobRequest;
+import com.dbfleetops.policy.dto.ConfigurationChangeItem;
+import com.dbfleetops.policy.dto.ConfigurationChangeRequest;
 import com.dbfleetops.policy.application.ConfigurationApplyQueryService;
 import com.dbfleetops.policy.application.ConfigurationApplyValidationService;
 import com.dbfleetops.policy.domain.ConfigurationApply;
@@ -71,10 +71,10 @@ class ConfigurationApplyFlowIntegrationTest {
                 true, true);
 
         ConfigurationApplyValidationResult result = validationService.validate(1L,
-                new CreateConfigurationApplyJobRequest(profile.getId(), "local-user",
+                new ConfigurationChangeRequest(profile.getId(), "local-user",
                         "enable slow query log",
-                        List.of(new ConfigurationApplyParameterRequest("slow_query_log", "ON"),
-                                new ConfigurationApplyParameterRequest("long_query_time", "1.0"))));
+                        List.of(new ConfigurationChangeItem("slow_query_log", "ON"),
+                                new ConfigurationChangeItem("long_query_time", "1.0"))));
 
         assertThat(result.databaseId()).isEqualTo(1L);
 
@@ -94,9 +94,9 @@ class ConfigurationApplyFlowIntegrationTest {
                 ParameterValueType.STRING, false, true);
 
         assertThatThrownBy(() -> validationService.validate(1L,
-                new CreateConfigurationApplyJobRequest(profile.getId(), "local-user",
+                new ConfigurationChangeRequest(profile.getId(), "local-user",
                         "try static parameter",
-                        List.of(new ConfigurationApplyParameterRequest("innodb_log_file_size",
+                        List.of(new ConfigurationChangeItem("innodb_log_file_size",
                                 "512M"))))).isInstanceOf(IllegalStateException.class)
                                         .hasMessageContaining("Static parameter is not supported");
     }
@@ -109,9 +109,9 @@ class ConfigurationApplyFlowIntegrationTest {
                 true, true);
 
         assertThatThrownBy(() -> validationService.validate(1L,
-                new CreateConfigurationApplyJobRequest(profile.getId(), "local-user",
+                new ConfigurationChangeRequest(profile.getId(), "local-user",
                         "unknown parameter",
-                        List.of(new ConfigurationApplyParameterRequest("unknown_parameter",
+                        List.of(new ConfigurationChangeItem("unknown_parameter",
                                 "ON"))))).isInstanceOf(IllegalArgumentException.class)
                                         .hasMessageContaining(
                                                 "Configuration profile parameter not found");
@@ -125,9 +125,9 @@ class ConfigurationApplyFlowIntegrationTest {
                 true, true);
 
         assertThatThrownBy(() -> validationService.validate(1L,
-                new CreateConfigurationApplyJobRequest(profile.getId(), "local-user",
+                new ConfigurationChangeRequest(profile.getId(), "local-user",
                         "invalid boolean",
-                        List.of(new ConfigurationApplyParameterRequest("slow_query_log",
+                        List.of(new ConfigurationChangeItem("slow_query_log",
                                 "enabled"))))).isInstanceOf(IllegalArgumentException.class)
                                         .hasMessageContaining("Invalid BOOLEAN targetValue");
     }
@@ -140,9 +140,9 @@ class ConfigurationApplyFlowIntegrationTest {
                 true, true);
 
         assertThatThrownBy(() -> validationService.validate(1L,
-                new CreateConfigurationApplyJobRequest(profile.getId(), "local-user",
+                new ConfigurationChangeRequest(profile.getId(), "local-user",
                         "invalid number",
-                        List.of(new ConfigurationApplyParameterRequest("long_query_time", "abc")))))
+                        List.of(new ConfigurationChangeItem("long_query_time", "abc")))))
                                 .isInstanceOf(IllegalArgumentException.class)
                                 .hasMessageContaining("Invalid NUMBER targetValue");
     }
@@ -155,10 +155,10 @@ class ConfigurationApplyFlowIntegrationTest {
                 true, true);
 
         assertThatThrownBy(() -> validationService.validate(1L,
-                new CreateConfigurationApplyJobRequest(profile.getId(), "local-user",
+                new ConfigurationChangeRequest(profile.getId(), "local-user",
                         "duplicate parameter",
-                        List.of(new ConfigurationApplyParameterRequest("slow_query_log", "ON"),
-                                new ConfigurationApplyParameterRequest("SLOW_QUERY_LOG", "OFF")))))
+                        List.of(new ConfigurationChangeItem("slow_query_log", "ON"),
+                                new ConfigurationChangeItem("SLOW_QUERY_LOG", "OFF")))))
                                         .isInstanceOf(IllegalArgumentException.class)
                                         .hasMessageContaining("Duplicate parameterName");
     }
@@ -178,9 +178,9 @@ class ConfigurationApplyFlowIntegrationTest {
                 true, true);
 
         assertThatThrownBy(() -> validationService.validate(1L,
-                new CreateConfigurationApplyJobRequest(profile.getId(), "another-user",
+                new ConfigurationChangeRequest(profile.getId(), "another-user",
                         "blocked apply",
-                        List.of(new ConfigurationApplyParameterRequest("slow_query_log", "ON")))))
+                        List.of(new ConfigurationChangeItem("slow_query_log", "ON")))))
                                 .isInstanceOf(IllegalStateException.class)
                                 .hasMessageContaining("already requested or running");
     }

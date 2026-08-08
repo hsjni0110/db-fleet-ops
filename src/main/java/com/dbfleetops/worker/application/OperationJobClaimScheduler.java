@@ -1,7 +1,7 @@
 package com.dbfleetops.worker.application;
 
-import com.dbfleetops.operation.application.provided.WorkerJobs;
-import com.dbfleetops.operation.dto.ClaimJobResponse;
+import com.dbfleetops.operation.job.application.provided.JobClaim;
+import com.dbfleetops.operation.job.dto.ClaimJobResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -14,16 +14,16 @@ public class OperationJobClaimScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(OperationJobClaimScheduler.class);
 
-    private final WorkerJobs workerService;
+    private final JobClaim jobClaim;
     private final WorkerShutdownState workerShutdownState;
     private final WorkerProperties workerProperties;
 
     public OperationJobClaimScheduler(
-            WorkerJobs workerService,
+            JobClaim jobClaim,
             WorkerShutdownState workerShutdownState,
             WorkerProperties workerProperties
     ) {
-        this.workerService = workerService;
+        this.jobClaim = jobClaim;
         this.workerShutdownState = workerShutdownState;
         this.workerProperties = workerProperties;
     }
@@ -37,7 +37,7 @@ public class OperationJobClaimScheduler {
         }
 
         try {
-            ClaimJobResponse response = workerService.claimJob(workerProperties.getId());
+            ClaimJobResponse response = jobClaim.claimJob(workerProperties.getId());
 
             if (!response.claimed()) {
                 log.debug("job_claim_poll_empty workerId={}", workerProperties.getId());

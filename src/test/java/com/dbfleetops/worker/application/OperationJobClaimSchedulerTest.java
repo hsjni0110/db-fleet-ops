@@ -1,9 +1,9 @@
 package com.dbfleetops.worker.application;
 
-import com.dbfleetops.operation.application.provided.WorkerJobs;
-import com.dbfleetops.operation.domain.JobStatus;
-import com.dbfleetops.operation.domain.JobType;
-import com.dbfleetops.operation.dto.ClaimJobResponse;
+import com.dbfleetops.operation.job.application.provided.JobClaim;
+import com.dbfleetops.operation.job.domain.JobStatus;
+import com.dbfleetops.operation.job.domain.JobType;
+import com.dbfleetops.operation.job.dto.ClaimJobResponse;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -16,8 +16,8 @@ import static org.mockito.Mockito.when;
 class OperationJobClaimSchedulerTest {
 
     @Test
-    void claimAvailableJobCallsWorkerServiceWithConfiguredWorkerId() {
-        WorkerJobs workerService = mock(WorkerJobs.class);
+    void claimAvailableJobRequestsAJobWithConfiguredWorkerId() {
+        JobClaim workerService = mock(JobClaim.class);
         WorkerShutdownState workerShutdownState = mock(WorkerShutdownState.class);
         WorkerProperties workerProperties = new WorkerProperties();
 
@@ -49,7 +49,7 @@ class OperationJobClaimSchedulerTest {
 
     @Test
     void claimAvailableJobSkipsClaimWhenWorkerIsShuttingDown() {
-        WorkerJobs workerService = mock(WorkerJobs.class);
+        JobClaim workerService = mock(JobClaim.class);
         WorkerShutdownState workerShutdownState = mock(WorkerShutdownState.class);
         WorkerProperties workerProperties = new WorkerProperties();
 

@@ -1,9 +1,10 @@
 package com.dbfleetops.operation.integration;
 
-import com.dbfleetops.operation.domain.JobStatus;
-import com.dbfleetops.operation.domain.JobType;
-import com.dbfleetops.operation.domain.OperationJob;
-import com.dbfleetops.operation.adapter.persistence.JpaOperationJobRepository;
+
+import com.dbfleetops.operation.job.domain.JobStatus;
+import com.dbfleetops.operation.job.domain.JobType;
+import com.dbfleetops.operation.job.domain.OperationJob;
+import com.dbfleetops.operation.job.adapter.persistence.JpaOperationJobRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -28,7 +29,8 @@ class OperationJobPersistenceTest {
                 1L,
                 "local-user",
                 "idem-persistence-001",
-                "{\"reason\":\"persistence test\"}"
+                "{\"reason\":\"persistence test\"}",
+                LocalDateTime.of(2026, 8, 8, 0, 0)
         );
 
         OperationJob savedJob =
@@ -63,7 +65,8 @@ class OperationJobPersistenceTest {
                 1L,
                 "local-user",
                 "idem-persistence-002",
-                "{\"reason\":\"idempotency test\"}"
+                "{\"reason\":\"idempotency test\"}",
+                LocalDateTime.of(2026, 8, 8, 0, 0)
         );
 
         jobRepository.save(job);
@@ -92,7 +95,8 @@ class OperationJobPersistenceTest {
                 1L,
                 "local-user",
                 "idem-persistence-003",
-                "{\"reason\":\"status update test\"}"
+                "{\"reason\":\"status update test\"}",
+                LocalDateTime.of(2026, 8, 8, 0, 0)
         );
 
         OperationJob savedJob =
@@ -100,6 +104,7 @@ class OperationJobPersistenceTest {
 
         savedJob.start(
                 "worker-1",
+                LocalDateTime.now(),
                 LocalDateTime.now().plusSeconds(60)
         );
 

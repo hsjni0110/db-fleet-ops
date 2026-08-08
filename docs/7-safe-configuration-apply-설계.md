@@ -1013,7 +1013,7 @@ Apply 검증 기준
 
 ---
 
-# 20. ConfigurationApplyJobExecutor를 분리한 이유
+# 20. 설정 변경 실행을 분리한 이유
 
 Worker가 Job을 Claim하면 JobType에 따라 다른 실행을 해야 합니다.
 
@@ -1047,20 +1047,20 @@ After Snapshot
 Apply 결과 저장
 ```
 
-이 로직을 모두 `OperationWorkerService` 안에 넣으면 Worker가 너무 많은 책임을 갖게 됩니다.
+이 로직을 하나의 Worker Service 안에 넣으면 Worker가 너무 많은 책임을 갖게 됩니다.
 
-그래서 `ConfigurationApplyJobExecutor`를 분리했습니다.
+그래서 Job 실행 조정과 실제 설정 변경을 분리했습니다.
 
-`OperationWorkerService`의 책임은 다음입니다.
+`JobClaimService`와 `ConfigurationApplyJobExecution`의 책임은 다음입니다.
 
 ```text
-Job Claim
-JobType 분기
-Job 성공/실패 상태 처리
-Audit 기록
+실행할 Job 가져오기
+Job 실행권 설정
+설정 변경 명령 생성
+설정 변경 결과를 Job 결과로 변환
 ```
 
-`ConfigurationApplyJobExecutor`의 책임은 다음입니다.
+Policy의 `ConfigurationChangeExecution` 책임은 다음입니다.
 
 ```text
 payload 파싱
@@ -1085,7 +1085,7 @@ Phase 7의 실제 실행 흐름은 다음과 같습니다.
 ```text
 OperationJob Claim
   ↓
-ConfigurationApplyJobExecutor.execute(job)
+설정 변경 Job 실행
   ↓
 payloadJson 파싱
   ↓

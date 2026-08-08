@@ -4,7 +4,7 @@ import com.dbfleetops.agent.application.AgentService;
 import com.dbfleetops.agent.domain.AgentStatus;
 import com.dbfleetops.agent.dto.AgentHeartbeatResponse;
 import com.dbfleetops.agent.dto.RegisterAgentResponse;
-import com.dbfleetops.operation.application.provided.AgentTasks;
+import com.dbfleetops.operation.task.application.provided.AgentTasks;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;

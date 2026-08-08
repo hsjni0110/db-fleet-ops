@@ -1214,7 +1214,7 @@ Spring ContextClosedEvent 발생
   ↓
 WorkerShutdownState.shuttingDown = true
   ↓
-OperationWorkerService.claimJob()에서 새 claim 차단
+JobClaimService.claimJob()에서 새 Job 가져오기 차단
 ```
 
 핵심 방어는 `claimJob()`에 있습니다.

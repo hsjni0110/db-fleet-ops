@@ -116,9 +116,11 @@ leaseUntil = 현재 시각 + Lease 시간
 
 코드는 다음 역할로 나누었습니다.
 
-- `OperationWorkerController`가 Worker의 Claim·완료·실패 요청을 받습니다.
-- `OperationWorkerService`가 실행 가능한 Job을 선택하고 전체 처리 순서를 관리합니다.
-- `OperationJobRepository`가 조건에 맞는 Job을 조회합니다.
+- `OperationWorkerController`가 Worker의 Job 가져오기·완료·실패 요청을 받습니다.
+- `JobClaimService`가 실행 가능한 Job을 선택하고 실행권을 설정합니다.
+- `JobExecutionDispatcher`가 Job 종류에 맞는 `JobExecution`을 선택합니다.
+- `JobReportService`가 Worker의 성공·실패 보고를 반영합니다.
+- `JobStore`가 조건에 맞는 Job을 조회합니다.
 - `OperationJob.start(...)`가 상태와 Worker Lease를 설정합니다.
 
 Controller는 HTTP 요청만 받고, Service는 흐름을 조정하며, Job 객체는 상태 규칙을 관리합니다.
@@ -199,12 +201,14 @@ operation/
   │   ├─ OperationJobController
   │   └─ OperationWorkerController
   ├─ application/
-  │   ├─ OperationJobService
-  │   └─ OperationWorkerService
+  │   ├─ JobService
+  │   ├─ JobClaimService
+  │   ├─ JobReportService
+  │   └─ JobExecution
   ├─ domain/
   │   └─ OperationJob
-  └─ infra/
-      └─ OperationJobRepository
+  └─ adapter/
+      └─ persistence/JobStoreAdapter
 ```
 
 - API는 요청 형식과 응답을 담당합니다.

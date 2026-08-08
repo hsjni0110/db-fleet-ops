@@ -6,8 +6,8 @@ import com.dbfleetops.agent.dto.AgentDetailResponse;
 import com.dbfleetops.agent.dto.AgentHostMetricResponse;
 import com.dbfleetops.agent.infra.AgentHostMetricRepository;
 import com.dbfleetops.agent.infra.AgentRepository;
-import com.dbfleetops.operation.dto.OperationTaskResponse;
-import com.dbfleetops.operation.adapter.persistence.JpaOperationTaskRepository;
+import com.dbfleetops.operation.task.dto.OperationTaskResponse;
+import com.dbfleetops.operation.task.adapter.persistence.JpaOperationTaskRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

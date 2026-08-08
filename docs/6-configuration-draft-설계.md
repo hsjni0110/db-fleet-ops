@@ -838,7 +838,7 @@ Worker Claim
 status = RUNNING
       │
       ▼
-ConfigurationCheckJobExecutor 실행
+설정 점검 Job 실행
       │
       ▼
 Drift 저장
@@ -893,16 +893,16 @@ Backup은 DB Host 근처에서 실행해야 할 가능성이 큽니다. `mysqldu
 
 ---
 
-# 17. ConfigurationCheckJobExecutor를 분리한 이유
+# 17. 설정 점검 실행을 분리한 이유
 
-처음에는 `OperationWorkerService` 안에 Configuration Check 실행 로직을 모두 넣을 수 있습니다.
+처음에는 하나의 Worker Service 안에 설정 점검 로직을 모두 넣을 수 있습니다.
 
 하지만 그렇게 하면 Worker가 너무 많은 책임을 갖게 됩니다.
 
 나쁜 구조는 다음과 같습니다.
 
 ```text
-OperationWorkerService
+하나의 Worker Service
   - Job Claim
   - Lease 설정
   - Backup Task 생성
@@ -916,31 +916,31 @@ OperationWorkerService
 Worker의 본래 책임은 Job을 가져오고 상태를 전이시키는 것입니다.  
 Configuration Check의 세부 실행 흐름은 별도 컴포넌트가 맡는 것이 좋습니다.
 
-그래서 `ConfigurationCheckJobExecutor`를 만들었습니다.
+현재는 Job을 가져오는 책임과 설정을 실제로 점검하는 책임을 분리했습니다.
 
 ```text
-OperationWorkerService
-  - Job claim
-  - JobType 분기
-  - 성공/실패 상태 처리
+JobClaimService
+  - 실행할 Job 가져오기
+  - Job 실행권 설정
 
-ConfigurationCheckJobExecutor
-  - payload 파싱
-  - ManagedDatabase 조회
-  - engineType 변환
+ConfigurationCheckJobExecution
+  - 저장된 Job 요청을 설정 점검 명령으로 변환
+  - 점검 결과를 Job 실행 결과로 변환
+
+ConfigurationCheckExecution
   - Snapshot 생성
   - 비교 실행
   - Drift 저장
 ```
 
-이렇게 나누면 Worker는 실행 흐름을 제어하고, Executor는 특정 JobType의 실제 실행 로직을 담당합니다.
+이렇게 나누면 Operation은 Job 상태를 관리하고, Policy는 현재 설정을 수집·비교해 차이를 저장합니다.
 
 나중에 설정 변경 Job이 추가되더라도 같은 방식으로 확장할 수 있습니다.
 
 ```text
-ConfigurationApplyJobExecutor
-BackupJobExecutor
-RestoreVerifyJobExecutor
+설정 변경 Job 실행
+백업 Job 실행
+복원 검증 Task 실행
 ```
 
 ---

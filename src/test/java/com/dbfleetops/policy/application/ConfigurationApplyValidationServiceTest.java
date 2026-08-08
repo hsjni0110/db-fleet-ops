@@ -1,7 +1,7 @@
 package com.dbfleetops.policy.application;
 
-import com.dbfleetops.operation.dto.ConfigurationApplyParameterRequest;
-import com.dbfleetops.operation.dto.CreateConfigurationApplyJobRequest;
+import com.dbfleetops.policy.dto.ConfigurationChangeItem;
+import com.dbfleetops.policy.dto.ConfigurationChangeRequest;
 import com.dbfleetops.policy.domain.ConfigurationApplyStatus;
 import com.dbfleetops.policy.domain.ConfigurationEngineType;
 import com.dbfleetops.policy.domain.ConfigurationProfile;
@@ -57,9 +57,9 @@ class ConfigurationApplyValidationServiceTest {
                 .thenReturn(Optional.of(longQueryTime));
 
         ConfigurationApplyValidationResult result = service.validate(1L,
-                new CreateConfigurationApplyJobRequest(1L, "local-user", "enable slow query log",
-                        List.of(new ConfigurationApplyParameterRequest("slow_query_log", "ON"),
-                                new ConfigurationApplyParameterRequest("long_query_time", "1.0"))));
+                new ConfigurationChangeRequest(1L, "local-user", "enable slow query log",
+                        List.of(new ConfigurationChangeItem("slow_query_log", "ON"),
+                                new ConfigurationChangeItem("long_query_time", "1.0"))));
 
         assertThat(result.databaseId()).isEqualTo(1L);
 
@@ -74,9 +74,9 @@ class ConfigurationApplyValidationServiceTest {
     @Test
     void validateThrowsExceptionWhenDuplicateParameterExists() {
         assertThatThrownBy(() -> service.validate(1L,
-                new CreateConfigurationApplyJobRequest(1L, "local-user", "duplicate test",
-                        List.of(new ConfigurationApplyParameterRequest("slow_query_log", "ON"),
-                                new ConfigurationApplyParameterRequest("SLOW_QUERY_LOG", "OFF")))))
+                new ConfigurationChangeRequest(1L, "local-user", "duplicate test",
+                        List.of(new ConfigurationChangeItem("slow_query_log", "ON"),
+                                new ConfigurationChangeItem("SLOW_QUERY_LOG", "OFF")))))
                                         .isInstanceOf(IllegalArgumentException.class)
                                         .hasMessageContaining("Duplicate parameterName");
     }
@@ -88,8 +88,8 @@ class ConfigurationApplyValidationServiceTest {
                         .thenReturn(true);
 
         assertThatThrownBy(() -> service.validate(1L,
-                new CreateConfigurationApplyJobRequest(1L, "local-user", "enable slow query log",
-                        List.of(new ConfigurationApplyParameterRequest("slow_query_log", "ON")))))
+                new ConfigurationChangeRequest(1L, "local-user", "enable slow query log",
+                        List.of(new ConfigurationChangeItem("slow_query_log", "ON")))))
                                 .isInstanceOf(IllegalStateException.class)
                                 .hasMessageContaining("already requested or running");
     }
@@ -101,8 +101,8 @@ class ConfigurationApplyValidationServiceTest {
         when(profileRepository.findById(1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.validate(1L,
-                new CreateConfigurationApplyJobRequest(1L, "local-user", "profile missing",
-                        List.of(new ConfigurationApplyParameterRequest("slow_query_log", "ON")))))
+                new ConfigurationChangeRequest(1L, "local-user", "profile missing",
+                        List.of(new ConfigurationChangeItem("slow_query_log", "ON")))))
                                 .isInstanceOf(IllegalArgumentException.class)
                                 .hasMessageContaining("Configuration profile not found");
     }
@@ -119,8 +119,8 @@ class ConfigurationApplyValidationServiceTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.validate(1L,
-                new CreateConfigurationApplyJobRequest(1L, "local-user", "invalid parameter",
-                        List.of(new ConfigurationApplyParameterRequest("unknown_parameter",
+                new ConfigurationChangeRequest(1L, "local-user", "invalid parameter",
+                        List.of(new ConfigurationChangeItem("unknown_parameter",
                                 "ON"))))).isInstanceOf(IllegalArgumentException.class)
                                         .hasMessageContaining(
                                                 "Configuration profile parameter not found");
@@ -141,8 +141,8 @@ class ConfigurationApplyValidationServiceTest {
                 .thenReturn(Optional.of(parameter));
 
         assertThatThrownBy(() -> service.validate(1L,
-                new CreateConfigurationApplyJobRequest(1L, "local-user", "static parameter test",
-                        List.of(new ConfigurationApplyParameterRequest("innodb_log_file_size",
+                new ConfigurationChangeRequest(1L, "local-user", "static parameter test",
+                        List.of(new ConfigurationChangeItem("innodb_log_file_size",
                                 "512M"))))).isInstanceOf(IllegalStateException.class)
                                         .hasMessageContaining("Static parameter is not supported");
     }
@@ -162,8 +162,8 @@ class ConfigurationApplyValidationServiceTest {
                 .thenReturn(Optional.of(parameter));
 
         assertThatThrownBy(() -> service.validate(1L,
-                new CreateConfigurationApplyJobRequest(1L, "local-user", "not allowed test",
-                        List.of(new ConfigurationApplyParameterRequest("sql_mode",
+                new ConfigurationChangeRequest(1L, "local-user", "not allowed test",
+                        List.of(new ConfigurationChangeItem("sql_mode",
                                 "STRICT_TRANS_TABLES"))))).isInstanceOf(IllegalStateException.class)
                                         .hasMessageContaining("not allowed");
     }
@@ -183,8 +183,8 @@ class ConfigurationApplyValidationServiceTest {
                 .thenReturn(Optional.of(parameter));
 
         assertThatThrownBy(() -> service.validate(1L,
-                new CreateConfigurationApplyJobRequest(1L, "local-user", "invalid boolean",
-                        List.of(new ConfigurationApplyParameterRequest("slow_query_log",
+                new ConfigurationChangeRequest(1L, "local-user", "invalid boolean",
+                        List.of(new ConfigurationChangeItem("slow_query_log",
                                 "enabled"))))).isInstanceOf(IllegalArgumentException.class)
                                         .hasMessageContaining("Invalid BOOLEAN targetValue");
     }
@@ -204,8 +204,8 @@ class ConfigurationApplyValidationServiceTest {
                 .thenReturn(Optional.of(parameter));
 
         assertThatThrownBy(() -> service.validate(1L,
-                new CreateConfigurationApplyJobRequest(1L, "local-user", "invalid number",
-                        List.of(new ConfigurationApplyParameterRequest("long_query_time", "abc")))))
+                new ConfigurationChangeRequest(1L, "local-user", "invalid number",
+                        List.of(new ConfigurationChangeItem("long_query_time", "abc")))))
                                 .isInstanceOf(IllegalArgumentException.class)
                                 .hasMessageContaining("Invalid NUMBER targetValue");
     }
@@ -225,8 +225,8 @@ class ConfigurationApplyValidationServiceTest {
                 .thenReturn(Optional.of(parameter));
 
         assertThatThrownBy(() -> service.validate(1L,
-                new CreateConfigurationApplyJobRequest(1L, "local-user", "unsafe string",
-                        List.of(new ConfigurationApplyParameterRequest("sql_mode",
+                new ConfigurationChangeRequest(1L, "local-user", "unsafe string",
+                        List.of(new ConfigurationChangeItem("sql_mode",
                                 "abc'; DROP DATABASE mysql; --")))))
                                         .isInstanceOf(IllegalArgumentException.class)
                                         .hasMessageContaining("Unsafe STRING targetValue");
