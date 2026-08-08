@@ -8,7 +8,6 @@ import java.time.LocalDateTime;
 
 import static org.springframework.util.Assert.hasText;
 import static org.springframework.util.Assert.notNull;
-import static org.springframework.util.Assert.state;
 
 @Getter
 @Entity
@@ -106,11 +105,11 @@ public class OperationTask {
     }
 
     public void claim(LocalDateTime now, LocalDateTime leaseExpiresAt) {
-        state(status == OperationTaskStatus.QUEUED,
+        requireExecution(status == OperationTaskStatus.QUEUED,
                 "대기 중인 Task만 시작할 수 있습니다. 현재 상태=" + status);
         notNull(now, "선점 시각은 필수입니다.");
         notNull(leaseExpiresAt, "Lease 만료 시각은 필수입니다.");
-        state(leaseExpiresAt.isAfter(now), "Lease 만료 시각은 선점 시각보다 뒤여야 합니다.");
+        requireExecution(leaseExpiresAt.isAfter(now), "Lease 만료 시각은 선점 시각보다 뒤여야 합니다.");
 
         this.status = OperationTaskStatus.RUNNING;
         this.executionAttempt++;
@@ -123,7 +122,7 @@ public class OperationTask {
     public void renewLease(int attempt, LocalDateTime now, LocalDateTime newLeaseExpiresAt) {
         validateActiveExecution(attempt, now);
         notNull(newLeaseExpiresAt, "새 Lease 만료 시각은 필수입니다.");
-        state(newLeaseExpiresAt.isAfter(now), "새 Lease 만료 시각은 현재 시각보다 뒤여야 합니다.");
+        requireExecution(newLeaseExpiresAt.isAfter(now), "새 Lease 만료 시각은 현재 시각보다 뒤여야 합니다.");
 
         this.leaseExpiresAt = newLeaseExpiresAt;
         this.lastProgressAt = now;
@@ -132,7 +131,7 @@ public class OperationTask {
 
     public void validateCredentialAccess(int attempt, LocalDateTime now) {
         validateActiveExecution(attempt, now);
-        notNull(credentialId, "Credential이 없는 Task입니다.");
+        requireExecution(credentialId != null, "Credential이 없는 Task입니다.");
     }
 
     public ResultReportAcceptance acceptSuccessReport(int attempt, String reportId,
@@ -177,7 +176,8 @@ public class OperationTask {
 
     public void requeueExpiredLease(LocalDateTime now, int maximumAttempts) {
         validateExpiredLease(now);
-        state(executionAttempt < maximumAttempts, "최대 실행 횟수에 도달한 Task는 재대기할 수 없습니다.");
+        requireExecution(executionAttempt < maximumAttempts,
+                "최대 실행 횟수에 도달한 Task는 재대기할 수 없습니다.");
 
         this.status = OperationTaskStatus.QUEUED;
         this.leaseExpiresAt = null;
@@ -187,7 +187,8 @@ public class OperationTask {
 
     public void timeoutExpiredLease(LocalDateTime now, int maximumAttempts) {
         validateExpiredLease(now);
-        state(executionAttempt >= maximumAttempts, "실행 횟수가 남은 Task는 최종 시간 초과 처리할 수 없습니다.");
+        requireExecution(executionAttempt >= maximumAttempts,
+                "실행 횟수가 남은 Task는 최종 시간 초과 처리할 수 없습니다.");
 
         this.status = OperationTaskStatus.TIMED_OUT;
         this.errorCode = "TASK_LEASE_EXPIRED";
@@ -197,32 +198,40 @@ public class OperationTask {
     }
 
     private void validateActiveExecution(int attempt, LocalDateTime now) {
-        state(status == OperationTaskStatus.RUNNING,
+        requireExecution(status == OperationTaskStatus.RUNNING,
                 "실행 중인 Task만 처리할 수 있습니다. 현재 상태=" + status);
-        state(executionAttempt == attempt,
+        requireExecution(executionAttempt == attempt,
                 "현재 실행 번호와 일치하지 않습니다. 현재=" + executionAttempt + ", 요청=" + attempt);
         notNull(now, "현재 시각은 필수입니다.");
-        state(leaseExpiresAt != null && leaseExpiresAt.isAfter(now), "Task Lease가 만료되었습니다.");
+        requireExecution(leaseExpiresAt != null && leaseExpiresAt.isAfter(now),
+                "Task Lease가 만료되었습니다.");
     }
 
     private void validateDuplicateReport(int attempt, String reportId, ResultReportType reportType,
             String fingerprint) {
-        state(status == OperationTaskStatus.SUCCEEDED || status == OperationTaskStatus.FAILED,
+        requireExecution(status == OperationTaskStatus.SUCCEEDED || status == OperationTaskStatus.FAILED,
                 "완료된 성공 또는 실패 Task만 결과를 재보고할 수 있습니다. 현재 상태=" + status);
-        state(executionAttempt == attempt,
+        requireExecution(executionAttempt == attempt,
                 "현재 실행 번호와 일치하지 않습니다. 현재=" + executionAttempt + ", 요청=" + attempt);
-        state(java.util.Objects.equals(resultReportId, reportId),
+        requireExecution(java.util.Objects.equals(resultReportId, reportId),
                 "기존 결과 보고 식별자와 일치하지 않습니다.");
-        state(resultReportType == reportType, "기존 결과 보고 종류와 일치하지 않습니다.");
-        state(java.util.Objects.equals(resultReportFingerprint, fingerprint),
+        requireExecution(resultReportType == reportType, "기존 결과 보고 종류와 일치하지 않습니다.");
+        requireExecution(java.util.Objects.equals(resultReportFingerprint, fingerprint),
                 "기존 결과 보고 내용과 일치하지 않습니다.");
     }
 
     private void validateExpiredLease(LocalDateTime now) {
-        state(status == OperationTaskStatus.RUNNING,
+        requireExecution(status == OperationTaskStatus.RUNNING,
                 "실행 중인 Task만 Lease 만료 처리할 수 있습니다. 현재 상태=" + status);
         notNull(now, "현재 시각은 필수입니다.");
-        state(leaseExpiresAt != null && !leaseExpiresAt.isAfter(now), "Task Lease가 아직 유효합니다.");
+        requireExecution(leaseExpiresAt != null && !leaseExpiresAt.isAfter(now),
+                "Task Lease가 아직 유효합니다.");
+    }
+
+    private void requireExecution(boolean condition, String message) {
+        if (!condition) {
+            throw new TaskExecutionConflictException(message);
+        }
     }
 
 }

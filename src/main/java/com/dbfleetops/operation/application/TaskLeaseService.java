@@ -4,7 +4,7 @@ import com.dbfleetops.operation.application.provided.TaskLease;
 import com.dbfleetops.operation.application.required.*;
 import com.dbfleetops.operation.dto.OperationTaskLeaseResponse;
 import com.dbfleetops.operation.dto.RenewOperationTaskLeaseRequest;
-import com.dbfleetops.operation.exception.TaskExecutionConflictException;
+import com.dbfleetops.operation.domain.TaskExecutionConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,11 +37,7 @@ public class TaskLeaseService implements TaskLease {
             throw new TaskExecutionConflictException("Task does not belong to agent.");
         }
         LocalDateTime now = LocalDateTime.now(clock);
-        try {
-            task.renewLease(request.executionAttempt(), now, now.plus(properties.duration()));
-        } catch (IllegalStateException exception) {
-            throw new TaskExecutionConflictException(exception.getMessage(), exception);
-        }
+        task.renewLease(request.executionAttempt(), now, now.plus(properties.duration()));
         return OperationTaskLeaseResponse.from(task);
     }
 

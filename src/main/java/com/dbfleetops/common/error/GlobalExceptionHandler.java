@@ -23,7 +23,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.dbfleetops.common.web.RequestIdFilter;
 import com.dbfleetops.database.exception.DatabaseConnectionValidationException;
-import com.dbfleetops.operation.exception.TaskExecutionConflictException;
+import com.dbfleetops.operation.domain.TaskExecutionConflictException;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestControllerAdvice

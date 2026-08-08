@@ -10,7 +10,7 @@ import com.dbfleetops.operation.application.required.DatabaseReader;
 import com.dbfleetops.operation.domain.OperationTask;
 import com.dbfleetops.operation.domain.OperationTaskType;
 import com.dbfleetops.operation.dto.ResolveTaskCredentialRequest;
-import com.dbfleetops.operation.exception.TaskExecutionConflictException;
+import com.dbfleetops.operation.domain.TaskExecutionConflictException;
 import com.dbfleetops.operation.application.required.TaskStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

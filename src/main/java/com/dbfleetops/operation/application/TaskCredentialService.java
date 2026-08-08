@@ -4,7 +4,7 @@ import com.dbfleetops.operation.application.provided.TaskCredential;
 import com.dbfleetops.operation.application.required.*;
 import com.dbfleetops.operation.dto.ResolveTaskCredentialRequest;
 import com.dbfleetops.operation.dto.TaskCredentialResponse;
-import com.dbfleetops.operation.exception.TaskExecutionConflictException;
+import com.dbfleetops.operation.domain.TaskExecutionConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,11 +43,7 @@ public class TaskCredentialService implements TaskCredential {
         if (!agentId.equals(task.getAgentId())) {
             throw new TaskExecutionConflictException("Task does not belong to Agent.");
         }
-        try {
-            task.validateCredentialAccess(request.executionAttempt(), LocalDateTime.now(clock));
-        } catch (IllegalStateException | IllegalArgumentException exception) {
-            throw new TaskExecutionConflictException(exception.getMessage(), exception);
-        }
+        task.validateCredentialAccess(request.executionAttempt(), LocalDateTime.now(clock));
         var credential = credentialRepository.findCredential(task.getCredentialId()).orElseThrow(
                 () -> new TaskExecutionConflictException("Credential not found."));
         var database = databaseRepository.findDatabase(credential.databaseId()).orElseThrow(

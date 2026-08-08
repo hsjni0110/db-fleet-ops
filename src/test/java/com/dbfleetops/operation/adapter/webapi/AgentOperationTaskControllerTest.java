@@ -3,7 +3,7 @@ package com.dbfleetops.operation.adapter.webapi;
 import com.dbfleetops.operation.application.provided.*;
 import com.dbfleetops.operation.domain.OperationTaskType;
 import com.dbfleetops.operation.dto.NextOperationTaskResponse;
-import com.dbfleetops.operation.exception.TaskExecutionConflictException;
+import com.dbfleetops.operation.domain.TaskExecutionConflictException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;

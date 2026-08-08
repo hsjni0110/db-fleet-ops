@@ -4,7 +4,6 @@ import com.dbfleetops.operation.application.provided.TaskReports;
 import com.dbfleetops.operation.application.required.*;
 import com.dbfleetops.operation.domain.*;
 import com.dbfleetops.operation.dto.*;
-import com.dbfleetops.operation.exception.TaskExecutionConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.*;
@@ -28,10 +27,10 @@ public class TaskReportService implements TaskReports {
             CompleteOperationTaskRequest request) {
         validateAgent(agentId, request.agentToken());
         OperationTask task = ownedTask(agentId, taskId);
-        ResultReportAcceptance accepted = conflict(() -> task.acceptSuccessReport(
+        ResultReportAcceptance accepted = task.acceptSuccessReport(
                 request.executionAttempt(), request.resultReportId(),
                 fingerprint.success(request.resultPayloadJson()), request.resultPayloadJson(),
-                LocalDateTime.now(clock)));
+                LocalDateTime.now(clock));
         if (accepted == ResultReportAcceptance.ACCEPTED) dispatcher.dispatch(task, request.resultPayloadJson());
         return OperationTaskResponse.from(task);
     }
@@ -39,10 +38,10 @@ public class TaskReportService implements TaskReports {
     public OperationTaskResponse failTask(Long agentId, Long taskId, FailOperationTaskRequest request) {
         validateAgent(agentId, request.agentToken());
         OperationTask task = ownedTask(agentId, taskId);
-        ResultReportAcceptance accepted = conflict(() -> task.acceptFailureReport(
+        ResultReportAcceptance accepted = task.acceptFailureReport(
                 request.executionAttempt(), request.resultReportId(),
                 fingerprint.failure(request.errorCode(), request.errorMessage()),
-                request.errorCode(), request.errorMessage(), LocalDateTime.now(clock)));
+                request.errorCode(), request.errorMessage(), LocalDateTime.now(clock));
         if (accepted == ResultReportAcceptance.ACCEPTED)
             coordinator.failLinkedJob(task, request.errorCode(), request.errorMessage());
         return OperationTaskResponse.from(task);
@@ -57,10 +56,5 @@ public class TaskReportService implements TaskReports {
         if (!agentId.equals(task.getAgentId())) throw new TaskExecutionConflictException(
                 "Task does not belong to agent. agentId=" + agentId + ", taskAgentId=" + task.getAgentId());
         return task;
-    }
-    private <T> T conflict(java.util.function.Supplier<T> action) {
-        try { return action.get(); } catch (IllegalStateException exception) {
-            throw new TaskExecutionConflictException(exception.getMessage(), exception);
-        }
     }
 }
