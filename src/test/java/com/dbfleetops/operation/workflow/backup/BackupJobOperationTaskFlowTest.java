@@ -4,7 +4,7 @@ import com.dbfleetops.operation.task.application.service.OperationTaskResultFing
 import com.dbfleetops.operation.task.application.service.TaskReportService;
 import com.dbfleetops.operation.task.adapter.integration.BackupTaskSuccessHandler;
 import com.dbfleetops.operation.task.application.service.TaskSuccessDispatcher;
-import com.dbfleetops.operation.workflow.application.JobTaskCoordinator;
+import com.dbfleetops.operation.workflow.application.LinkedJobFailureService;
 
 import com.dbfleetops.operation.job.application.required.*;
 import com.dbfleetops.operation.task.application.required.*;
@@ -53,19 +53,19 @@ class BackupJobOperationTaskFlowTest {
             ReflectionTestUtils.setField(task, "id", 10L + saved.size());
             saved.add(task); return task;
         });
-        JobTaskCoordinator coordinator = new JobTaskCoordinator(jobs, tasks, CLOCK);
         BackupPayloadBuilder payloads = mock(BackupPayloadBuilder.class);
         when(payloads.shouldVerifyAfterBackup(anyString())).thenReturn(true);
         when(payloads.createRestorePayload(anyLong(), anyLong(), anyString(), anyString()))
                 .thenReturn("{}");
-        BackupWorkflow workflow = new BackupWorkflow(agents, databases, credentials, tasks,
-                coordinator, payloads, verifications, CLOCK);
+        BackupWorkflow workflow = new BackupWorkflow(agents, databases, credentials, jobs, tasks,
+                payloads, verifications, CLOCK);
         OperationTask backup = toEntity(workflow.startBackup(100L, 1L), saved);
         backup.claim(LocalDateTime.now(), LocalDateTime.now().plusMinutes(1));
         when(tasks.findById(backup.getId())).thenReturn(Optional.of(backup));
         BackupTaskSuccessHandler backupSuccessHandler = new BackupTaskSuccessHandler(workflow);
         TaskReportService reports = new TaskReportService(agents, tasks,
-                new TaskSuccessDispatcher(List.of(backupSuccessHandler)), coordinator,
+                new TaskSuccessDispatcher(List.of(backupSuccessHandler)),
+                new LinkedJobFailureService(jobs, CLOCK),
                 Clock.systemUTC(),
                 new OperationTaskResultFingerprint());
 
@@ -91,9 +91,10 @@ class BackupJobOperationTaskFlowTest {
         when(agents.matchesToken(1L, "token")).thenReturn(true);
         when(tasks.findById(10L)).thenReturn(Optional.of(task));
         when(jobs.findByIdForUpdate(100L)).thenReturn(Optional.of(job));
-        JobTaskCoordinator coordinator = new JobTaskCoordinator(jobs, tasks, CLOCK);
         TaskReportService reports = new TaskReportService(agents, tasks,
-                new TaskSuccessDispatcher(List.of()), coordinator, Clock.systemUTC(),
+                new TaskSuccessDispatcher(List.of()),
+                new LinkedJobFailureService(jobs, CLOCK),
+                Clock.systemUTC(),
                 new OperationTaskResultFingerprint());
 
         reports.failTask(1L, 10L, new FailOperationTaskRequest("token", "BACKUP_FAILED", "failed"));

@@ -4,7 +4,7 @@ package com.dbfleetops.operation.task.application.service;
 import com.dbfleetops.operation.shared.application.required.AgentExecutionTarget;
 import com.dbfleetops.operation.shared.application.required.AgentReader;
 import com.dbfleetops.operation.task.application.required.TaskStore;
-import com.dbfleetops.operation.task.application.required.LinkedJobProgress;
+import com.dbfleetops.operation.task.application.required.LinkedJobFailure;
 import com.dbfleetops.operation.task.domain.OperationTask;
 import com.dbfleetops.operation.task.domain.OperationTaskType;
 import com.dbfleetops.operation.task.domain.TaskExecutionConflictException;
@@ -34,7 +34,7 @@ class TaskReportServiceTest {
     private AgentReader agents;
     private TaskStore tasks;
     private TaskSuccessDispatcher successDispatcher;
-    private LinkedJobProgress jobs;
+    private LinkedJobFailure linkedJobFailure;
     private TaskReportService service;
 
     @BeforeEach
@@ -42,12 +42,12 @@ class TaskReportServiceTest {
         agents = mock(AgentReader.class);
         tasks = mock(TaskStore.class);
         successDispatcher = mock(TaskSuccessDispatcher.class);
-        jobs = mock(LinkedJobProgress.class);
+        linkedJobFailure = mock(LinkedJobFailure.class);
 
         when(agents.findAgent(1L)).thenReturn(Optional.of(new AgentExecutionTarget(1L, true)));
         when(agents.matchesToken(1L, "token")).thenReturn(true);
 
-        service = new TaskReportService(agents, tasks, successDispatcher, jobs, CLOCK,
+        service = new TaskReportService(agents, tasks, successDispatcher, linkedJobFailure, CLOCK,
                 new OperationTaskResultFingerprint());
     }
 
@@ -61,7 +61,7 @@ class TaskReportServiceTest {
         service.failTask(1L, 10L, request);
         service.failTask(1L, 10L, request);
 
-        verify(jobs, times(1)).fail(100L, "BACKUP_FAILED", "백업 실패");
+        verify(linkedJobFailure, times(1)).fail(100L, "BACKUP_FAILED", "백업 실패");
     }
 
     @Test

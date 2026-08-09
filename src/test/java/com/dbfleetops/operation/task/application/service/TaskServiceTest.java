@@ -34,7 +34,7 @@ class TaskServiceTest {
         AgentReader agents = mock(AgentReader.class);
         TaskStore tasks = mock(TaskStore.class);
         TaskSuccessHandler handler = mock(TaskSuccessHandler.class);
-        LinkedJobProgress jobs = mock(LinkedJobProgress.class);
+        LinkedJobFailure linkedJobFailure = mock(LinkedJobFailure.class);
         when(agents.findAgent(1L)).thenReturn(Optional.of(new AgentExecutionTarget(1L, true)));
         when(agents.matchesToken(1L, "token")).thenReturn(true);
         OperationTask task = OperationTask.create(1L, OperationTaskType.COLLECT_LINUX_STATUS, "{}");
@@ -44,7 +44,7 @@ class TaskServiceTest {
         when(tasks.findById(10L)).thenReturn(Optional.of(task));
         when(handler.supports(OperationTaskType.COLLECT_LINUX_STATUS)).thenReturn(true);
         TaskReportService service = new TaskReportService(agents, tasks,
-                new TaskSuccessDispatcher(List.of(handler)), jobs,
+                new TaskSuccessDispatcher(List.of(handler)), linkedJobFailure,
                 Clock.fixed(now.plusSeconds(1).toInstant(ZoneOffset.UTC), ZoneOffset.UTC),
                 new OperationTaskResultFingerprint());
         CompleteOperationTaskRequest request = new CompleteOperationTaskRequest("token", 1,

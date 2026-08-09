@@ -3,10 +3,10 @@ package com.dbfleetops.operation.workflow.backup;
 import com.dbfleetops.operation.shared.application.required.AgentReader;
 import com.dbfleetops.operation.shared.application.required.CredentialReader;
 import com.dbfleetops.operation.shared.application.required.DatabaseReader;
+import com.dbfleetops.operation.job.application.required.JobStore;
 import com.dbfleetops.operation.task.application.required.TaskStore;
 import com.dbfleetops.operation.task.domain.OperationTask;
 import com.dbfleetops.operation.task.domain.OperationTaskType;
-import com.dbfleetops.operation.workflow.application.JobTaskCoordinator;
 import com.dbfleetops.operation.workflow.application.required.BackupPayloadBuilder;
 import com.dbfleetops.operation.workflow.application.required.BackupVerificationWriter;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +28,7 @@ class BackupWorkflowValidationTest {
     private final DatabaseReader databases = mock(DatabaseReader.class);
     private final CredentialReader credentials = mock(CredentialReader.class);
     private final TaskStore tasks = mock(TaskStore.class);
-    private final JobTaskCoordinator coordinator = mock(JobTaskCoordinator.class);
+    private final JobStore jobs = mock(JobStore.class);
     private final BackupPayloadBuilder payloads = mock(BackupPayloadBuilder.class);
     private final BackupVerificationWriter verifications = mock(BackupVerificationWriter.class);
 
@@ -36,7 +36,7 @@ class BackupWorkflowValidationTest {
 
     @BeforeEach
     void setUp() {
-        workflow = new BackupWorkflow(agents, databases, credentials, tasks, coordinator, payloads,
+        workflow = new BackupWorkflow(agents, databases, credentials, jobs, tasks, payloads,
                 verifications, Clock.systemUTC());
     }
 
@@ -69,6 +69,6 @@ class BackupWorkflowValidationTest {
                 .isThrownBy(() -> workflow.continueAfterSuccess(1L, "{}"))
                 .withMessageContaining("지원하지 않는 Task 종류입니다.");
 
-        verifyNoInteractions(coordinator, payloads, verifications);
+        verifyNoInteractions(jobs, payloads, verifications);
     }
 }

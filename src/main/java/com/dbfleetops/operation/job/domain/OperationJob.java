@@ -198,4 +198,8 @@ public class OperationJob {
                 updatedAt = now;
         }
 
+        public boolean hasRemainingRetries() {
+                return retryCount < maxRetryCount;
+        }
+
 }

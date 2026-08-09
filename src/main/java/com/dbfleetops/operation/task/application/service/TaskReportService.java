@@ -3,7 +3,7 @@ package com.dbfleetops.operation.task.application.service;
 import com.dbfleetops.operation.task.application.provided.TaskReports;
 import com.dbfleetops.operation.shared.application.required.AgentReader;
 import com.dbfleetops.operation.task.application.required.TaskStore;
-import com.dbfleetops.operation.task.application.required.LinkedJobProgress;
+import com.dbfleetops.operation.task.application.required.LinkedJobFailure;
 import com.dbfleetops.operation.task.domain.OperationTask;
 import com.dbfleetops.operation.task.domain.ResultReportAcceptance;
 import com.dbfleetops.operation.task.domain.TaskExecutionConflictException;
@@ -27,18 +27,18 @@ public class TaskReportService implements TaskReports {
     private final AgentReader agents;
     private final TaskStore tasks;
     private final TaskSuccessDispatcher successDispatcher;
-    private final LinkedJobProgress jobs;
+    private final LinkedJobFailure linkedJobFailure;
     private final Clock clock;
     private final OperationTaskResultFingerprint fingerprints;
 
     public TaskReportService(AgentReader agents, TaskStore tasks,
             TaskSuccessDispatcher successDispatcher,
-            LinkedJobProgress jobs, Clock clock,
+            LinkedJobFailure linkedJobFailure, Clock clock,
             OperationTaskResultFingerprint fingerprints) {
         this.agents = agents;
         this.tasks = tasks;
         this.successDispatcher = successDispatcher;
-        this.jobs = jobs;
+        this.linkedJobFailure = linkedJobFailure;
         this.clock = clock;
         this.fingerprints = fingerprints;
     }
@@ -108,7 +108,8 @@ public class TaskReportService implements TaskReports {
     private void failLinkedJob(OperationTask task, FailOperationTaskRequest request,
             ResultReportAcceptance acceptance) {
         if (acceptance == ACCEPTED) {
-            jobs.fail(task.getOperationJobId(), request.errorCode(), request.errorMessage());
+            linkedJobFailure.fail(task.getOperationJobId(), request.errorCode(),
+                    request.errorMessage());
         }
     }
 

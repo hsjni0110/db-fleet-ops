@@ -1,6 +1,6 @@
 package com.dbfleetops.operation.task.application.service;
 
-import com.dbfleetops.operation.workflow.application.JobTaskCoordinator;
+import com.dbfleetops.operation.workflow.application.LinkedJobFailureService;
 
 import com.dbfleetops.operation.shared.application.required.AgentReader;
 import com.dbfleetops.operation.shared.application.required.AgentExecutionTarget;
@@ -135,7 +135,7 @@ class TaskLeaseServicesTest {
         when(jobs.findByIdForUpdate(100L)).thenReturn(Optional.of(job));
 
         int recovered = new ExpiredTaskService(tasks, PROPERTIES, audit, CLOCK,
-                new JobTaskCoordinator(jobs, tasks, CLOCK))
+                new LinkedJobFailureService(jobs, CLOCK))
                 .recoverExpiredTasks();
 
         assertThat(recovered).isEqualTo(1);

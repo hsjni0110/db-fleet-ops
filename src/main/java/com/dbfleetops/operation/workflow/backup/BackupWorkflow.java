@@ -1,5 +1,6 @@
 package com.dbfleetops.operation.workflow.backup;
 
+import com.dbfleetops.operation.job.application.required.JobStore;
 import com.dbfleetops.operation.job.domain.OperationJob;
 import com.dbfleetops.operation.shared.application.required.AgentExecutionTarget;
 import com.dbfleetops.operation.shared.application.required.AgentReader;
@@ -11,13 +12,13 @@ import com.dbfleetops.operation.task.application.required.TaskStore;
 import com.dbfleetops.operation.task.domain.OperationTask;
 import com.dbfleetops.operation.task.domain.OperationTaskType;
 import com.dbfleetops.operation.task.dto.OperationTaskResponse;
-import com.dbfleetops.operation.workflow.application.JobTaskCoordinator;
 import com.dbfleetops.operation.workflow.application.provided.BackupStarter;
 import com.dbfleetops.operation.workflow.application.provided.BackupTaskResults;
 import com.dbfleetops.operation.workflow.application.required.BackupPayloadBuilder;
 import com.dbfleetops.operation.workflow.application.required.BackupVerificationWriter;
 import com.dbfleetops.operation.workflow.application.required.RestoreVerificationOutcome;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -34,26 +35,27 @@ public class BackupWorkflow implements BackupStarter, BackupTaskResults {
     private final AgentReader agents;
     private final DatabaseReader databases;
     private final CredentialReader credentials;
+    private final JobStore jobs;
     private final TaskStore tasks;
-    private final JobTaskCoordinator coordinator;
     private final BackupPayloadBuilder payloads;
     private final BackupVerificationWriter verifications;
     private final Clock clock;
 
     public BackupWorkflow(AgentReader agents, DatabaseReader databases, CredentialReader credentials,
-            TaskStore tasks, JobTaskCoordinator coordinator, BackupPayloadBuilder payloads,
+            JobStore jobs, TaskStore tasks, BackupPayloadBuilder payloads,
             BackupVerificationWriter verifications, Clock clock) {
         this.agents = agents;
         this.databases = databases;
         this.credentials = credentials;
+        this.jobs = jobs;
         this.tasks = tasks;
-        this.coordinator = coordinator;
         this.payloads = payloads;
         this.verifications = verifications;
         this.clock = clock;
     }
 
     @Override
+    @Transactional
     public OperationTaskResponse startBackup(Long jobId, Long databaseId) {
         validateTaskCreationRequest(jobId, databaseId);
 
@@ -71,13 +73,14 @@ public class BackupWorkflow implements BackupStarter, BackupTaskResults {
     }
 
     @Override
+    @Transactional
     public void continueAfterSuccess(Long taskId, String resultPayloadJson) {
         validateTaskResultRequest(taskId, resultPayloadJson);
 
         OperationTask task = requireTask(taskId);
         validateBackupTask(task);
 
-        OperationJob job = coordinator.linkedJobForUpdate(task);
+        OperationJob job = findLinkedJobForUpdate(task);
         if (job == null) {
             return;
         }
@@ -94,6 +97,17 @@ public class BackupWorkflow implements BackupStarter, BackupTaskResults {
         return tasks.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Task를 찾을 수 없습니다. taskId=" + taskId));
+    }
+
+    private OperationJob findLinkedJobForUpdate(OperationTask task) {
+        Long jobId = task.getOperationJobId();
+        if (jobId == null) {
+            return null;
+        }
+
+        return jobs.findByIdForUpdate(jobId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "연결된 Job을 찾을 수 없습니다. jobId=" + jobId));
     }
 
     private Optional<OperationTask> findExistingBackupTask(Long jobId) {
