@@ -6,6 +6,8 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.Test;
 
+import static com.tngtech.archunit.base.DescribedPredicate.not;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 class OperationArchitectureTest {
@@ -64,11 +66,23 @@ class OperationArchitectureTest {
     }
 
     @Test
-    void jobAndTaskDoNotDependOnWorkflowImplementations() {
+    void jobAndTaskCoreDoNotDependOnWorkflow() {
         noClasses().that().resideInAnyPackage("com.dbfleetops.operation.job..",
-                        "com.dbfleetops.operation.task..")
+                        "com.dbfleetops.operation.task.application..",
+                        "com.dbfleetops.operation.task.domain..",
+                        "com.dbfleetops.operation.task.dto..")
                 .should().dependOnClassesThat()
                 .resideInAnyPackage("com.dbfleetops.operation.workflow..")
+                .check(classes);
+    }
+
+    @Test
+    void taskAdaptersOnlyUseWorkflowProvidedPorts() {
+        noClasses().that().resideInAPackage("com.dbfleetops.operation.task.adapter..")
+                .should().dependOnClassesThat(resideInAnyPackage(
+                                "com.dbfleetops.operation.workflow..")
+                        .and(not(resideInAnyPackage(
+                                "com.dbfleetops.operation.workflow.application.provided.."))))
                 .check(classes);
     }
 

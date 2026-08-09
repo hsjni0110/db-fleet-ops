@@ -8,12 +8,12 @@ import com.dbfleetops.operation.shared.application.required.CredentialReference;
 import com.dbfleetops.operation.shared.application.required.DatabaseExecutionTarget;
 import com.dbfleetops.operation.shared.application.required.DatabaseReader;
 import com.dbfleetops.operation.task.application.required.TaskStore;
-import com.dbfleetops.operation.task.application.result.TaskResultHandler;
 import com.dbfleetops.operation.task.domain.OperationTask;
 import com.dbfleetops.operation.task.domain.OperationTaskType;
 import com.dbfleetops.operation.task.dto.OperationTaskResponse;
 import com.dbfleetops.operation.workflow.application.JobTaskCoordinator;
-import com.dbfleetops.operation.workflow.application.provided.BackupTasks;
+import com.dbfleetops.operation.workflow.application.provided.BackupStarter;
+import com.dbfleetops.operation.workflow.application.provided.BackupTaskResults;
 import com.dbfleetops.operation.workflow.application.required.BackupPayloadBuilder;
 import com.dbfleetops.operation.workflow.application.required.BackupVerificationWriter;
 import com.dbfleetops.operation.workflow.application.required.RestoreVerificationOutcome;
@@ -21,10 +21,16 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Optional;
+
+import static org.springframework.util.Assert.hasText;
+import static org.springframework.util.Assert.notNull;
+import static org.springframework.util.Assert.state;
 
 /** 백업과 복원 검증 Task의 순서 및 Job 종료를 관리합니다. */
 @Component
-public class BackupWorkflow implements BackupTasks, TaskResultHandler {
+public class BackupWorkflow implements BackupStarter, BackupTaskResults {
+
     private final AgentReader agents;
     private final DatabaseReader databases;
     private final CredentialReader credentials;
@@ -33,68 +39,200 @@ public class BackupWorkflow implements BackupTasks, TaskResultHandler {
     private final BackupPayloadBuilder payloads;
     private final BackupVerificationWriter verifications;
     private final Clock clock;
+
     public BackupWorkflow(AgentReader agents, DatabaseReader databases, CredentialReader credentials,
             TaskStore tasks, JobTaskCoordinator coordinator, BackupPayloadBuilder payloads,
             BackupVerificationWriter verifications, Clock clock) {
-        this.agents = agents; this.databases = databases; this.credentials = credentials;
-        this.tasks = tasks; this.coordinator = coordinator; this.payloads = payloads;
+        this.agents = agents;
+        this.databases = databases;
+        this.credentials = credentials;
+        this.tasks = tasks;
+        this.coordinator = coordinator;
+        this.payloads = payloads;
         this.verifications = verifications;
         this.clock = clock;
     }
-    public boolean supports(OperationTaskType type) {
-        return type == OperationTaskType.MYSQL_LOGICAL_BACKUP
-                || type == OperationTaskType.MYSQL_RESTORE_VERIFY;
+
+    @Override
+    public OperationTaskResponse startBackup(Long jobId, Long databaseId) {
+        validateTaskCreationRequest(jobId, databaseId);
+
+        Optional<OperationTask> existingTask = findExistingBackupTask(jobId);
+        if (existingTask.isPresent()) {
+            return OperationTaskResponse.from(existingTask.get());
+        }
+
+        DatabaseExecutionTarget database = requireDatabase(databaseId);
+        AgentExecutionTarget agent = requireAssignedAgent(database);
+        CredentialReference credential = requireCredential(databaseId);
+
+        OperationTask backupTask = createLogicalBackupTask(jobId, database, agent, credential);
+        return OperationTaskResponse.from(tasks.save(backupTask));
     }
-    public OperationTaskResponse createBackupTask(Long jobId, Long databaseId) {
-        if (tasks.existsByJobAndType(jobId, OperationTaskType.MYSQL_LOGICAL_BACKUP))
-            return OperationTaskResponse.from(tasks.findByJob(jobId).stream()
-                    .filter(task -> task.getTaskType() == OperationTaskType.MYSQL_LOGICAL_BACKUP)
-                    .findFirst().orElseThrow());
-        DatabaseExecutionTarget database = databases.findDatabase(databaseId).orElseThrow(() ->
-                new IllegalArgumentException("Database not found. databaseId=" + databaseId));
-        if (database.assignedAgentId() == null) throw new IllegalStateException(
-                "Database has no assigned Agent. databaseId=" + databaseId);
-        AgentExecutionTarget agent = agents.findAgent(database.assignedAgentId()).orElseThrow(() ->
-                new IllegalStateException("Assigned Agent not found. agentId=" + database.assignedAgentId()));
-        if (!agent.online()) throw new IllegalStateException("Assigned Agent is not ONLINE. agentId=" + agent.id());
-        CredentialReference credential = credentials.findCredentialByDatabase(databaseId).orElseThrow(() ->
-                new IllegalArgumentException("Credential not found. databaseId=" + databaseId));
-        String parameters = """
+
+    @Override
+    public void continueAfterSuccess(Long taskId, String resultPayloadJson) {
+        validateTaskResultRequest(taskId, resultPayloadJson);
+
+        OperationTask task = requireTask(taskId);
+        validateBackupTask(task);
+
+        OperationJob job = coordinator.linkedJobForUpdate(task);
+        if (job == null) {
+            return;
+        }
+
+        if (isLogicalBackup(task)) {
+            handleBackupResult(job, task, resultPayloadJson);
+            return;
+        }
+
+        handleRestoreVerificationResult(job, task, resultPayloadJson);
+    }
+
+    private OperationTask requireTask(Long taskId) {
+        return tasks.findById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Task를 찾을 수 없습니다. taskId=" + taskId));
+    }
+
+    private Optional<OperationTask> findExistingBackupTask(Long jobId) {
+        if (!tasks.existsByJobAndType(jobId, OperationTaskType.MYSQL_LOGICAL_BACKUP)) {
+            return Optional.empty();
+        }
+
+        OperationTask existingTask = tasks.findByJob(jobId).stream()
+                .filter(this::isLogicalBackup)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Backup Task 존재 여부와 조회 결과가 일치하지 않습니다. jobId=" + jobId));
+        return Optional.of(existingTask);
+    }
+
+    private DatabaseExecutionTarget requireDatabase(Long databaseId) {
+        return databases.findDatabase(databaseId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "관리 Database를 찾을 수 없습니다. databaseId=" + databaseId));
+    }
+
+    private AgentExecutionTarget requireAssignedAgent(DatabaseExecutionTarget database) {
+        Long agentId = database.assignedAgentId();
+        state(agentId != null,
+                "관리 Database에 Agent가 배정되지 않았습니다. databaseId=" + database.id());
+
+        AgentExecutionTarget agent = agents.findAgent(agentId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "배정된 Agent를 찾을 수 없습니다. agentId=" + agentId));
+
+        state(agent.online(), "배정된 Agent가 ONLINE 상태가 아닙니다. agentId=" + agent.id());
+        return agent;
+    }
+
+    private CredentialReference requireCredential(Long databaseId) {
+        return credentials.findCredentialByDatabase(databaseId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "DB 접속 인증 정보를 찾을 수 없습니다. databaseId=" + databaseId));
+    }
+
+    private OperationTask createLogicalBackupTask(Long jobId, DatabaseExecutionTarget database,
+            AgentExecutionTarget agent, CredentialReference credential) {
+        String parameters = createBackupParameters(jobId, database);
+
+        return OperationTask.createForJob(agent.id(), jobId, credential.id(),
+                OperationTaskType.MYSQL_LOGICAL_BACKUP, parameters);
+    }
+
+    private String createBackupParameters(Long jobId, DatabaseExecutionTarget database) {
+        return """
                 {"operationJobId":%d,"databaseId":%d,"databaseName":"%s","host":"%s","port":%d,
                 "backupType":"LOGICAL","compression":true,"verifyAfterBackup":true,
                 "verifyRowCount":true,"cleanup":true}
-                """.formatted(jobId, databaseId, escape(database.databaseName()),
+                """.formatted(jobId, database.id(), escape(database.databaseName()),
                         escape(database.host()), database.port());
-        return OperationTaskResponse.from(tasks.save(OperationTask.createForJob(agent.id(), jobId,
-                credential.id(), OperationTaskType.MYSQL_LOGICAL_BACKUP, parameters)));
     }
-    public void handle(OperationTask task, String result) {
-        OperationJob job = coordinator.linkedJobForUpdate(task);
-        if (job == null) return;
-        if (task.getTaskType() == OperationTaskType.MYSQL_LOGICAL_BACKUP) {
-            if (!payloads.shouldVerifyAfterBackup(task.getParametersJson())) {
-                job.succeed(now(), result);
-                return;
-            }
-            if (!tasks.existsByJobAndType(job.getId(), OperationTaskType.MYSQL_RESTORE_VERIFY)) {
-                String payload = payloads.createRestorePayload(job.getId(), task.getId(),
-                        task.getParametersJson(), result);
-                OperationTask restoreTask = task.getCredentialId() == null
-                        ? OperationTask.createForJob(task.getAgentId(), job.getId(),
-                                OperationTaskType.MYSQL_RESTORE_VERIFY, payload)
-                        : OperationTask.createForJob(task.getAgentId(), job.getId(),
-                                task.getCredentialId(), OperationTaskType.MYSQL_RESTORE_VERIFY,
-                                payload);
-                tasks.save(restoreTask);
-            }
+
+    private void handleBackupResult(OperationJob job, OperationTask backupTask,
+            String resultPayloadJson) {
+        if (!requiresRestoreVerification(backupTask)) {
+            job.succeed(now(), resultPayloadJson);
             return;
         }
-        RestoreVerificationOutcome outcome = verifications.record(job.getId(), task.getId(), result);
-        if (outcome.verified()) job.succeed(now(), result);
-        else job.fail(now(), outcome.errorCode(), outcome.errorMessage());
+
+        createRestoreVerificationTask(job, backupTask, resultPayloadJson);
     }
+
+    private boolean requiresRestoreVerification(OperationTask backupTask) {
+        return payloads.shouldVerifyAfterBackup(backupTask.getParametersJson());
+    }
+
+    private void createRestoreVerificationTask(OperationJob job, OperationTask backupTask,
+            String backupResultPayload) {
+        if (tasks.existsByJobAndType(job.getId(), OperationTaskType.MYSQL_RESTORE_VERIFY)) {
+            return;
+        }
+
+        String restoreParameters = payloads.createRestorePayload(job.getId(), backupTask.getId(),
+                backupTask.getParametersJson(), backupResultPayload);
+        OperationTask restoreTask = createRestoreTask(job, backupTask, restoreParameters);
+
+        tasks.save(restoreTask);
+    }
+
+    private OperationTask createRestoreTask(OperationJob job, OperationTask backupTask,
+            String restoreParameters) {
+        if (backupTask.getCredentialId() == null) {
+            return OperationTask.createForJob(backupTask.getAgentId(), job.getId(),
+                    OperationTaskType.MYSQL_RESTORE_VERIFY, restoreParameters);
+        }
+
+        return OperationTask.createForJob(backupTask.getAgentId(), job.getId(),
+                backupTask.getCredentialId(), OperationTaskType.MYSQL_RESTORE_VERIFY,
+                restoreParameters);
+    }
+
+    private void handleRestoreVerificationResult(OperationJob job, OperationTask restoreTask,
+            String resultPayloadJson) {
+        RestoreVerificationOutcome outcome = verifications.record(job.getId(), restoreTask.getId(),
+                resultPayloadJson);
+
+        if (outcome.verified()) {
+            job.succeed(now(), resultPayloadJson);
+            return;
+        }
+
+        job.fail(now(), outcome.errorCode(), outcome.errorMessage());
+    }
+
+    private boolean isLogicalBackup(OperationTask task) {
+        return task.getTaskType() == OperationTaskType.MYSQL_LOGICAL_BACKUP;
+    }
+
+    private void validateTaskCreationRequest(Long jobId, Long databaseId) {
+        notNull(jobId, "Operation Job ID는 필수입니다.");
+        notNull(databaseId, "Database ID는 필수입니다.");
+    }
+
+    private void validateTaskResultRequest(Long taskId, String resultPayloadJson) {
+        notNull(taskId, "Task ID는 필수입니다.");
+        hasText(resultPayloadJson, "Task 결과는 필수입니다.");
+    }
+
+    private void validateBackupTask(OperationTask task) {
+        notNull(task, "Task는 필수입니다.");
+        state(isBackupTask(task),
+                "지원하지 않는 Task 종류입니다. taskType=" + task.getTaskType());
+    }
+
+    private boolean isBackupTask(OperationTask task) {
+        return task.getTaskType() == OperationTaskType.MYSQL_LOGICAL_BACKUP
+                || task.getTaskType() == OperationTaskType.MYSQL_RESTORE_VERIFY;
+    }
+
     private String escape(String value) {
         return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
-    private LocalDateTime now() { return LocalDateTime.now(clock); }
+
+    private LocalDateTime now() {
+        return LocalDateTime.now(clock);
+    }
 }

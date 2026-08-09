@@ -26,17 +26,18 @@ public class TaskReportService implements TaskReports {
 
     private final AgentReader agents;
     private final TaskStore tasks;
-    private final TaskResultDispatcher results;
+    private final TaskSuccessDispatcher successDispatcher;
     private final LinkedJobProgress jobs;
     private final Clock clock;
     private final OperationTaskResultFingerprint fingerprints;
 
-    public TaskReportService(AgentReader agents, TaskStore tasks, TaskResultDispatcher results,
+    public TaskReportService(AgentReader agents, TaskStore tasks,
+            TaskSuccessDispatcher successDispatcher,
             LinkedJobProgress jobs, Clock clock,
             OperationTaskResultFingerprint fingerprints) {
         this.agents = agents;
         this.tasks = tasks;
-        this.results = results;
+        this.successDispatcher = successDispatcher;
         this.jobs = jobs;
         this.clock = clock;
         this.fingerprints = fingerprints;
@@ -52,7 +53,7 @@ public class TaskReportService implements TaskReports {
         OperationTask task = requireOwnedTask(agentId, taskId);
         ResultReportAcceptance acceptance = acceptSuccess(task, request);
 
-        dispatchAcceptedResult(task, request.resultPayloadJson(), acceptance);
+        processFirstSuccess(task, request.resultPayloadJson(), acceptance);
 
         return OperationTaskResponse.from(task);
     }
@@ -97,10 +98,10 @@ public class TaskReportService implements TaskReports {
                 now());
     }
 
-    private void dispatchAcceptedResult(OperationTask task, String resultPayload,
+    private void processFirstSuccess(OperationTask task, String resultPayload,
             ResultReportAcceptance acceptance) {
         if (acceptance == ACCEPTED) {
-            results.dispatch(task, resultPayload);
+            successDispatcher.dispatch(task, resultPayload);
         }
     }
 

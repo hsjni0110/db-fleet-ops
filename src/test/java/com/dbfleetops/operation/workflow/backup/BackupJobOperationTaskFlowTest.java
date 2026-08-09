@@ -2,7 +2,8 @@ package com.dbfleetops.operation.workflow.backup;
 
 import com.dbfleetops.operation.task.application.service.OperationTaskResultFingerprint;
 import com.dbfleetops.operation.task.application.service.TaskReportService;
-import com.dbfleetops.operation.task.application.service.TaskResultDispatcher;
+import com.dbfleetops.operation.task.adapter.integration.BackupTaskSuccessHandler;
+import com.dbfleetops.operation.task.application.service.TaskSuccessDispatcher;
 import com.dbfleetops.operation.workflow.application.JobTaskCoordinator;
 
 import com.dbfleetops.operation.job.application.required.*;
@@ -59,11 +60,13 @@ class BackupJobOperationTaskFlowTest {
                 .thenReturn("{}");
         BackupWorkflow workflow = new BackupWorkflow(agents, databases, credentials, tasks,
                 coordinator, payloads, verifications, CLOCK);
-        OperationTask backup = toEntity(workflow.createBackupTask(100L, 1L), saved);
+        OperationTask backup = toEntity(workflow.startBackup(100L, 1L), saved);
         backup.claim(LocalDateTime.now(), LocalDateTime.now().plusMinutes(1));
         when(tasks.findById(backup.getId())).thenReturn(Optional.of(backup));
+        BackupTaskSuccessHandler backupSuccessHandler = new BackupTaskSuccessHandler(workflow);
         TaskReportService reports = new TaskReportService(agents, tasks,
-                new TaskResultDispatcher(List.of(workflow)), coordinator, Clock.systemUTC(),
+                new TaskSuccessDispatcher(List.of(backupSuccessHandler)), coordinator,
+                Clock.systemUTC(),
                 new OperationTaskResultFingerprint());
 
         reports.completeTask(1L, backup.getId(), new CompleteOperationTaskRequest("token", """
@@ -90,7 +93,7 @@ class BackupJobOperationTaskFlowTest {
         when(jobs.findByIdForUpdate(100L)).thenReturn(Optional.of(job));
         JobTaskCoordinator coordinator = new JobTaskCoordinator(jobs, tasks, CLOCK);
         TaskReportService reports = new TaskReportService(agents, tasks,
-                new TaskResultDispatcher(List.of()), coordinator, Clock.systemUTC(),
+                new TaskSuccessDispatcher(List.of()), coordinator, Clock.systemUTC(),
                 new OperationTaskResultFingerprint());
 
         reports.failTask(1L, 10L, new FailOperationTaskRequest("token", "BACKUP_FAILED", "failed"));

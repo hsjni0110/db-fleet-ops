@@ -2,7 +2,7 @@ package com.dbfleetops.operation.workflow.backup;
 
 import com.dbfleetops.operation.job.application.execution.JobExecution;
 import com.dbfleetops.operation.job.application.execution.JobExecutionOutcome;
-import com.dbfleetops.operation.workflow.application.provided.BackupTasks;
+import com.dbfleetops.operation.workflow.application.provided.BackupStarter;
 import com.dbfleetops.operation.job.domain.JobType;
 import com.dbfleetops.operation.job.domain.OperationJob;
 import org.springframework.stereotype.Component;
@@ -11,10 +11,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class BackupJobExecution implements JobExecution {
 
-    private final BackupTasks backupTasks;
+    private final BackupStarter backupStarter;
 
-    public BackupJobExecution(BackupTasks backupTasks) {
-        this.backupTasks = backupTasks;
+    public BackupJobExecution(BackupStarter backupStarter) {
+        this.backupStarter = backupStarter;
     }
 
     @Override
@@ -24,7 +24,7 @@ public class BackupJobExecution implements JobExecution {
 
     @Override
     public JobExecutionOutcome execute(OperationJob job) {
-        backupTasks.createBackupTask(job.getId(), job.getTargetDatabaseId());
+        backupStarter.startBackup(job.getId(), job.getTargetDatabaseId());
         return JobExecutionOutcome.inProgress("Backup operation task created.");
     }
 }

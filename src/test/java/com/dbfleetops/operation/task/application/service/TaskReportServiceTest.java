@@ -33,7 +33,7 @@ class TaskReportServiceTest {
 
     private AgentReader agents;
     private TaskStore tasks;
-    private TaskResultDispatcher results;
+    private TaskSuccessDispatcher successDispatcher;
     private LinkedJobProgress jobs;
     private TaskReportService service;
 
@@ -41,13 +41,13 @@ class TaskReportServiceTest {
     void setUp() {
         agents = mock(AgentReader.class);
         tasks = mock(TaskStore.class);
-        results = mock(TaskResultDispatcher.class);
+        successDispatcher = mock(TaskSuccessDispatcher.class);
         jobs = mock(LinkedJobProgress.class);
 
         when(agents.findAgent(1L)).thenReturn(Optional.of(new AgentExecutionTarget(1L, true)));
         when(agents.matchesToken(1L, "token")).thenReturn(true);
 
-        service = new TaskReportService(agents, tasks, results, jobs, CLOCK,
+        service = new TaskReportService(agents, tasks, successDispatcher, jobs, CLOCK,
                 new OperationTaskResultFingerprint());
     }
 
@@ -74,7 +74,7 @@ class TaskReportServiceTest {
         service.completeTask(1L, 10L, request);
         service.completeTask(1L, 10L, request);
 
-        verify(results, times(1)).dispatch(task, "{}");
+        verify(successDispatcher, times(1)).dispatch(task, "{}");
     }
 
     @Test

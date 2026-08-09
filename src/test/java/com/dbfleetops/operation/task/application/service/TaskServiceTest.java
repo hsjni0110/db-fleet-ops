@@ -3,7 +3,6 @@ package com.dbfleetops.operation.task.application.service;
 
 import com.dbfleetops.operation.job.application.required.*;
 import com.dbfleetops.operation.task.application.required.*;
-import com.dbfleetops.operation.task.application.result.TaskResultHandler;
 import com.dbfleetops.operation.workflow.application.required.*;
 import com.dbfleetops.operation.shared.application.required.*;
 import com.dbfleetops.operation.job.domain.*;
@@ -34,7 +33,7 @@ class TaskServiceTest {
     void duplicateSuccessDoesNotRunHandlerAgain() {
         AgentReader agents = mock(AgentReader.class);
         TaskStore tasks = mock(TaskStore.class);
-        TaskResultHandler handler = mock(TaskResultHandler.class);
+        TaskSuccessHandler handler = mock(TaskSuccessHandler.class);
         LinkedJobProgress jobs = mock(LinkedJobProgress.class);
         when(agents.findAgent(1L)).thenReturn(Optional.of(new AgentExecutionTarget(1L, true)));
         when(agents.matchesToken(1L, "token")).thenReturn(true);
@@ -45,13 +44,13 @@ class TaskServiceTest {
         when(tasks.findById(10L)).thenReturn(Optional.of(task));
         when(handler.supports(OperationTaskType.COLLECT_LINUX_STATUS)).thenReturn(true);
         TaskReportService service = new TaskReportService(agents, tasks,
-                new TaskResultDispatcher(List.of(handler)), jobs,
+                new TaskSuccessDispatcher(List.of(handler)), jobs,
                 Clock.fixed(now.plusSeconds(1).toInstant(ZoneOffset.UTC), ZoneOffset.UTC),
                 new OperationTaskResultFingerprint());
         CompleteOperationTaskRequest request = new CompleteOperationTaskRequest("token", 1,
                 "8d77288c-cf64-4ae8-a5be-a4010192fc6e", "{}");
         service.completeTask(1L, 10L, request);
         service.completeTask(1L, 10L, request);
-        verify(handler, times(1)).handle(task, "{}");
+        verify(handler, times(1)).handleSuccess(task, "{}");
     }
 }
