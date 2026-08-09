@@ -1,4 +1,4 @@
-# 비동기 운영 작업을 위한 Job Engine 설계
+# 비동기 작업 처리를 위한 Job 구조
 
 ## 1. 결론
 
@@ -20,7 +20,7 @@
 - 같은 요청의 중복 생성과 일시적인 실패를 제어할 수 있습니다.
 - 운영자는 Job ID로 진행 상태와 결과를 다시 조회할 수 있습니다.
 
-이 문서는 Job Engine만 설명합니다. Control Plane과 Agent를 분리한 이유는 [4번 문서](4-중앙-관제-서버와-Go-Agent를-분리한-이유.md), Job이 Agent Task로 이어지는 백업 흐름은 [5번 문서](5-operation-job과-operation-task를-연결한-agent-기반-백업-실행-구조.md)에서 설명합니다.
+이 문서는 Job Engine만 설명합니다. Control Plane과 Agent를 분리한 이유는 [4번 문서](4-중앙-관제-서버와-Go-Agent-분리-구조.md), Job이 Agent Task로 이어지는 백업 흐름은 [5번 문서](5-백업-Job과-Agent-Task-실행-구조.md)에서 설명합니다.
 
 ## 2. Job이 맡은 일
 

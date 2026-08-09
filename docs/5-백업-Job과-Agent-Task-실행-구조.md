@@ -1,11 +1,11 @@
-# OperationJob과 OperationTask를 연결한 Agent 기반 백업 실행 구조
+# 백업 Job과 Agent Task 실행 구조
 
 ## 1. 이 문서의 범위
 
 이 문서는 백업 Job이 논리 백업과 복원 검증 Task로 실행되고, Task 결과로 Job의 최종 상태를 판정하는 구조만 설명합니다.
 
-- Job의 비동기 접수와 Idempotency는 [3번 문서](3-비동기-운영-작업을-위한-job-engine-설계.md)를 참고합니다.
-- Agent 분리, Poll, Task Lease와 결과 재전송은 [4번 문서](4-중앙-관제-서버와-Go-Agent를-분리한-이유.md)를 참고합니다.
+- Job의 비동기 접수와 Idempotency는 [3번 문서](3-비동기-작업-처리를-위한-Job-구조.md)를 참고합니다.
+- Agent 분리, Poll, Task Lease와 결과 재전송은 [4번 문서](4-중앙-관제-서버와-Go-Agent-분리-구조.md)를 참고합니다.
 
 ## 2. 백업 Job 실행 흐름
 
