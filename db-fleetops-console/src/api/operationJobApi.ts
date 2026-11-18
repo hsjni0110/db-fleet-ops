@@ -4,6 +4,16 @@ import type {
   OperationJobResponse,
 } from "../types";
 
+export interface BackupBinlogPosition {
+  file: string;
+  position: number;
+}
+
+export async function getBackupBinlogPosition(jobId: string): Promise<BackupBinlogPosition | null> {
+  const response = await http.get<BackupBinlogPosition>(`/api/v1/jobs/${jobId}/backup-binlog-position`);
+  return response.status === 204 ? null : response.data;
+}
+
 export async function getOperationJobs(): Promise<OperationJobResponse[]> {
   const response = await http.get<OperationJobResponse[]>("/api/v1/jobs");
 

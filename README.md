@@ -1,8 +1,9 @@
 # DB FleetOps
 
-DB FleetOps는 여러 MySQL을 한 곳에서 관리하는 운영 도구입니다.
+DB FleetOps는 여러 MySQL의 백업·복원 검증, 설정 점검과 잠금 대기 진단을 한곳에서 수행하는 운영 도구입니다.
 
-관리할 Database를 등록하고, 백업이나 설정 점검 같은 오래 걸리는 일을 안전하게 실행하며, 그 결과를 화면과 API에서 확인할 수 있습니다.
+- [백업 복원과 시점 복구](docs/8-백업-복원-검증-구조.md)에서 실제 주문 데이터 복원, 손상 백업 차단, 잘못된 삭제 직전 복구 절차를 확인할 수 있습니다.
+- [MySQL 행 잠금 장애 진단](docs/9-DB-FleetOps-배포와-관측성.md#12-mysql-행-잠금-장애-진단)에서 차단 세션을 찾고 같은 실험 조건에서 쓰기 p95를 778.48ms에서 220.86ms로 줄인 과정을 확인할 수 있습니다.
 
 ## 1. 상세 문서
 
@@ -252,7 +253,7 @@ Docker가 필요한 테스트는 일반 단위 테스트와 분리되어 있습�
 |---|---|
 | 중앙 관제 서버와 Worker | Java 21, Spring Boot 3.5, Gradle |
 | Agent | Go |
-| Metadata·관리 Database | MySQL 8.4 |
+| Metadata·관리 Database | MySQL 8.0 (로컬 Compose) |
 | 로컬 실행 | Docker Compose |
 | 배포 예제 | Kubernetes, Kustomize |
 | 관측 | Spring Boot Actuator, Prometheus, Grafana |

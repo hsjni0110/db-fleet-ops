@@ -26,13 +26,37 @@ class JobServiceTest {
             Instant.parse("2026-08-08T00:00:00Z"), ZoneOffset.UTC);
     private final DatabaseReader databases = mock(DatabaseReader.class);
     private final JobStore jobs = mock(JobStore.class);
+    private final TaskStore tasks = mock(TaskStore.class);
     private final AuditWriter audit = mock(AuditWriter.class);
     private final ConfigurationChange configuration = mock(ConfigurationChange.class);
     private final JobPayloadFactory payloads = new JobPayloadFactory(new ObjectMapper());
     private final ConfigurationCommandFactory configurationCommands =
             new ConfigurationCommandFactory(new ObjectMapper());
     private final JobService service = new JobService(
-            databases, jobs, audit, configuration, payloads, configurationCommands, CLOCK);
+            databases, jobs, audit, configuration, payloads, configurationCommands, CLOCK,
+            tasks, new ObjectMapper());
+
+    @Test
+    void readsPositionFromSuccessfulBackupTaskAndSupportsOldBackups() {
+        var job = mock(OperationJob.class);
+        when(job.getJobType()).thenReturn(JobType.BACKUP);
+        when(jobs.findById(15L)).thenReturn(Optional.of(job));
+        var task = mock(OperationTask.class);
+        when(task.getTaskType()).thenReturn(OperationTaskType.MYSQL_LOGICAL_BACKUP);
+        when(task.getStatus()).thenReturn(OperationTaskStatus.SUCCEEDED);
+        when(tasks.findByJob(15L)).thenReturn(List.of(task));
+        when(task.getResultPayloadJson()).thenReturn(
+                """
+                {"status":"VERIFIED","binlogPosition":{"file":"mysql-bin.000001","position":1845}}
+                """,
+                """
+                {"status":"VERIFIED"}
+                """);
+
+        assertThat(service.getBackupBinlogPosition(15L))
+                .contains(new BackupBinlogPosition("mysql-bin.000001", 1845));
+        assertThat(service.getBackupBinlogPosition(15L)).isEmpty();
+    }
 
     @Test
     void createsBackupJobForActiveDatabase() {

@@ -1,0 +1,23 @@
+x-mysql: &mysql
+  image: mysql:8.0
+  environment:
+    MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+  tmpfs:
+    - /var/lib/mysql
+  healthcheck:
+    test: ["CMD", "mysqladmin", "ping", "--protocol=tcp", "-h", "127.0.0.1", "--silent"]
+    interval: 2s
+    timeout: 3s
+    retries: 35
+
+services:
+  source:
+    <<: *mysql
+    command: ["--server-id=1", "--log-bin=mysql-bin", "--binlog-format=ROW"]
+    network_mode: none
+  recovery:
+    <<: *mysql
+    image: mysql:8.0-debian
+    platform: linux/amd64
+    command: ["--server-id=2", "--skip-log-bin"]
+    network_mode: none

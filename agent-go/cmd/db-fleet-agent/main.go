@@ -54,6 +54,7 @@ func main() {
 				),
 				task.NewMySQLBackupHandler(
 					cfg.BackupDirectory,
+					cfg.BackupCaptureBinlogPosition,
 				),
 				task.NewMySQLRestoreVerifyHandler(),
 			},

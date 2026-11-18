@@ -14,6 +14,7 @@ type Config struct {
 	AgentVersion                string
 	AgentStateFile              string
 	BackupDirectory             string
+	BackupCaptureBinlogPosition bool
 	HeartbeatIntervalSeconds    int
 	PollIntervalSeconds         int
 	LeaseRenewalIntervalSeconds int
@@ -29,6 +30,7 @@ func Load() Config {
 		AgentVersion:                getEnv("AGENT_VERSION", "0.1.0"),
 		AgentStateFile:              getEnv("AGENT_STATE_FILE", "./agent-state.json"),
 		BackupDirectory:             getEnv("BACKUP_DIRECTORY", "/tmp/db-fleetops-backups"),
+		BackupCaptureBinlogPosition: getEnv("BACKUP_CAPTURE_BINLOG_POSITION", "false") == "true",
 		HeartbeatIntervalSeconds:    getEnvInt("HEARTBEAT_INTERVAL_SECONDS", 10),
 		PollIntervalSeconds:         getEnvInt("POLL_INTERVAL_SECONDS", 5),
 		LeaseRenewalIntervalSeconds: getEnvInt("LEASE_RENEWAL_INTERVAL_SECONDS", 20),

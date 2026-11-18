@@ -312,17 +312,20 @@ public class MySqlDiagnosticAdapter implements DatabaseDiagnosticPort {
     ) {
         String sql = """
                 SELECT
-                    waiting_trx.trx_id AS waiting_trx_id,
-                    waiting_trx.trx_mysql_thread_id AS waiting_thread_id,
-                    waiting_trx.trx_query AS waiting_query,
-                    blocking_trx.trx_id AS blocking_trx_id,
-                    blocking_trx.trx_mysql_thread_id AS blocking_thread_id,
-                    blocking_trx.trx_query AS blocking_query
-                FROM information_schema.innodb_lock_waits lock_waits
-                JOIN information_schema.innodb_trx waiting_trx
-                    ON lock_waits.requesting_trx_id = waiting_trx.trx_id
-                JOIN information_schema.innodb_trx blocking_trx
-                    ON lock_waits.blocking_trx_id = blocking_trx.trx_id
+                    lock_waits.requesting_engine_transaction_id AS waiting_trx_id,
+                    waiting_thread.processlist_id AS waiting_thread_id,
+                    waiting_thread.processlist_info AS waiting_query,
+                    lock_waits.blocking_engine_transaction_id AS blocking_trx_id,
+                    blocking_thread.processlist_id AS blocking_thread_id,
+                    blocking_thread.processlist_info AS blocking_query
+                FROM performance_schema.data_lock_waits lock_waits
+                JOIN performance_schema.threads waiting_thread
+                    ON lock_waits.requesting_thread_id = waiting_thread.thread_id
+                JOIN performance_schema.threads blocking_thread
+                    ON lock_waits.blocking_thread_id = blocking_thread.thread_id
+                WHERE lock_waits.engine = 'INNODB'
+                    AND waiting_thread.processlist_id IS NOT NULL
+                    AND blocking_thread.processlist_id IS NOT NULL
                 """;
 
         try (

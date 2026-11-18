@@ -7,6 +7,7 @@ import { ElMessage } from "element-plus";
 import { Back, Refresh } from "@element-plus/icons-vue";
 
 import { getApiErrorMessage, getOperationJob } from "../api";
+import { getBackupBinlogPosition, type BackupBinlogPosition } from "../api/operationJobApi";
 import OperationJobStatusTag from "../components/OperationJobStatusTag.vue";
 
 import type { OperationJobResponse } from "../types";
@@ -18,6 +19,8 @@ const jobId = computed(() => String(route.params.jobId));
 const job = ref<OperationJobResponse | null>(null);
 const loading = ref(false);
 const errorMessage = ref<string | null>(null);
+const backupPosition = ref<BackupBinlogPosition | null>(null);
+const backupPositionError = ref(false);
 
 function formatNullable(value?: string | number | null) {
   if (value === null || value === undefined || value === "") {
@@ -38,9 +41,18 @@ function formatDateTime(value?: string | null) {
 async function loadJob() {
   loading.value = true;
   errorMessage.value = null;
+  backupPosition.value = null;
+  backupPositionError.value = false;
 
   try {
     job.value = await getOperationJob(jobId.value);
+    if (job.value.jobType === "BACKUP") {
+      try {
+        backupPosition.value = await getBackupBinlogPosition(jobId.value);
+      } catch {
+        backupPositionError.value = true;
+      }
+    }
   } catch (error) {
     errorMessage.value = getApiErrorMessage(error);
     ElMessage.error("작업 상세 정보를 불러오지 못했습니다.");
@@ -133,6 +145,14 @@ onMounted(() => {
                 </el-descriptions-item>
                 <el-descriptions-item label="종료 시각">
                   {{ formatDateTime(job.finishedAt) }}
+                </el-descriptions-item>
+                <el-descriptions-item v-if="job.jobType === 'BACKUP'" :span="2">
+                  <template #label>
+                    복구 시작 위치
+                    <FieldHelp label="복구 시작 위치" text="백업 스냅숏 이후의 변경을 재생할 바이너리 로그 파일과 바이트 위치." />
+                  </template>
+                  <code v-if="backupPosition">{{ backupPosition.file }} · {{ backupPosition.position }}</code>
+                  <span v-else>{{ backupPositionError ? "조회 실패" : "미기록" }}</span>
                 </el-descriptions-item>
               </el-descriptions>
             </el-tab-pane>

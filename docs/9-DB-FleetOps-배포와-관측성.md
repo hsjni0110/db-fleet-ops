@@ -176,3 +176,53 @@ kubectl get pods -n db-fleetops
 - TLS, Ingress, 인증서, NetworkPolicy와 PodDisruptionBudget이 없습니다.
 - Prometheus와 Grafana의 장기 보관, Alert 규칙과 고가용성은 구성하지 않았습니다.
 - API·Worker의 실제 부하, 수평 확장과 종료 중 장기 Job 동작은 별도 환경에서 검증해야 합니다.
+
+## 12. MySQL 행 잠금 장애 진단
+
+MySQL 8.0.41에서 같은 행을 갱신하는 요청의 p95를 778.48ms에서 220.86ms로 줄였다. 실험에서 같은 180ms 지연을 잠금 획득 앞으로 옮기자 대기가 관측된 비율도 낮아졌다. 세 조건에서 갱신 48건이 모두 커밋됐다.
+
+### 상황과 목표
+
+예를 들어 결제 상태를 갱신한 트랜잭션이 후속 작업을 기다리며 커밋하지 않으면, 같은 행을 갱신하는 요청도 기다린다. 응답 시간만 보면 느려졌다는 사실은 알 수 있다. 어떤 세션이 잠금을 잡고 있는지 확인하고, 잠금 보유 시간만 줄였을 때 지연이 개선되는지 비교했다.
+
+### 판단과 구현
+
+1. [MySqlDiagnosticAdapter.getLockWaits()](../src/main/java/com/dbfleetops/health/infra/MySqlDiagnosticAdapter.java)는 MySQL 8.0에서 제거된 잠금 테이블 대신 `performance_schema.data_lock_waits`를 읽는다. 이 테이블에서 대기·보유 트랜잭션과 내부 스레드 ID를 가져오고, 양쪽을 `performance_schema.threads`와 연결해 `CONNECTION_ID()`와 비교할 수 있는 `PROCESSLIST_ID`로 바꾼다. 잠금을 쥔 세션이 유휴 상태면 현재 쿼리가 비어 있을 수 있어 세션 ID를 함께 보여 준다.
+2. [기존 진단 API](../src/main/java/com/dbfleetops/health/api/DatabaseDiagnosticController.java)는 같은 응답 형식으로 두 세션을 반환한다. [데이터베이스 상세 화면](../db-fleetops-console/src/pages/DatabaseDetailPage.vue)은 대기 세션과 잠금 보유 세션을 나란히 표시한다.
+3. [통합 테스트](../src/test/java/com/dbfleetops/health/infra/MySqlLockWaitIntegrationTest.java)는 한 세션이 행을 갱신한 뒤 커밋을 미루고 두 번째 세션이 같은 행을 갱신하게 한다. 조회 결과와 두 세션의 `CONNECTION_ID()`가 일치하는지 확인한다. 보유자가 롤백한 뒤 대기 세션이 갱신을 완료하고 차단 관계가 사라지는 것도 검사한다.
+
+### 실행 결과 1. 차단 세션 식별
+
+브라우저 검증에서는 대기 세션 `2267`과 이 요청을 막은 세션 `2266`을 `잠금 대기` 탭에서 확인했다. 이 상태라면 보유 세션의 트랜잭션 범위를 먼저 살필 수 있다. 아래 부하 측정과는 별도의 재현이다.
+
+![실제 MySQL 차단을 재현한 전체 화면. 대기 세션과 잠금 보유 세션](images/9-mysql-lock-wait.jpg)
+
+### 실행 결과 2. 잠금 범위 변경
+
+세션 4개가 각각 12회씩 같은 행을 갱신했다. 두 실험군에는 같은 180ms 지연을 넣었다. p95는 성공 요청의 시작부터 커밋까지 걸린 시간이다. 잠금 대기는 약 50ms 간격으로 조회했고 실험 세션끼리 차단한 경우만 집계했다.
+
+| 조건 | 성공 / 시도 | 타임아웃 | 쓰기 p95 | 대기 관측 / 조회 | 최종 갱신값 |
+|---|---:|---:|---:|---:|---:|
+| 기준 상태 | 48 / 48 | 0 | 18.01ms | 2 / 3 | 48 |
+| 잠금을 잡은 뒤 180ms 지연 | 48 / 48 | 0 | 778.48ms | 122 / 126 | 48 |
+| 잠금을 잡기 전 180ms 지연 | 48 / 48 | 0 | 220.86ms | 2 / 35 | 48 |
+
+![JUnit 실행 출력 전체 화면. 기준, 잠금 중 지연, 잠금 전 지연과 최종 행 값](images/9-mysql-lock-measurements.jpg)
+
+같은 행의 갱신이 줄을 서고 있었고, 잠금을 잡은 시간을 줄였을 때 성공 건수는 유지하면서 p95가 약 72% 감소했다. 각 세션은 한 요청이 끝난 뒤 다음 요청을 보냈으며, 빠르게 끝난 기준 상태의 관측 표본은 3개였다. 운영 트래픽이나 고정 요청률에서의 성능은 측정하지 않았다.
+
+### 실행 결과 3. 잠금 해제
+
+보유 세션이 롤백하고 대기 세션의 갱신이 끝난 뒤 같은 API는 빈 배열을 반환했다. 콘솔에서도 새로고침 후 대기 항목이 사라졌다.
+
+![잠금 해제 후 같은 콘솔 전체 화면의 잠금 대기 없음](images/9-mysql-lock-released.jpg)
+
+### 재실행
+
+로컬 MySQL 8.0의 실험용 DB 정보를 `LOCK_LAB_PORT`, `LOCK_LAB_DATABASE`, `LOCK_LAB_USER`, `LOCK_LAB_PASSWORD`로 설정한다. 계정은 실험 테이블을 생성·갱신·삭제하고 위 두 Performance Schema 테이블을 읽을 수 있어야 한다. 테스트는 실행마다 고유한 이름으로 테이블을 만들고 종료 시 삭제한다.
+
+```bash
+./gradlew integrationTest --tests 'com.dbfleetops.health.infra.MySqlLockWaitIntegrationTest' --info
+```
+
+[MySQL 8.0 잠금 대기 조회](https://dev.mysql.com/doc/refman/8.0/en/performance-schema-data-lock-waits-table.html)

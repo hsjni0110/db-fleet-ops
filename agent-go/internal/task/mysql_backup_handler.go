@@ -34,10 +34,11 @@ type MySQLBackupHandler struct {
 
 func NewMySQLBackupHandler(
 	backupDirectory string,
+	captureBinlogPosition bool,
 ) *MySQLBackupHandler {
 	return &MySQLBackupHandler{
 		backupDirectory: backupDirectory,
-		runner:          backup.NewMySQLDumpRunner(),
+		runner:          backup.NewMySQLDumpRunner(captureBinlogPosition),
 	}
 }
 

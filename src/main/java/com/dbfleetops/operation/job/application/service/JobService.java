@@ -13,6 +13,13 @@ import com.dbfleetops.operation.job.dto.CreateBackupJobRequest;
 import com.dbfleetops.operation.job.dto.CreateConfigurationApplyJobRequest;
 import com.dbfleetops.operation.job.dto.CreateConfigurationCheckJobRequest;
 import com.dbfleetops.operation.job.dto.OperationJobResponse;
+import com.dbfleetops.operation.job.dto.BackupBinlogPosition;
+import com.dbfleetops.operation.task.application.required.TaskStore;
+import com.dbfleetops.operation.task.domain.OperationTask;
+import com.dbfleetops.operation.task.domain.OperationTaskStatus;
+import com.dbfleetops.operation.task.domain.OperationTaskType;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,10 +47,13 @@ public class JobService implements JobOperations {
     private final JobPayloadFactory payloads;
     private final ConfigurationCommandFactory configurationCommands;
     private final Clock clock;
+    private final TaskStore tasks;
+    private final ObjectMapper objectMapper;
 
     public JobService(DatabaseReader databases, JobStore jobs, AuditWriter audit,
             ConfigurationChange configurationChanges, JobPayloadFactory payloads,
-            ConfigurationCommandFactory configurationCommands, Clock clock) {
+            ConfigurationCommandFactory configurationCommands, Clock clock,
+            TaskStore tasks, ObjectMapper objectMapper) {
         this.databases = databases;
         this.jobs = jobs;
         this.audit = audit;
@@ -51,6 +61,8 @@ public class JobService implements JobOperations {
         this.payloads = payloads;
         this.configurationCommands = configurationCommands;
         this.clock = clock;
+        this.tasks = tasks;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -96,6 +108,37 @@ public class JobService implements JobOperations {
                         "Job을 찾을 수 없습니다. jobId=" + jobId));
 
         return OperationJobResponse.from(job);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<BackupBinlogPosition> getBackupBinlogPosition(Long jobId) {
+        if (getJob(jobId).jobType() != BACKUP) {
+            return Optional.empty();
+        }
+        return tasks.findByJob(jobId).stream()
+                .filter(task -> task.getTaskType() == OperationTaskType.MYSQL_LOGICAL_BACKUP
+                        && task.getStatus() == OperationTaskStatus.SUCCEEDED)
+                .map(OperationTask::getResultPayloadJson)
+                .filter(result -> result != null && !result.isBlank())
+                .findFirst()
+                .flatMap(this::readBinlogPosition);
+    }
+
+    private Optional<BackupBinlogPosition> readBinlogPosition(String taskResult) {
+        try {
+            var position = objectMapper.readTree(taskResult).path("binlogPosition");
+            var file = position.path("file");
+            var offset = position.path("position");
+            if (!file.isTextual() || file.textValue().isBlank() || !offset.isIntegralNumber()
+                    || !offset.canConvertToLong() || offset.longValue() < 4
+                    || offset.longValue() > 9_007_199_254_740_991L) {
+                return Optional.empty();
+            }
+            return Optional.of(new BackupBinlogPosition(file.textValue(), offset.longValue()));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("백업 Task 결과를 읽을 수 없습니다.", exception);
+        }
     }
 
     @Override

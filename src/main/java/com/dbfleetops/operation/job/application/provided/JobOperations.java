@@ -4,7 +4,9 @@ import com.dbfleetops.operation.job.dto.CreateBackupJobRequest;
 import com.dbfleetops.operation.job.dto.CreateConfigurationApplyJobRequest;
 import com.dbfleetops.operation.job.dto.CreateConfigurationCheckJobRequest;
 import com.dbfleetops.operation.job.dto.OperationJobResponse;
+import com.dbfleetops.operation.job.dto.BackupBinlogPosition;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 사용자의 운영 Job 요청을 받는 입구입니다.
@@ -25,6 +27,9 @@ public interface JobOperations {
 
     /** Job ID로 하나의 Job과 현재 상태를 조회합니다. */
     OperationJobResponse getJob(Long jobId);
+
+    /** 백업 Task가 기록한 복구 시작 위치를 조회합니다. */
+    Optional<BackupBinlogPosition> getBackupBinlogPosition(Long jobId);
 
     /** 최근에 생성된 순서로 전체 Job 목록을 조회합니다. */
     List<OperationJobResponse> getJobs();

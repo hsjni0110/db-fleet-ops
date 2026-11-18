@@ -2,9 +2,36 @@ package backup
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestReadBinlogPositionFromDumpHeader(t *testing.T) {
+	for _, header := range []string{
+		"-- CHANGE REPLICATION SOURCE TO SOURCE_LOG_FILE='mysql-bin.000001', SOURCE_LOG_POS=1845;",
+		"-- CHANGE MASTER TO MASTER_LOG_FILE='mysql-bin.000001', MASTER_LOG_POS=1845;",
+	} {
+		dump := filepath.Join(t.TempDir(), "backup.sql")
+		if err := os.WriteFile(dump, []byte("-- MySQL dump\n"+header+"\nCREATE TABLE t (id INT);"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := readBinlogPosition(dump)
+		if err != nil || got == nil || got.File != "mysql-bin.000001" || got.Position != 1845 {
+			t.Fatalf("position = %+v, error = %v", got, err)
+		}
+	}
+}
+
+func TestReadBinlogPositionRejectsMissingHeader(t *testing.T) {
+	dump := filepath.Join(t.TempDir(), "backup.sql")
+	if err := os.WriteFile(dump, []byte("-- MySQL dump\nCREATE TABLE t (id INT);"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readBinlogPosition(dump); err == nil {
+		t.Fatal("expected missing binary log position to fail")
+	}
+}
 
 func TestCreateDefaultsFileDoesNotExposePasswordInFileName(t *testing.T) {
 	filePath, err :=

@@ -3,6 +3,7 @@ package com.dbfleetops.operation.job.adapter.webapi;
 import com.dbfleetops.operation.job.application.provided.JobOperations;
 import com.dbfleetops.operation.job.dto.CreateBackupJobRequest;
 import com.dbfleetops.operation.job.dto.OperationJobResponse;
+import com.dbfleetops.operation.job.dto.BackupBinlogPosition;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -53,5 +54,12 @@ public class OperationJobController {
     @GetMapping("/api/v1/jobs")
     public ResponseEntity<List<OperationJobResponse>> getJobs() {
         return ResponseEntity.ok(operationJobService.getJobs());
+    }
+
+    @GetMapping("/api/v1/jobs/{jobId}/backup-binlog-position")
+    public ResponseEntity<BackupBinlogPosition> getBackupBinlogPosition(@PathVariable Long jobId) {
+        return operationJobService.getBackupBinlogPosition(jobId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 }

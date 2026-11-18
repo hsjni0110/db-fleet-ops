@@ -666,11 +666,11 @@ onMounted(() => {
           stripe
           empty-text="잠금 대기 없음"
         >
-          <el-table-column prop="waitingTransactionId" label="대기 트랜잭션" min-width="160" />
-          <el-table-column prop="waitingThreadId" label="대기 스레드" width="150" />
+          <el-table-column prop="waitingThreadId" label="대기 세션" width="110" />
+          <el-table-column prop="blockingThreadId" label="잠금 보유 세션" width="125" />
+          <el-table-column prop="waitingTransactionId" label="대기 트랜잭션" min-width="130" />
+          <el-table-column prop="blockingTransactionId" label="잠금 보유 트랜잭션" min-width="145" />
           <el-table-column prop="waitingQueryPreview" label="대기 쿼리" min-width="300" show-overflow-tooltip />
-          <el-table-column prop="blockingTransactionId" label="잠금 보유 트랜잭션" min-width="160" />
-          <el-table-column prop="blockingThreadId" label="잠금 보유 스레드" width="150" />
           <el-table-column prop="blockingQueryPreview" label="잠금 보유 쿼리" min-width="300" show-overflow-tooltip />
         </el-table>
       </el-tab-pane>
