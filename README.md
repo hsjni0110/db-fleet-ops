@@ -1,211 +1,67 @@
 # DB FleetOps
 
-DB FleetOps는 여러 MySQL의 백업·복원 검증, 설정 점검과 잠금 대기 진단을 한곳에서 수행하는 운영 도구입니다.
+DB FleetOps는 여러 MySQL을 관리하는 운영 도구입니다. 주문 백업을 임시 MySQL에 복원해 테이블과 데이터를 확인하고, 쓰기가 느려지면 어떤 세션이 다른 요청을 막는지 콘솔에서 찾을 수 있습니다.
 
-- [백업 복원과 시점 복구](docs/8-백업-복원-검증-구조.md)에서 실제 주문 데이터 복원, 손상 백업 차단, 잘못된 삭제 직전 복구 절차를 확인할 수 있습니다.
-- [MySQL 행 잠금 장애 진단](docs/9-DB-FleetOps-배포와-관측성.md#12-mysql-행-잠금-장애-진단)에서 차단 세션을 찾고 같은 실험 조건에서 쓰기 p95를 778.48ms에서 220.86ms로 줄인 과정을 확인할 수 있습니다.
+## 실제로 확인한 결과
 
-## 1. 상세 문서
-
-README는 전체 구조만 설명합니다. 설계 근거와 테스트 결과는 다음 문서에서 확인할 수 있습니다.
-
-| 문서 | 내용 |
+| 상황 | 구현과 결과 |
 |---|---|
-| [DB FleetOps가 해결하려는 문제](docs/1-DB-FleetOps가-해결하려는-문제.md) | 프로젝트 목적과 구현 범위 |
-| [자동 테스트와 실패 재현 전략](docs/2-자동-테스트와-실패-재현-전략.md) | 테스트 구분과 실행 방법 |
-| [비동기 작업 처리를 위한 Job 구조](docs/3-비동기-작업-처리를-위한-Job-구조.md) | Job 상태, 중복 요청 방지와 Worker 실행권 |
-| [중앙 관제 서버와 Go Agent 분리 구조](docs/4-중앙-관제-서버와-Go-Agent-분리-구조.md) | Agent Pull 통신, Task 실행권과 실패 대응 |
-| [백업 Job과 Agent Task 실행 구조](docs/5-백업-Job과-Agent-Task-실행-구조.md) | 백업 Task와 Job 상태 연결 |
-| [Database 설정 차이 점검 구조](docs/6-Database-설정-차이-점검-구조.md) | 설정 기준, 실제 설정 기록과 설정 차이 |
-| [운영 Database 설정 안전 변경 구조](docs/7-운영-Database-설정-안전-변경-구조.md) | 설정 변경 검증과 전·후 확인 |
-| [백업 복원 검증 구조](docs/8-백업-복원-검증-구조.md) | 백업 파일의 실제 복원과 검증 |
-| [DB FleetOps 배포와 관측성](docs/9-DB-FleetOps-배포와-관측성.md) | Docker Compose, Kubernetes와 운영 지표 |
-| [용어 정리](docs/용어%20정리.md) | 문서와 코드에서 사용하는 공통 용어 |
-| [도메인 정리](docs/도메인%20정리.md) | 도메인별 역할과 규칙 |
-| [유스케이스별 객체 관계](docs/diagram/유스케이스별-객체-관계.md) | 주요 유스케이스의 객체와 메시지 관계 |
-| [금융·보험 개선 로드맵](docs/db-fleet-ops_finance_insurance_roadmap.md) | Insurance Sandbox부터 업무 정합성 검증까지의 단계별 계획 |
+| 주문 백업이 실제로 복원되는지 확인 | 백업 Task를 수행한 Go Agent가 같은 파일을 임시 DB에 복원했습니다. 작업 #15에서 `orders`와 `order_items`를 각각 2행씩 확인했습니다. [복원 구현과 콘솔 증거](docs/8-백업-복원-검증-구조.md#1-백업-파일로-주문-데이터를-복원했다) |
+| 파일 크기가 그대로인 손상 백업 차단 | 덤프의 SQL 값 하나를 바꾼 뒤 백업 당시 SHA-256과 비교했습니다. 불일치하면 MySQL 명령을 **0회** 호출하는 것을 Go 테스트로 확인했습니다. [차단 코드와 테스트 출력](docs/8-백업-복원-검증-구조.md#2-내용이-바뀐-덤프를-복원-전에-차단했다) |
+| 실수로 삭제한 주문을 사고 직전까지 복구 | 별도 MySQL에서 전체 백업을 복원하고 삭제 직전 위치까지만 바이너리 로그를 적용하는 실험을 구성했습니다. 로컬 실행 완료를 확인했으며 해당 실행의 위치와 소요 시간은 기록하지 않았습니다. [PITR 스크립트와 확인 범위](docs/8-백업-복원-검증-구조.md#3-잘못된-삭제-직전까지-복구하는-경로를-만들었다) |
+| 같은 행의 쓰기 지연 원인 확인 | MySQL 8.0에서 대기 세션과 잠금 보유 세션을 식별했습니다. 동일한 180ms 지연을 잠금 획득 앞으로 옮긴 실험에서 쓰기 p95가 **778.48ms → 220.86ms**로 줄었고, 두 조건에서 48건씩 모두 커밋됐습니다. [조회 SQL과 조치 전후 측정](docs/9-DB-FleetOps-배포와-관측성.md#12-mysql-행-잠금-장애-진단) |
 
-## 2. 무엇을 할 수 있나요?
+### 콘솔에서 확인한 두 사례
 
-- 관리 Database의 접속 상태와 기본 정보를 확인합니다.
-- 백업을 만들고 실제로 복원되는지 검증합니다.
-- 운영 기준과 실제 Database 설정의 차이를 찾습니다.
-- 허용된 설정만 변경하고 변경 전·후 값을 남깁니다.
-- Job과 Task의 진행 상태, Agent 상태와 실행 결과를 추적합니다.
+작업 #15는 주문 테이블 2개와 행 4개를 복원했습니다. 화면에서 전체 판정과 테이블별 행 수를 확인할 수 있습니다.
 
-## 3. 핵심 용어
+![주문 백업 작업 15의 복원 검증. 테이블 2개와 행 4개](docs/images/7-restore-verify.jpg)
 
-| 용어 | 쉬운 설명 |
-|---|---|
-| 관리 Database (`ManagedDatabase`) | DB FleetOps에 등록하여 관리하는 Database |
-| 운영 Job (`OperationJob`) | 운영자가 달성하려는 하나의 목표. 예: “주문 Database를 백업하고 복원 가능성을 확인한다” |
-| 운영 Task (`OperationTask`) | Job을 완료하기 위해 Agent가 한 번에 실행하는 구체적인 일. 예: 백업 파일 생성 |
-| Worker | 대기 중인 Job을 선점해 실행 순서와 상태를 조정하는 중앙 관제 서버의 구성요소 |
-| Agent | Database Host 가까이에서 Task를 선점해 실제 명령을 실행하는 프로그램 |
-| 설정 기준 (`ConfigurationProfile`) | Database가 따라야 할 설정값 묶음 |
-| 실제 설정 기록 (`ConfigurationSnapshot`) | 특정 시점에 Database에서 수집한 실제 설정값 |
-| 설정 차이 (`ConfigurationDrift`) | 설정 기준과 실제 설정을 비교해서 찾은 차이 |
-| Task 실행권 | 특정 실행 번호의 Agent만 정해진 시간 동안 Task를 처리할 수 있는 권한 |
+잠금 실험에서 대기 세션 `2267`이 보유 세션 `2266`에 막혔습니다. 잠금을 해제한 뒤 같은 조회에서 대기 항목이 사라졌습니다. [해제 후 화면과 부하 테스트 출력](docs/9-DB-FleetOps-배포와-관측성.md#실행-결과-3-잠금-해제)
 
-Job과 Task는 다음처럼 구분합니다.
+![실제 MySQL 잠금 대기. 대기 세션 2267과 보유 세션 2266](docs/images/9-mysql-lock-wait.jpg)
 
-```text
-백업하고 복원 가능한지 확인한다       운영 Job
-  ├─ 백업 파일을 만든다              운영 Task
-  └─ 임시 Database에 복원해 확인한다  운영 Task
+## 구조와 운영 흐름
+
+예를 들어 운영자가 주문 DB의 백업을 요청하면 **Job** 하나가 생깁니다. Worker는 백업과 복원 검증을 각각 **Task**로 배정하고, DB 가까이에 있는 Go Agent가 Task를 가져가 실행합니다. 같은 완료 보고가 다시 도착해도 후속 Task는 한 번만 생성합니다. 콘솔은 작업 결과와 실패 원인을 보여 줍니다. [Job과 Task의 코드 흐름](docs/5-백업-Job과-Agent-Task-실행-구조.md)
+
+```mermaid
+flowchart LR
+    Console["운영 콘솔"] --> API["Spring Boot API"]
+    API --> Meta["작업 기록 DB"]
+    Worker["Worker"] --> Meta
+    Agent["Go Agent"] --> API
+    Agent --> Target["관리 MySQL"]
 ```
 
-## 4. 화면에서 확인할 수 있는 것
+설정 점검은 실제 값을 수집해 운영 기준과 비교합니다. 설정 변경은 허용된 항목과 값 형식을 확인한 뒤 적용하고, 변경 전후 값을 기록합니다. [설정 차이 점검](docs/6-Database-설정-차이-점검-구조.md) · [설정 변경의 검증 흐름](docs/7-운영-Database-설정-안전-변경-구조.md)
 
-아래 캡처는 2026년 11월 18일 로컬 콘솔 화면입니다. 화면 문구와 표시 기준은 [운영 콘솔 문서](./db-fleetops-console/README.md)에 정리했습니다.
+## 화면에서 확인할 수 있는 것
 
-### 운영 현황
+[운영 현황](docs/images/dashboard.jpg) · [데이터베이스 목록](docs/images/1-db-instance.jpg) · [데이터베이스 상세](docs/images/2-db-detail.jpg) · [운영 작업](docs/images/3-operation-job.jpg) · [실행기 목록](docs/images/4-agent-list.jpg) · [설정 기준](docs/images/5-configuration-profile.jpg) · [설정 차이](docs/images/6-configuration-drift.jpg)
 
-![운영 현황](./docs/images/dashboard.jpg)
+## 로컬 실행
 
-### 데이터베이스 목록
-
-등록된 데이터베이스의 상태와 기본 정보를 확인합니다.
-
-![데이터베이스 목록](./docs/images/1-db-instance.jpg)
-
-데이터베이스 상세 화면에서는 접속 정보와 관련 운영 정보를 확인합니다.
-
-![데이터베이스 상세](./docs/images/2-db-detail.jpg)
-
-### 운영 작업
-
-백업과 설정 점검 같은 운영 목표가 어디까지 진행됐는지 확인합니다.
-
-![백업 작업 상세](./docs/images/3-operation-job.jpg)
-
-### 실행기 목록
-
-등록 상태, 마지막 접속 시각과 실행 단계를 확인합니다.
-
-![실행기 접속 상태](./docs/images/4-agent-list.jpg)
-
-### 설정 기준과 설정 차이
-
-Database가 따라야 할 설정 기준을 등록합니다.
-
-![설정 기준 목록](./docs/images/5-configuration-profile.jpg)
-
-설정 기준과 실제 설정이 다른 항목을 확인합니다.
-
-![설정 점검 이력과 항목별 차이](./docs/images/6-configuration-drift.jpg)
-
-### 복원 검증
-
-백업 파일을 임시 Database에 복원한 결과와 검증 내용을 확인합니다.
-
-![테이블별 백업 복원 검증 결과](./docs/images/7-restore-verify.jpg)
-
-## 5. 어떻게 동작하나요?
-
-```text
-운영자
-  │ 운영 Job 요청
-  ▼
-중앙 관제 서버 ── Job과 Task 상태 저장 ── Metadata Database
-  │
-  ├─ Worker가 Job의 실행 순서와 상태를 조정
-  │
-  └─ Agent가 Task를 선점할 수 있도록 제공
-                    │
-                    ▼
-              Go Agent
-                    │ Host 안에서 명령 실행
-                    ▼
-              관리 Database
-```
-
-중앙 관제 서버는 요청과 실행 상태를 관리하고, 실제 Host 작업은 Go Agent가 수행합니다. Agent가 중앙 관제 서버에 먼저 연결해 Task를 선점하므로 Agent용 외부 수신 Port가 필요하지 않습니다.
-
-오래 걸리는 실행이 중간에 끊겨도 Task가 계속 `RUNNING`에 머물지 않도록 Task 실행권과 실행 번호를 사용합니다. 같은 결과가 다시 보고되면 결과 보고 번호로 중복을 확인하여 후속 Task나 결과가 두 번 만들어지지 않게 합니다.
-
-## 6. 주요 실행 흐름
-
-### 백업과 복원 검증
-
-```text
-백업 Job 생성
-  → 백업 Task 실행
-  → 백업 파일 생성
-  → 복원 검증 Task 실행
-  → 임시 Database에 복원
-  → 검증 통과 시 Job 성공
-```
-
-백업 파일이 만들어진 것만으로 성공 처리하지 않습니다. 복원 검증이 필요한 Job은 실제 복원과 검증까지 끝나야 성공합니다.
-
-### 설정 차이 점검
-
-```text
-설정 기준 선택
-  → 실제 설정 수집
-  → 실제 설정 기록 저장
-  → 기준과 실제 값 비교
-  → 설정 차이 저장
-```
-
-이 흐름은 Database 설정을 바꾸지 않고 차이만 확인합니다.
-
-### 안전한 설정 변경
-
-```text
-변경 요청 검증
-  → 변경 전 실제 설정 기록
-  → 허용된 설정 변경
-  → 변경 후 실제 설정 기록
-  → 반영 결과 확인
-```
-
-설정 변경은 허용 여부와 값 형식을 먼저 검사하며, 변경 전·후 값을 함께 남깁니다.
-
-## 7. 로컬 실행
-
-키 설정, JAR 빌드와 컨테이너 실행은 [Docker Compose 실행 절차](docs/9-DB-FleetOps-배포와-관측성.md#4-docker-compose-실행)를 따릅니다.
-
-| 구성요소 | 접속 위치 |
-|---|---|
-| API | http://localhost:8080 |
-| Worker | http://localhost:8081 |
-| Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3000 |
-
-실행 중인 구성요소의 기본 연결 상태는 다음 명령으로 확인합니다.
+프로젝트 루트의 `.env`에 `DB_FLEETOPS_CREDENTIAL_ENCRYPTION_KEY`를 설정한 뒤 실행합니다. 기존 환경을 다시 띄울 때는 DB 비밀번호를 암호화한 기존 키를 사용합니다. [키 생성과 배포 절차](docs/9-DB-FleetOps-배포와-관측성.md#4-docker-compose-실행)
 
 ```bash
+./gradlew bootJar && docker compose up --build -d
 ./scripts/smoke-test-compose.sh
+npm --prefix db-fleetops-console ci
+npm --prefix db-fleetops-console run dev
 ```
 
-종료할 때는 다음 명령을 사용합니다.
+| 구성요소 | 기본 주소 |
+|---|---|
+| 운영 콘솔 | http://localhost:5173 |
+| API · Worker | http://localhost:8080 · http://localhost:8081 |
+| Prometheus · Grafana | http://localhost:9090 · http://localhost:3000 |
 
-```bash
-docker compose down
-```
+종료 명령은 `docker compose down`입니다. `-v`를 추가하면 작업 기록 DB와 Agent 데이터 볼륨까지 삭제됩니다.
 
-`docker compose down -v`는 Metadata Database와 Agent 데이터까지 지우므로 전체 초기화가 필요할 때만 사용합니다.
+### 보험 업무 규칙 실습
 
-### Insurance Sandbox
-
-기본 관리 대상 MySQL은 `insurance_sandbox`를 생성하고 다음 합성 데이터를 넣습니다.
-
-| 데이터 | 건수 |
-|---|---:|
-| 고객 (`Customer`) | 10,000 |
-| 보험 계약 (`Policy`) | 30,000 |
-| 보험료 수납 (`PremiumPayment`) | 300,000 |
-| 보험금 청구 (`Claim`) | 20,000 |
-| 보험금 지급 (`ClaimPayment`) | 10,000 |
-
-실제 개인정보나 난수를 사용하지 않으므로 새 volume에서는 항상 같은 데이터가 생성됩니다.
-기존 `target-mysql-data` volume에는 초기화 SQL이 다시 실행되지 않습니다. 기존 데이터를
-보존할 필요가 없는 경우에만 `docker compose down -v`로 전체 volume을 삭제한 뒤 다시
-실행합니다.
-
-정상 데이터 확인과 의도적 오류 데이터의 주입·원복은 하나의 도구로 실행합니다.
+초기화된 테스트 DB `insurance_sandbox`에는 합성 고객·계약·청구 데이터가 있습니다. 운영 콘솔에서 `target-mysql:3306`의 `insurance_sandbox`를 등록하고, Agent와 `Insurance Sandbox V1` 프로필을 연결하면 복원본에 업무 규칙 7개를 실행합니다. 예를 들어 계약이 없는 청구를 찾아낼 수 있습니다. [시드 데이터와 오류 재현 절차](docs/db-fleet-ops_finance_insurance_roadmap.md)
 
 ```bash
 ./scripts/insurance-sandbox.sh verify
@@ -213,55 +69,25 @@ docker compose down
 ./scripts/insurance-sandbox.sh reset
 ```
 
-`inject`는 중복 수납, 중복 지급, 계약 없는 청구, 0원 완료 지급, 고객 없는 활성 계약을
-예약된 ID로 한 번씩 생성합니다. 같은 명령을 다시 실행해도 오류 데이터가 늘어나지 않으며,
-`reset`은 이 예약된 데이터만 제거하고 정상 상태를 다시 검증합니다.
-
-FleetOps에 등록할 때 Docker network 내부 접속 정보는 host `target-mysql`, port `3306`,
-database name `insurance_sandbox`입니다. Agent가 등록된 뒤 해당 Agent ID를 관리 DB의
-`assignedAgentId`로 지정해야 백업과 복원 검증 Task를 실행할 수 있습니다.
-
-관리 DB 등록 화면에서 `Insurance Sandbox V1` 업무 검증 Profile을 선택하거나, 상세 화면에서
-연결할 수 있습니다. Profile이 연결되면 복원된 임시 DB에서 7개 내부 Business Rule을 읽기
-전용 Transaction으로 실행합니다. Profile을 `None`으로 두면 기존과 같이 Table·Row Count
-기술 검증만 수행합니다. Rule SQL과 DB 인증 정보는 Console 및 공개 API에 노출하지 않습니다.
-
-## 8. 테스트
+## 테스트와 재현
 
 ```bash
-# 빠른 Java 테스트
 ./gradlew test
-
-# 실제 MySQL 연결 테스트
 ./gradlew integrationTest
-
-# Agent 장애와 응답 유실 재현 테스트
 ./gradlew agentFailureTest --rerun-tasks --console=plain
-
-# 중앙 관제 서버와 Agent 분리 구조 검증
 ./gradlew architectureTest --rerun-tasks --console=plain
-
-# Go Agent 테스트
-cd agent-go && go test ./...
+(cd agent-go && go test ./...)
+python3 scripts/mysql-pitr-rehearsal.py
 ```
 
-Docker가 필요한 테스트는 일반 단위 테스트와 분리되어 있습니다. 자세한 범위는 [자동 테스트와 실패 재현 전략](docs/2-자동-테스트와-실패-재현-전략.md)을 참고합니다.
+실제 MySQL과 Docker가 필요한 테스트의 실행 조건은 [테스트 가이드](docs/2-자동-테스트와-실패-재현-전략.md)에 있습니다. 행 잠금 비교 실험은 [실험 계정과 환경 변수](docs/9-DB-FleetOps-배포와-관측성.md#재실행)를 설정한 뒤 실행합니다. 위의 성능 수치는 로컬 MySQL 8.0.41의 통제된 실험에서 얻었습니다.
 
-## 9. 기술 구성
+## 설계 문서
 
-| 영역 | 사용 기술 |
+| 주제 | 문서 |
 |---|---|
-| 중앙 관제 서버와 Worker | Java 21, Spring Boot 3.5, Gradle |
-| Agent | Go |
-| Metadata·관리 Database | MySQL 8.0 (로컬 Compose) |
-| 로컬 실행 | Docker Compose |
-| 배포 예제 | Kubernetes, Kustomize |
-| 관측 | Spring Boot Actuator, Prometheus, Grafana |
-| 테스트 | JUnit 5, Mockito, AssertJ, MockMvc, Go test |
+| 프로젝트 범위 | [해결하려는 문제](docs/1-DB-FleetOps가-해결하려는-문제.md) · [도메인 정리](docs/도메인%20정리.md) · [용어 정리](docs/용어%20정리.md) |
+| 비동기 작업과 실행권 | [Job 구조](docs/3-비동기-작업-처리를-위한-Job-구조.md) · [중앙 관제 서버와 Go Agent](docs/4-중앙-관제-서버와-Go-Agent-분리-구조.md) · [객체 관계](docs/diagram/유스케이스별-객체-관계.md) |
+| 배포와 관측 | [Compose와 Kubernetes 예제, 운영 지표](docs/9-DB-FleetOps-배포와-관측성.md) · [운영 콘솔](db-fleetops-console/README.md) |
 
-## 10. 현재 범위와 보완할 점
-
-- 현재 주요 실행 대상은 MySQL입니다.
-- Kubernetes 구성은 로컬 학습과 구조 검증을 위한 예제이며 운영용 완성본이 아닙니다.
-- Metadata Database 고가용성, Schema Migration, TLS와 외부 Secret 관리는 운영 적용 전에 보완해야 합니다.
-- 대용량 백업의 CPU·Disk 부하와 장시간 실행은 실제 운영 환경과 비슷한 장비에서 추가 검증해야 합니다.
+중앙 관제 서버는 Java 21과 Spring Boot, 콘솔은 Vue 3와 TypeScript, 현장 실행기는 Go를 사용합니다. 로컬 Compose의 작업 기록 DB와 관리 대상 DB는 MySQL 8.0입니다. 운영 적용 전에는 [고가용성·보안·부하 검증 항목](docs/9-DB-FleetOps-배포와-관측성.md#11-운영-적용-전에-보완할-부분)을 확인해야 합니다.
