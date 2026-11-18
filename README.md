@@ -47,6 +47,12 @@ flowchart LR
 
 설정 점검은 실제 값을 수집해 운영 기준과 비교합니다. 설정 변경은 허용된 항목과 값 형식을 확인한 뒤 적용하고, 변경 전후 값을 기록합니다. [설정 차이 점검](docs/6-Database-설정-차이-점검-구조.md), [설정 변경의 검증 흐름](docs/7-운영-Database-설정-안전-변경-구조.md)
 
+### 현장 실행기의 Go 선택
+
+20초 동안 백업을 기다리는 동안에도 Agent는 중앙 서버에 살아 있다는 신호를 보내고, 해당 작업을 계속 실행할 권한을 갱신해야 합니다. 반대로 그 권한을 잃으면 이미 시작한 `mysqldump`를 멈춰야 합니다. 이 두 동작을 각 DB 호스트에서 지원하려고 Go를 선택했습니다. goroutine으로 생존 신호와 작업 실행을 나누고, 작업의 `context`를 OS 명령까지 전달할 수 있기 때문입니다. 두 동작은 Go 표준 라이브러리로 구현했습니다. [Agent 실행 코드](agent-go/internal/application/agent_service.go)와 [덤프 실행 코드](agent-go/internal/infra/backup/mysql_dump_runner.go)
+
+20초 지연을 넣은 장애 재현에서 백업과 생존 신호를 같은 흐름에 뒀을 때 신호 간격이 최대 **21초**였습니다. 신호 전송을 별도 goroutine으로 옮기자 같은 실험에서 최대 **2초**로 줄었고 작업도 완료됐습니다. 중앙 서버가 실행권 충돌로 갱신을 거절하면 Agent는 작업의 `context`를 취소하고 이전 시도의 결과를 보고하지 않습니다. [Go 선택 근거와 실험 기록](docs/4-중앙-관제-서버와-Go-Agent-분리-구조.md#5-현장-실행기의-go-선택)
+
 ## 콘솔 화면
 
 [운영 현황](docs/images/dashboard.jpg), [데이터베이스 목록](docs/images/1-db-instance.jpg), [데이터베이스 상세](docs/images/2-db-detail.jpg), [운영 작업](docs/images/3-operation-job.jpg), [실행기 목록](docs/images/4-agent-list.jpg), [설정 기준](docs/images/5-configuration-profile.jpg), [설정 차이](docs/images/6-configuration-drift.jpg)

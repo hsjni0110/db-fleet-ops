@@ -101,29 +101,32 @@ Linux 상태 수집과 MySQL 백업은 실제 데이터베이스가 운영되는
 
 따라서 현장 실행기가 먼저 시작한 연결만으로 전체 작업 흐름이 동작한다는 사실을 확인했습니다.
 
-## 5. 왜 Go를 사용했는가
+## 5. 현장 실행기의 Go 선택
 
-현장 실행기는 여러 데이터베이스 Host에 배포됩니다. 따라서 실행 파일이 작고, 사용하지 않을 때 Memory를 적게 차지하며, 서로 다른 CPU 환경에서 만들 수 있어야 합니다.
+현장 실행기는 백업이 오래 걸려도 중앙 서버에 생존 신호와 실행권 갱신 요청을 보내야 한다. 실행권을 잃으면 이미 시작한 MySQL 명령을 중단해야 한다. 이 두 동작을 각 DB 호스트에서 실행해야 해서 **동시 실행, OS 프로세스 취소, Linux 배포**를 함께 고려해 Go를 선택했다.
 
-결과를 본 뒤 기준을 바꾸지 않도록 다음 기준을 먼저 정했습니다.
+### 20초 백업 중 생존 신호 전송
 
-| 확인 항목 | 기준 |
-|---|---|
-| 실행 파일 크기 | 25MiB 이하 |
-| 사용하지 않을 때 Memory | 40MiB 이하 |
-| Container 시작 시간 | 15초 미만 |
-| Intel·AMD 계열 Linux 실행 파일 | Build 성공 |
-| ARM 계열 Linux 실행 파일 | Build 성공 |
+초기 구현은 백업이 끝나야 다음 생존 신호를 보냈다. 백업 명령에 20초 지연을 넣자 신호 간격이 최대 21초까지 늘었다. [AgentService.Run()](../agent-go/internal/application/agent_service.go)에서 신호 전송을 별도 goroutine으로 옮겨, 백업을 기다리는 동안에도 독립적으로 요청을 보내게 했다. 같은 지연을 다시 넣었을 때 최대 간격은 **2초**였고 백업 Task도 성공했다. 실험은 백업 명령의 대기 시간을 재현했다. [실패 재현 코드](../src/failureTest/java/com/dbfleetops/failure/scenario/AgentFailureTest.java)
 
-같은 환경에서 측정한 결과는 다음과 같습니다.
+### 실행권 상실 시 덤프 중단
 
-![alt text](images/image-4.png)
+예를 들어 Task의 첫 번째 시도가 백업을 수행 중인데 중앙 서버가 실행권을 회수했다고 가정한다. 이전 실행이 계속 덤프를 쓰거나 결과를 보고하면 두 번째 실행과 겹칠 수 있다. [maintainTaskLease()](../agent-go/internal/application/agent_service.go)는 갱신 요청이 실행권 충돌로 거절되거나 갱신 실패가 실행권 기간만큼 이어지면 작업의 `context`를 취소한다. [MySQLDumpRunner](../agent-go/internal/infra/backup/mysql_dump_runner.go)는 이 값을 `exec.CommandContext`에 넘긴다. 취소 신호가 도착하면 Go가 실행한 `mysqldump` 프로세스가 종료되고, Agent는 실행권을 잃은 시도의 결과 보고를 건너뛴다. [Go 프로세스 취소 동작](https://pkg.go.dev/os/exec#CommandContext)
 
-Go 현장 실행기는 프로젝트에서 정한 기준을 모두 만족했습니다. 따라서 여러 Host에 배포하는 실행기로 Go를 선택한 근거가 있습니다.
+Go를 선택한 이유는 **주기적으로 신호를 보내는 코드와 OS 명령이 같은 작업의 취소 신호에 반응하도록 연결할 수 있기 때문**이다. 중앙의 Spring Boot 애플리케이션은 작업 기록과 실행권 판정을 담당한다. 실행기는 [Dockerfile](../agent-go/Dockerfile)에서 `CGO_ENABLED=0`으로 빌드해 MySQL 도구가 있는 이미지에 실행 파일을 배치한다. DB 호스트에 중앙 서버와 같은 JVM 환경을 맞출 필요가 없다.
 
-다만 전체 Container Image는 581.43MiB입니다. Go 실행 파일은 작지만 실제 백업과 복원에 필요한 MySQL 도구가 함께 들어 있기 때문입니다. 작은 작업자가 무거운 공구 가방을 들고 있는 것과 같습니다.
+### 배포 기준과 측정값
 
-이 실험은 Go가 다른 언어보다 항상 좋다는 뜻이 아닙니다. 현재 Go 구현이 이 프로젝트에서 정한 기준을 만족한다는 뜻입니다.
+빌드와 시작 조건은 [AgentRuntimeCheck](../src/failureTest/java/com/dbfleetops/failure/validity/AgentRuntimeCheck.java)에 고정했다.
+
+| 확인 항목 | 기준 | 실험 결과 |
+|---|---|---|
+| Go 실행 파일 크기 | 25MiB 이하 | 9.07MiB |
+| 유휴 프로세스 메모리 | 40MiB 이하 | 7.11MiB |
+| 컨테이너 시작 시간 | 15초 미만 | 9.709초 |
+| Linux amd64와 arm64 빌드 | 두 대상 모두 성공 | 통과 |
+
+MySQL 도구를 포함한 실험 이미지 전체 크기는 **581.43MiB**였다. 이 수치는 현장 실행기의 배포 기준을 통과했다는 근거다. 같은 기능의 Java 실행기를 만들어 비교한 실험은 수행하지 않았다. [실행 환경 측정 원본](images/image-4.png)
 
 ## 6. 전체 작업과 현장 작업을 나눈 이유
 
