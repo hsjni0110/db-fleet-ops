@@ -2,6 +2,8 @@
 import { computed, reactive, ref, watch } from "vue";
 import { Plus, Refresh } from "@element-plus/icons-vue";
 
+import { operationalLabel } from "../labels";
+import FieldHelp from "./FieldHelp.vue";
 import OperationJobLookup from "./OperationJobLookup.vue";
 
 import type {
@@ -41,16 +43,17 @@ const emit = defineEmits<{
       | CreateConfigurationApplyJobRequest,
   ];
   lookupJob: [jobId: string];
-  refreshDatabases: [];
   refreshProfiles: [];
 }>();
 
-const selectedJobType = ref<OperationJobType>("BACKUP");
+const jobTypes = ["BACKUP", "CONFIGURATION_CHECK", "CONFIGURATION_APPLY"] as const;
+const jobTypeOptions = jobTypes.map((value) => ({ label: operationalLabel(value), value }));
+const selectedJobType = ref<(typeof jobTypes)[number]>("BACKUP");
 
 const jobForm = reactive<OperationJobFormState>({
   databaseId: null,
   profileId: null,
-  reason: "manual backup from operation console",
+  reason: "콘솔 수동 작업",
   requestedBy: "local-user",
   parametersText: "",
 });
@@ -63,29 +66,9 @@ const selectedProfile = computed(() => {
   return activeProfiles.value.find((profile) => profile.profileId === jobForm.profileId);
 });
 
-const selectedJobDescription = computed(() => {
-  if (selectedJobType.value === "BACKUP") {
-    return "대상 DB의 논리 백업 Job을 생성합니다.";
-  }
-
-  if (selectedJobType.value === "CONFIGURATION_CHECK") {
-    return "대상 DB의 실제 설정을 Profile 기준으로 점검하는 Job을 생성합니다.";
-  }
-
-  if (selectedJobType.value === "CONFIGURATION_APPLY") {
-    return "Profile과 입력한 Parameter 값을 기준으로 설정 적용 Job을 생성합니다.";
-  }
-
-  return "RESTART Job은 Operation Job 타입에 포함되어 있지만 현재 생성 API는 없습니다.";
-});
-
 const isConfigurationJob = computed(() => {
   return selectedJobType.value === "CONFIGURATION_CHECK" ||
     selectedJobType.value === "CONFIGURATION_APPLY";
-});
-
-const isRestartJob = computed(() => {
-  return selectedJobType.value === "RESTART";
 });
 
 function parseApplyParameters() {
@@ -161,13 +144,7 @@ function submitOperationJob() {
       requestedBy: jobForm.requestedBy,
       parameters,
     });
-    return;
   }
-
-  emit("createOperationJob", selectedJobType.value, jobForm.databaseId, {
-    reason: jobForm.reason,
-    requestedBy: jobForm.requestedBy,
-  });
 }
 
 watch(
@@ -200,34 +177,19 @@ watch(
 <template>
   <div class="operation-job-controls">
     <el-form label-position="top" class="operation-job-form" @submit.prevent>
-      <el-form-item label="Job Type">
+      <el-form-item label="작업 유형">
         <el-segmented
           v-model="selectedJobType"
-          :options="[
-            { label: 'Backup', value: 'BACKUP' },
-            { label: 'Config Check', value: 'CONFIGURATION_CHECK' },
-            { label: 'Config Apply', value: 'CONFIGURATION_APPLY' },
-            { label: 'Restart', value: 'RESTART' },
-          ]"
+          :options="jobTypeOptions"
         />
       </el-form-item>
 
-      <el-alert
-        type="info"
-        show-icon
-        :closable="false"
-        class="operation-job-type-alert"
-      >
-        <template #title>{{ selectedJobType }}</template>
-        <p>{{ selectedJobDescription }}</p>
-      </el-alert>
-
       <div class="operation-job-form-grid">
-        <el-form-item label="Target Database" required>
+        <el-form-item label="대상 데이터베이스" required>
           <el-select
             v-model="jobForm.databaseId"
             class="full-width"
-            placeholder="DB 선택"
+            placeholder="데이터베이스 선택"
             :loading="loadingDatabases"
             :disabled="activeDatabases.length === 0"
           >
@@ -240,11 +202,11 @@ watch(
           </el-select>
         </el-form-item>
 
-        <el-form-item v-if="isConfigurationJob" label="Configuration Profile" required>
+        <el-form-item v-if="isConfigurationJob" label="설정 기준" required>
           <el-select
             v-model="jobForm.profileId"
             class="full-width"
-            placeholder="Profile 선택"
+            placeholder="설정 기준 선택"
             :loading="loadingProfiles"
             :disabled="activeProfiles.length === 0"
           >
@@ -257,42 +219,31 @@ watch(
           </el-select>
         </el-form-item>
 
-        <el-form-item label="Requested By" required>
+        <el-form-item label="요청자" required>
           <el-input v-model="jobForm.requestedBy" placeholder="local-user" />
         </el-form-item>
 
-        <el-form-item label="Reason" required>
+        <el-form-item label="작업 사유" required>
           <el-input
             v-model="jobForm.reason"
-            placeholder="operation reason"
+            placeholder="예: 정기 백업"
           />
         </el-form-item>
 
-        <el-form-item label="Action">
-          <el-button
-            type="primary"
-            :icon="Plus"
-            :loading="creatingJob"
-            :disabled="activeDatabases.length === 0 || isRestartJob"
-            @click="submitOperationJob"
-          >
-            Create Job
-          </el-button>
-        </el-form-item>
       </div>
 
-      <el-form-item
-        v-if="selectedJobType === 'CONFIGURATION_APPLY'"
-        label="Apply Parameters"
-        required
-      >
+      <div v-if="selectedJobType === 'CONFIGURATION_APPLY'" class="setting-values">
+        <label for="job-setting-values">적용할 설정값</label>
+        <FieldHelp label="적용할 설정값" text="한 줄에 항목=값 한 쌍 입력. 재시작 없이 변경 가능한 허용 항목만 적용." />
         <el-input
+          id="job-setting-values"
           v-model="jobForm.parametersText"
           type="textarea"
           :rows="4"
+          aria-required="true"
           placeholder="slow_query_log=ON"
         />
-      </el-form-item>
+      </div>
 
       <div v-if="isConfigurationJob" class="operation-job-secondary-actions">
         <el-button
@@ -300,15 +251,25 @@ watch(
           :loading="loadingProfiles"
           @click="emit('refreshProfiles')"
         >
-          Refresh Profiles
+          설정 기준 새로고침
+        </el-button>
+      </div>
+
+      <div class="form-submit">
+        <el-button
+          type="primary"
+          :icon="Plus"
+          :loading="creatingJob"
+          :disabled="activeDatabases.length === 0 || (isConfigurationJob && !activeProfiles.length)"
+          @click="submitOperationJob"
+        >
+          {{ operationalLabel(selectedJobType) }} 요청
         </el-button>
       </div>
     </el-form>
     <OperationJobLookup
-      :loading-databases="loadingDatabases"
       :looking-up-job="lookingUpJob"
       @lookup-job="emit('lookupJob', $event)"
-      @refresh-databases="emit('refreshDatabases')"
     />
   </div>
 </template>

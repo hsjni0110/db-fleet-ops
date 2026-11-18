@@ -38,7 +38,7 @@ OperationJob
 
 Worker는 실행 가능한 Job을 찾아 실행 순서와 상태를 조정합니다. 실제 Host 작업이 필요하면 하위 `OperationTask`를 만들 수 있지만, 그 세부 구조는 Job Engine의 책임이 아닙니다.
 
-쉽게 말하면 Job은 사용자가 보는 주문서이고, Worker는 처리할 주문서를 가져가는 조정자입니다.
+쉽게 말하면 Job은 사용자가 보는 주문서이고, Worker는 처리할 주문서를 선점하는 조정자입니다.
 
 ## 3. 왜 먼저 저장하는가
 
@@ -73,7 +73,7 @@ QUEUED | RUNNING | FAILED | TIMED_OUT
 
 | 상태 | 의미 |
 |---|---|
-| `QUEUED` | Worker가 가져갈 수 있는 상태 |
+| `QUEUED` | Worker가 선점할 수 있는 상태 |
 | `RUNNING` | Worker가 실행을 조정 중인 상태 |
 | `SUCCEEDED` | 운영 목적을 달성한 상태 |
 | `FAILED` | 작업이 실패한 상태 |
@@ -82,7 +82,7 @@ QUEUED | RUNNING | FAILED | TIMED_OUT
 
 상태 변경은 Service에서 필드를 직접 조합하지 않고 `OperationJob.start(...)`, `succeed(...)`, `fail(...)`, `retry(...)`, `timeout(...)`, `cancel(...)` 같은 도메인 메서드로 수행합니다.
 
-따라서 아직 Worker가 가져가지 않은 Job을 성공 처리하거나, 이미 성공한 Job을 다시 시작하는 잘못된 흐름을 한곳에서 거절할 수 있습니다.
+따라서 아직 Worker가 선점하지 않은 Job을 성공 처리하거나, 이미 성공한 Job을 다시 시작하는 잘못된 흐름을 한곳에서 거절할 수 있습니다.
 
 ## 5. 중복 요청을 어떻게 막는가
 
@@ -98,7 +98,7 @@ targetDatabaseId + jobType + idempotencyKey
 
 다만 요청마다 다른 Key를 보내거나 Key를 생략하면 중복을 막을 수 없습니다. Key를 언제 만들고 언제까지 재사용할지는 API 호출자가 지켜야 하는 계약입니다.
 
-## 6. Worker는 Job을 어떻게 가져가는가
+## 6. Worker는 Job을 어떻게 선점하는가
 
 Worker는 다음 조건을 만족하는 Job을 찾습니다.
 
@@ -116,8 +116,8 @@ leaseUntil = 현재 시각 + Lease 시간
 
 코드는 다음 역할로 나누었습니다.
 
-- `OperationWorkerController`가 Worker의 Job 가져오기·완료·실패 요청을 받습니다.
-- `JobClaimService`가 실행 가능한 Job을 선택하고 실행권을 설정합니다.
+- `OperationWorkerController`가 Worker의 Job 선점·완료·실패 요청을 받습니다.
+- `JobAcquisitionService`가 실행 가능한 Job을 선택하고 실행권을 설정합니다.
 - `JobExecutionDispatcher`가 Job 종류에 맞는 `JobExecution`을 선택합니다.
 - `JobReportService`가 Worker의 성공·실패 보고를 반영합니다.
 - `JobStore`가 조건에 맞는 Job을 조회합니다.
@@ -127,14 +127,14 @@ Controller는 HTTP 요청만 받고, Service는 흐름을 조정하며, Job 객�
 
 ## 7. Job Lease의 현재 한계
 
-Lease는 Worker가 사라졌을 때 언제 소유권을 다시 판단할지 알려주는 기준입니다. 하지만 현재 Job Engine은 Claim할 때 Lease를 저장하고 결과를 받을 때 Worker를 확인하는 수준입니다.
+Lease는 Worker가 사라졌을 때 언제 소유권을 다시 판단할지 알려주는 기준입니다. 하지만 현재 Job Engine은 선점할 때 Lease를 저장하고 결과를 받을 때 Worker를 확인하는 수준입니다.
 
 아직 다음 기능은 구현하거나 충분히 실험하지 않았습니다.
 
 - 실행 중인 Job Lease의 주기적 갱신
 - 만료된 `RUNNING` Job을 찾는 Scheduler
 - 만료 Job의 `QUEUED` 복귀 또는 `TIMED_OUT` 판정
-- 여러 Worker가 동시에 같은 Job을 Claim하는 상황의 충분한 경쟁 실험
+- 여러 Worker가 동시에 같은 Job을 선점하는 상황의 충분한 경쟁 실험
 
 Agent가 실행하는 `OperationTask` Lease 회수는 별도 구현되어 있습니다. Task Lease와 Job Lease는 목적이 다르므로 이 문서에서 같은 기능으로 설명하지 않습니다.
 
@@ -163,7 +163,7 @@ RUNNING
 
 ```text
 JOB_CREATED
-  → JOB_CLAIMED
+  → JOB_ACQUIRED
   → JOB_FAILED
   → JOB_RETRIED
 ```
@@ -189,7 +189,7 @@ Operation Service
 - Transaction, Version과 고유 제약을 사용할 수 있습니다.
 - 초기 기능과 테스트가 단순합니다.
 
-대신 Job 수와 Worker 경쟁이 커지면 조회 충돌과 Database 부하가 증가할 수 있습니다. 완료 Job 보관 기간, 인덱스, 정리 정책과 여러 Worker의 Claim 방식도 필요해집니다.
+대신 Job 수와 Worker 경쟁이 커지면 조회 충돌과 Database 부하가 증가할 수 있습니다. 완료 Job 보관 기간, 인덱스, 정리 정책과 여러 Worker의 선점 방식도 필요해집니다.
 
 현재 규모에서는 단순성이 더 중요하다고 판단했으며, 실제 부하 측정 없이 별도 Queue 도입이 필요하다고 단정하지 않습니다.
 
@@ -202,7 +202,7 @@ operation/
   │   └─ OperationWorkerController
   ├─ application/
   │   ├─ JobService
-  │   ├─ JobClaimService
+  │   ├─ JobAcquisitionService
   │   ├─ JobReportService
   │   └─ JobExecution
   ├─ domain/
@@ -224,11 +224,11 @@ Job Type별 실제 실행 방식이나 Agent Task 생성은 각 기능 문서에
 
 - Job이 `QUEUED`로 생성됩니다.
 - 같은 Idempotency Key 요청은 기존 Job을 반환합니다.
-- Worker가 실행 가능한 Job을 Claim하면 `RUNNING`이 됩니다.
+- Worker가 실행 가능한 Job을 선점하면 `RUNNING`이 됩니다.
 - 잘못된 Worker가 완료·실패 결과를 저장할 수 없습니다.
 - 성공·실패·Retry·취소 상태 전이 규칙이 적용됩니다.
 - 재시도하면 횟수와 다음 실행 가능 시각이 변경됩니다.
-- BACKUP Job Claim이 하위 Task 생성으로 이어집니다.
+- BACKUP Job 선점이 하위 Task 생성으로 이어집니다.
 - 주요 Job 행위가 Audit Port에 전달됩니다.
 
 이 테스트는 도메인과 Application Service 중심입니다. 여러 Worker Process의 실제 동시 경쟁, Worker 강제 종료와 Job Lease 자동 회수는 아직 별도의 장애 실험이 필요합니다.
@@ -242,7 +242,7 @@ Job Type별 실제 실행 방식이나 Agent Task 생성은 각 기능 문서에
 - 운영 요청의 비동기 접수와 상태 조회
 - 도메인 상태 전이
 - Idempotency Key 기반 중복 접수 방지
-- Worker Claim과 소유자 확인
+- Worker의 Job 선점과 소유자 확인
 - 제한된 Retry와 Audit 기록
 
 보완이 필요한 핵심은 Job Lease의 갱신·자동 회수와 여러 Worker가 경쟁하는 실제 환경 검증입니다. 이 기능이 확인되기 전에는 Worker 장애가 발생해도 Job이 자동으로 복구된다고 주장하면 안 됩니다.

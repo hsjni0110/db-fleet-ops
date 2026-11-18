@@ -115,10 +115,10 @@ class AgentFailureTest {
 
     @Test
     @Order(3)
-    void concurrentPollClaimsTaskOnce() throws Exception {
+    void concurrentPollAcquiresTaskOnce() throws Exception {
         var agent = environment.registerAgent("concurrent-poll");
         long taskId = environment.createTask(agent.id(), null, BACKUP_PARAMETERS);
-        int duplicateClaims = 0;
+        int duplicateAcquisitions = 0;
 
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             for (int round = 0; round < 20; round++) {
@@ -126,14 +126,14 @@ class AgentFailureTest {
                 var first = executor.submit(() -> pollAtBarrier(agent, barrier));
                 var second = executor.submit(() -> pollAtBarrier(agent, barrier));
                 barrier.countDown();
-                if (first.get() == taskId && second.get() == taskId) duplicateClaims++;
+                if (first.get() == taskId && second.get() == taskId) duplicateAcquisitions++;
             }
         }
 
-        assertEquals(0, duplicateClaims);
+        assertEquals(0, duplicateAcquisitions);
         printResult("동시 Poll의 중복 선점", Map.of(
                 "반복 횟수", 20,
-                "같은 Task 중복 반환 횟수", duplicateClaims));
+                "같은 Task 중복 반환 횟수", duplicateAcquisitions));
     }
 
     @Test
@@ -144,7 +144,7 @@ class AgentFailureTest {
         String parameters = BACKUP_PARAMETERS.replace("\"verifyAfterBackup\":false",
                 "\"verifyAfterBackup\":true");
         long taskId = environment.createTask(agent.id(), jobId, parameters);
-        int executionAttempt = environment.claimNextTask(agent).body()
+        int executionAttempt = environment.acquireNextTask(agent).body()
                 .path("executionAttempt").asInt();
         var proxy = environment.startResponseLossProxy();
 
@@ -194,7 +194,7 @@ class AgentFailureTest {
     private static long pollAtBarrier(TestEnvironment.AgentIdentity agent,
             CountDownLatch barrier) throws Exception {
         barrier.await();
-        return environment.claimNextTask(agent).body().path("taskId").asLong();
+        return environment.acquireNextTask(agent).body().path("taskId").asLong();
     }
 
     private static boolean loseFirstCompletionResponse(

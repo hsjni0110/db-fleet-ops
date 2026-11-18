@@ -8,7 +8,7 @@ Operation Job API는 오래 걸리거나 실패할 수 있는 DB 운영 작업�
 
 - Backup Job 생성
 - Job 조회
-- Worker Claim
+- Worker의 Job 선점
 - Lease 설정
 - Retry 처리
 - Audit Log 기록
@@ -45,7 +45,7 @@ Go Agent
 ```text
 Backup Job 생성
   ↓
-Worker Claim
+Worker의 Job 선점
   ↓
 MYSQL_LOGICAL_BACKUP OperationTask 생성
   ↓
@@ -152,17 +152,17 @@ Job의 현재 상태를 조회합니다.
 
 ---
 
-## 3. Worker Job Claim
+## 3. Worker의 Job 선점
 
 ```http
-POST /internal/v1/workers/{workerId}/jobs/claim
+POST /internal/v1/workers/{workerId}/jobs/acquire
 ```
 
 ### Response: Job이 있는 경우
 
 ```json
 {
-  "claimed": true,
+  "acquired": true,
   "jobId": 1,
   "jobType": "BACKUP",
   "status": "RUNNING",
@@ -176,7 +176,7 @@ POST /internal/v1/workers/{workerId}/jobs/claim
 
 ```json
 {
-  "claimed": false,
+  "acquired": false,
   "jobId": null,
   "jobType": null,
   "status": null,
@@ -188,20 +188,20 @@ POST /internal/v1/workers/{workerId}/jobs/claim
 
 ### 설명
 
-Worker가 `QUEUED` 상태의 Job 하나를 가져가 `RUNNING`으로 변경합니다.
+Worker가 `QUEUED` 상태의 Job 하나를 선점해 `RUNNING`으로 변경합니다.
 
 이때 `leaseOwner`와 `leaseUntil`을 설정합니다.
 
 ```text
 QUEUED
-  ↓ claim
+  ↓ acquire
 RUNNING
 ```
 
-현재 `BACKUP` Job을 Claim하면 내부적으로 `MYSQL_LOGICAL_BACKUP` OperationTask가 자동 생성됩니다.
+현재 `BACKUP` Job을 선점하면 내부적으로 `MYSQL_LOGICAL_BACKUP` OperationTask가 자동 생성됩니다.
 
 ```text
-Worker Claim
+Worker의 Job 선점
   ↓
 OperationJob RUNNING
   ↓
@@ -250,7 +250,7 @@ POST /internal/v1/workers/{workerId}/jobs/{jobId}/succeed
 
 ### 설명
 
-Job을 Claim한 Worker만 성공 처리할 수 있습니다.
+Job을 선점한 Worker만 성공 처리할 수 있습니다.
 
 다만 현재 백업 흐름에서는 Worker가 직접 성공 처리하기보다, 연결된 OperationTask가 성공하면 OperationJob도 자동으로 `SUCCEEDED` 처리됩니다.
 
@@ -302,7 +302,7 @@ POST /internal/v1/workers/{workerId}/jobs/{jobId}/fail
 
 ### 설명
 
-Job을 Claim한 Worker만 실패 처리할 수 있습니다.
+Job을 선점한 Worker만 실패 처리할 수 있습니다.
 
 OperationTask가 실패한 경우에도 연결된 OperationJob은 실패 처리됩니다.
 
@@ -375,12 +375,12 @@ Retry 시에는 다음 값이 초기화됩니다.
 
 ## 7. OperationTask 생성 흐름
 
-Backup Job은 Worker Claim 시점에 OperationTask를 생성합니다.
+Backup Job은 Worker의 Job 선점 시점에 OperationTask를 생성합니다.
 
 ```text
 OperationJob(BACKUP, QUEUED)
   ↓
-Worker Claim
+Worker의 Job 선점
   ↓
 OperationJob(BACKUP, RUNNING)
   ↓
@@ -427,7 +427,7 @@ POST /api/v1/database-instances/{databaseId}/operations/backups
   ↓
 OperationJob QUEUED 생성
   ↓
-POST /internal/v1/workers/{workerId}/jobs/claim
+POST /internal/v1/workers/{workerId}/jobs/acquire
   ↓
 OperationJob RUNNING
   ↓
@@ -510,8 +510,8 @@ CANCELLED
 | Action | 발생 시점 |
 |---|---|
 | JOB_CREATED | Job 생성 |
-| JOB_CLAIMED | Worker Claim |
-| OPERATION_TASK_CREATED | Backup Job Claim 후 OperationTask 생성 |
+| JOB_ACQUIRED | Worker의 Job 선점 |
+| OPERATION_TASK_CREATED | Backup Job 선점 후 OperationTask 생성 |
 | JOB_SUCCEEDED | Job 성공 처리 |
 | JOB_FAILED | Job 실패 처리 |
 | JOB_RETRIED | Retry로 다시 QUEUED 처리 |
@@ -526,7 +526,7 @@ Task Start, Complete, Fail에 대한 별도 Audit은 아직 구현하지 않았�
 
 - Backup Job 생성
 - Idempotency-Key 기반 중복 생성 방지
-- Worker Claim
+- Worker의 Job 선점
 - Lease 설정
 - Job 성공 처리
 - Job 실패 처리
@@ -549,7 +549,7 @@ Task Start, Complete, Fail에 대한 별도 Audit은 아직 구현하지 않았�
 아직 다음 기능은 없습니다.
 
 - ManagedDatabase와 Agent 직접 매핑
-- Task 동시 Claim 제어
+- Task 동시 선점 제어
 - OperationTask 중복 생성 방지
 - OperationTask 실패와 OperationJob Retry의 정교한 연결
 - Credential Reference

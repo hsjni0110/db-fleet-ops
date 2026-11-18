@@ -16,6 +16,10 @@ Restore Verification 기능이 추가되면서 백업 성공 기준은 다음과
   ↓
 Row Count 검증
   ↓
+연결된 Profile의 업무 Rule 검증
+  ↓
+임시 DB 정리
+  ↓
 복원 검증 결과 저장
 ```
 
@@ -56,6 +60,26 @@ GET /api/v1/jobs/{jobId}/restore-verification
   "backupFile": "/tmp/db-fleetops-backups/orders.sql",
   "temporaryDatabaseName": "restore_verify_orders_100",
   "status": "VERIFIED",
+  "technicalStatus": "VERIFIED",
+  "cleanupStatus": "COMPLETED",
+  "cleanupErrorCode": null,
+  "cleanupErrorMessage": null,
+  "businessVerification": {
+    "profileKey": "INSURANCE_SANDBOX_V1",
+    "status": "VERIFIED",
+    "checkedRuleCount": 7,
+    "failedRuleCount": 0,
+    "ruleResults": [
+      {
+        "ruleCode": "DUPLICATE_COMPLETED_PREMIUM_PAYMENT",
+        "ruleName": "완료된 보험료 수납 중복",
+        "status": "VERIFIED",
+        "violationCount": 0,
+        "durationMillis": 12,
+        "message": "Business Rule verified"
+      }
+    ]
+  },
   "restoredTableCount": 2,
   "checkedTableCount": 2,
   "totalRowCount": 38512,
@@ -246,6 +270,19 @@ GET /api/v1/restore-verifications/{verificationId}
 | COUNT_FAILED | 테이블은 존재하지만 Row Count 조회에 실패한 상태 |
 | SKIPPED | Row Count 검증을 수행하지 않은 상태 |
 
+## 단계별 상태
+
+| 구분 | 상태 |
+|---|---|
+| `technicalStatus` | `VERIFIED`, `FAILED` |
+| `businessVerification.status` | `NOT_APPLIED`, `SKIPPED`, `VERIFIED`, `FAILED`, `ERROR` |
+| Rule `status` | `VERIFIED`, `FAILED`, `ERROR` |
+| `cleanupStatus` | `NOT_REQUESTED`, `COMPLETED`, `FAILED` |
+
+Profile이 없으면 업무 상태는 `NOT_APPLIED`, 기술 검증이 실패하면 연결된 Profile의 업무
+검증은 `SKIPPED`입니다. 위반 건수가 1 이상이면 Rule은 `FAILED`, SQL 거절·시간 초과·실행
+오류는 `ERROR`입니다.
+
 ---
 
 # 5. 주요 필드 설명
@@ -270,6 +307,10 @@ GET /api/v1/restore-verifications/{verificationId}
 | completedAt | 복원 검증 완료 시각 |
 | createdAt | 결과 생성 시각 |
 | items | 테이블 단위 검증 결과 목록 |
+| technicalStatus | Table·Row Count 기술 검증 상태 |
+| businessVerification | Profile Key, 집계와 Rule별 결과 |
+| cleanupStatus | 임시 DB 정리 상태 |
+| cleanupErrorCode, cleanupErrorMessage | 정리 실패 정보 |
 
 ---
 
@@ -382,6 +423,8 @@ expectedTables 존재 여부 확인
   ↓
 SELECT COUNT(*) FROM table
   ↓
+검토된 Business Rule을 읽기 전용 Transaction에서 순차 실행
+  ↓
 임시 DB 삭제
   ↓
 BackupRestoreVerification 저장
@@ -395,8 +438,8 @@ OperationJob SUCCEEDED 또는 FAILED 처리
 
 | Restore Verification 결과 | OperationJob 결과 | 설명 |
 |---|---|---|
-| VERIFIED | SUCCEEDED | 백업 파일이 실제로 복원 가능하다고 판단 |
-| FAILED | FAILED | 복원 또는 검증 실패 |
+| VERIFIED | SUCCEEDED | 기술 검증과 적용된 업무 검증을 통과하고 정리 완료 |
+| FAILED | FAILED | 기술 실패, 업무 위반 또는 Rule 실행 오류 |
 | CLEANUP_FAILED | FAILED | 임시 DB 삭제 실패로 운영상 불완전 종료 |
 | verifyAfterBackup=false | SUCCEEDED | 복원 검증을 생략하고 백업 파일 생성 결과만 반영 |
 

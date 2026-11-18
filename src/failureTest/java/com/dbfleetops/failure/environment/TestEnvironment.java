@@ -186,7 +186,7 @@ public final class TestEnvironment implements AutoCloseable {
                 + URLEncoder.encode(identity.token(), StandardCharsets.UTF_8);
     }
 
-    public HttpResult claimNextTask(AgentIdentity identity) throws Exception {
+    public HttpResult acquireNextTask(AgentIdentity identity) throws Exception {
         return post(nextTaskPath(identity), Map.of(), Duration.ofSeconds(5));
     }
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { operationalLabel } from "../labels";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -127,7 +128,7 @@ async function loadDriftDetail(driftId: number) {
     selectedDrift.value = await getConfigurationDrift(driftId);
   } catch (error) {
     driftDetailError.value = getApiErrorMessage(error);
-    ElMessage.error("Configuration Drift 상세를 불러오지 못했습니다.");
+    ElMessage.error("설정 점검 상세를 불러오지 못했습니다.");
   } finally {
     loadingDriftDetail.value = false;
   }
@@ -175,13 +176,12 @@ onMounted(async () => {
       <template #header>
         <div class="card-header">
           <div>
-            <span>Configuration Drifts</span>
-            <p class="card-subtitle">Configuration Check Job이 만든 실제값과 기준값의 비교 결과입니다.</p>
+            <span>설정 차이</span>
           </div>
 
           <div class="card-actions">
             <el-button :icon="Search" @click="openOperationJobs">
-              Create Check Job
+              설정 점검 요청
             </el-button>
             <el-button
               :icon="Refresh"
@@ -189,7 +189,7 @@ onMounted(async () => {
               :disabled="!selectedDatabaseId"
               @click="refreshSelectedDatabaseDrifts"
             >
-              Refresh
+              새로고침
             </el-button>
           </div>
         </div>
@@ -205,11 +205,11 @@ onMounted(async () => {
       />
 
       <el-form label-position="top" @submit.prevent>
-        <el-form-item label="Target Database">
+        <el-form-item label="대상 데이터베이스">
           <el-select
             v-model="selectedDatabaseId"
             class="full-width"
-            placeholder="DB 선택"
+            placeholder="데이터베이스 선택"
             :loading="loadingDatabases"
             :disabled="activeDatabases.length === 0"
           >
@@ -225,7 +225,7 @@ onMounted(async () => {
 
       <el-empty
         v-if="!loadingDatabases && activeDatabases.length === 0"
-        description="No active databases available for drift lookup."
+        description="활성 데이터베이스 없음"
       />
     </el-card>
 
@@ -233,11 +233,10 @@ onMounted(async () => {
       <template #header>
         <div class="card-header">
           <div>
-            <span>Latest Drift</span>
-            <p class="card-subtitle">{{ selectedDatabase.name }} 기준 최신 Configuration Drift 결과입니다.</p>
+            <span>최근 설정 점검</span>
           </div>
 
-          <el-tag type="info">DB #{{ selectedDatabase.id }}</el-tag>
+          <el-tag type="info">데이터베이스 #{{ selectedDatabase.id }}</el-tag>
         </div>
       </template>
 
@@ -252,24 +251,24 @@ onMounted(async () => {
 
       <div v-if="latestDrift" v-loading="loadingLatestDrift" class="metric-grid">
         <div class="metric-card">
-          <span class="metric-label">Status</span>
+          <span class="metric-label">상태</span>
           <el-tag :type="getComplianceTagType(latestDrift.status)" effect="dark">
-            {{ latestDrift.status }}
+            {{ operationalLabel(latestDrift.status) }}
           </el-tag>
-          <small>driftId={{ latestDrift.driftId }}</small>
+          <small>점검 #{{ latestDrift.driftId }}</small>
         </div>
         <div class="metric-card">
-          <span class="metric-label">Total</span>
+          <span class="metric-label">점검 항목</span>
           <strong>{{ latestDrift.totalCount }}</strong>
-          <small>checked parameters</small>
+          <small>점검 항목</small>
         </div>
         <div class="metric-card">
-          <span class="metric-label">Compliant</span>
+          <span class="metric-label">기준 일치</span>
           <strong>{{ latestDrift.compliantCount }}</strong>
-          <small>expected = actual</small>
+
         </div>
         <div class="metric-card">
-          <span class="metric-label">Non-Compliant / Missing</span>
+          <span class="metric-label">불일치 / 누락</span>
           <strong>{{ latestDrift.nonCompliantCount }} / {{ latestDrift.missingCount }}</strong>
           <small>{{ latestDrift.checkedAt }}</small>
         </div>
@@ -277,26 +276,26 @@ onMounted(async () => {
 
       <div v-if="latestDrift" class="detail-summary-grid">
         <div class="summary-tile">
-          <span class="summary-label">Profile ID</span>
+          <span class="summary-label">기준 번호</span>
           <strong>{{ latestDrift.profileId }}</strong>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Snapshot ID</span>
+          <span class="summary-label">설정 기록 번호</span>
           <strong>{{ latestDrift.snapshotId }}</strong>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Engine</span>
-          <strong>{{ latestDrift.engineType }}</strong>
+          <span class="summary-label">엔진</span>
+          <strong>{{ operationalLabel(latestDrift.engineType) }}</strong>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Checked At</span>
+          <span class="summary-label">점검 시각</span>
           <strong>{{ latestDrift.checkedAt }}</strong>
         </div>
       </div>
 
       <el-empty
         v-else-if="!loadingLatestDrift && !latestDriftError"
-        description="Latest drift result is not available yet."
+        description="설정 점검 결과 없음"
       />
     </el-card>
 
@@ -304,11 +303,10 @@ onMounted(async () => {
       <template #header>
         <div class="card-header">
           <div>
-            <span>Drift History</span>
-            <p class="card-subtitle">History row를 선택하면 Drift Item 상세를 조회합니다.</p>
+            <span>설정 점검 이력</span>
           </div>
 
-          <el-tag type="info">{{ driftHistory.length }} results</el-tag>
+          <el-tag type="info">{{ driftHistory.length }} 건</el-tag>
         </div>
       </template>
 
@@ -321,30 +319,30 @@ onMounted(async () => {
         :closable="false"
       />
 
-      <el-table
+      <el-table scrollbar-tabindex="0"
         v-loading="loadingHistory"
         class="console-table"
         :data="driftHistory"
         highlight-current-row
-        empty-text="No drift history found for this database."
+        empty-text="설정 점검 이력 없음"
         @row-click="selectDrift"
       >
-        <el-table-column prop="driftId" label="Drift ID" width="100" />
-        <el-table-column prop="profileId" label="Profile ID" width="110" />
-        <el-table-column prop="snapshotId" label="Snapshot ID" width="120" />
-        <el-table-column label="Status" width="150">
+        <el-table-column prop="driftId" label="점검 번호" width="100" />
+        <el-table-column prop="profileId" label="기준 번호" width="110" />
+        <el-table-column prop="snapshotId" label="설정 기록 번호" width="120" />
+        <el-table-column label="상태" width="150">
           <template #default="{ row }">
             <el-tag :type="getComplianceTagType(row.status)" effect="light">
-              {{ row.status }}
+              {{ operationalLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="totalCount" label="Total" width="90" />
-        <el-table-column prop="compliantCount" label="Compliant" width="120" />
-        <el-table-column prop="nonCompliantCount" label="Non-Compliant" width="150" />
-        <el-table-column prop="missingCount" label="Missing" width="110" />
-        <el-table-column prop="checkedAt" label="Checked At" min-width="190" />
-        <el-table-column label="Actions" width="120" fixed="right">
+        <el-table-column prop="totalCount" label="점검 항목" width="90" />
+        <el-table-column prop="compliantCount" label="기준 일치" width="120" />
+        <el-table-column prop="nonCompliantCount" label="불일치" width="150" />
+        <el-table-column prop="missingCount" label="누락" width="110" />
+        <el-table-column prop="checkedAt" label="점검 시각" min-width="190" />
+        <el-table-column label="관리" width="120">
           <template #default="{ row }">
             <el-button
               type="primary"
@@ -353,7 +351,7 @@ onMounted(async () => {
               :icon="View"
               @click.stop="loadDriftDetail(row.driftId)"
             >
-              Detail
+              상세
             </el-button>
           </template>
         </el-table-column>
@@ -364,12 +362,11 @@ onMounted(async () => {
       <template #header>
         <div class="card-header">
           <div>
-            <span>Drift Items #{{ selectedDrift.driftId }}</span>
-            <p class="card-subtitle">Expected value와 실제 DB 설정값의 Parameter별 비교 결과입니다.</p>
+            <span>항목별 설정 차이 #{{ selectedDrift.driftId }}</span>
           </div>
 
           <el-tag :type="getComplianceTagType(selectedDrift.status)">
-            {{ selectedDrift.status }}
+            {{ operationalLabel(selectedDrift.status) }}
           </el-tag>
         </div>
       </template>
@@ -383,43 +380,45 @@ onMounted(async () => {
         :closable="false"
       />
 
-      <el-table
+      <el-table scrollbar-tabindex="0"
         v-loading="loadingDriftDetail"
         class="console-table"
         :data="selectedDrift.items"
-        empty-text="No drift items found."
+        empty-text="항목별 점검 결과 없음"
       >
-        <el-table-column prop="parameterName" label="Parameter" min-width="190" />
-        <el-table-column prop="expectedValue" label="Expected" min-width="150" show-overflow-tooltip />
-        <el-table-column label="Actual" min-width="150" show-overflow-tooltip>
+        <el-table-column prop="parameterName" label="설정 항목" min-width="190" />
+        <el-table-column prop="expectedValue" label="기준값" min-width="150" show-overflow-tooltip />
+        <el-table-column label="현재값" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">
             {{ formatNullable(row.actualValue) }}
           </template>
         </el-table-column>
-        <el-table-column prop="valueType" label="Type" width="110" />
-        <el-table-column label="Dynamic" width="110">
+        <el-table-column prop="valueType" label="유형" width="110">
+          <template #default="{ row }">{{ operationalLabel(row.valueType) }}</template>
+        </el-table-column>
+        <el-table-column label="재시작 없이 변경" width="110">
           <template #default="{ row }">
             <el-tag :type="row.dynamic ? 'success' : 'warning'" effect="light">
-              {{ row.dynamic ? "YES" : "NO" }}
+              {{ row.dynamic ? "가능" : "불가" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Apply Allowed" width="140">
+        <el-table-column label="변경 허용" width="140">
           <template #default="{ row }">
             <el-tag :type="row.applyAllowed ? 'success' : 'danger'" effect="light">
-              {{ row.applyAllowed ? "YES" : "NO" }}
+              {{ row.applyAllowed ? "허용" : "제한" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Status" width="150">
+        <el-table-column label="상태" width="150">
           <template #default="{ row }">
             <el-tag :type="getComplianceTagType(row.complianceStatus)" effect="light">
-              {{ row.complianceStatus }}
+              {{ operationalLabel(row.complianceStatus) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="message" label="Message" min-width="300" show-overflow-tooltip />
-        <el-table-column prop="createdAt" label="Created At" min-width="190" />
+        <el-table-column prop="message" label="메시지" min-width="300" show-overflow-tooltip />
+        <el-table-column prop="createdAt" label="등록 시각" min-width="190" />
       </el-table>
     </el-card>
   </section>

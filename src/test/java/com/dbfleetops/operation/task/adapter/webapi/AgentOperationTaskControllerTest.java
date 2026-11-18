@@ -27,13 +27,13 @@ class AgentOperationTaskControllerTest {
     @Autowired MockMvc mockMvc;
     @MockitoBean AgentTasks taskService;
     @MockitoBean TaskReports taskReports;
-    @MockitoBean TaskClaim claimService;
+    @MockitoBean TaskAcquisition acquisitionService;
     @MockitoBean TaskLease leaseService;
     @MockitoBean TaskCredential credentialService;
 
     @Test
-    void postNextReturnsClaimedExecution() throws Exception {
-        when(claimService.claimNext(1L, "token")).thenReturn(new NextOperationTaskResponse(
+    void postNextReturnsAcquiredExecution() throws Exception {
+        when(acquisitionService.acquireNext(1L, "token")).thenReturn(new NextOperationTaskResponse(
                 true, 10L, OperationTaskType.COLLECT_LINUX_STATUS, "{}", 1,
                 LocalDateTime.of(2026, 8, 7, 12, 1)));
 

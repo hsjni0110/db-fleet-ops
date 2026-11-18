@@ -22,6 +22,7 @@ export interface CreateDatabaseInstanceRequest {
   description?: string;
   username: string;
   password: string;
+  businessVerificationProfileKey?: Nullable<string>;
 }
 
 export type UpdateDatabaseInstanceRequest = CreateDatabaseInstanceRequest;
@@ -38,6 +39,7 @@ export interface DatabaseInstanceResponse {
   serviceName?: Nullable<string>;
   owner?: Nullable<string>;
   description?: Nullable<string>;
+  businessVerificationProfileKey?: Nullable<string>;
 }
 
 export interface DatabaseInstanceSummary {
@@ -45,6 +47,16 @@ export interface DatabaseInstanceSummary {
   name: string;
   engine: DatabaseEngine;
   status: DatabaseStatus;
+  businessVerificationProfileKey?: Nullable<string>;
+}
+
+export interface BusinessVerificationProfileResponse {
+  key: string;
+  name: string;
+  description: string;
+  engine: DatabaseEngine;
+  requiredTables: string[];
+  ruleCount: number;
 }
 
 export interface DefaultDatabaseHealthResponse {

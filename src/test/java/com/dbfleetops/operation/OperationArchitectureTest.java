@@ -100,7 +100,7 @@ class OperationArchitectureTest {
 
     @Test
     void workerSchedulerDoesNotReportJobResults() {
-        noClasses().that().haveSimpleName("OperationJobClaimScheduler")
+        noClasses().that().haveSimpleName("OperationJobAcquisitionScheduler")
                 .should().dependOnClassesThat().haveSimpleName("JobReports")
                 .check(classes);
     }

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { Refresh } from "@element-plus/icons-vue";
+import { operationalLabel } from "../labels";
 
 import {
   createBackupJob,
@@ -60,11 +61,11 @@ function validateBackupRequest(
   request: BackupJobRequest,
 ) {
   if (!databaseId) {
-    return "Backup 대상 DB를 선택하세요.";
+    return "백업 대상 DB를 선택하세요.";
   }
 
   if (!request.reason.trim()) {
-    return "Backup 사유를 입력하세요.";
+    return "백업 사유를 입력하세요.";
   }
 
   if (!request.requestedBy.trim()) {
@@ -80,7 +81,7 @@ function validateConfigurationRequest(databaseId: number | null, profileId: numb
   }
 
   if (!profileId) {
-    return "Configuration Profile을 선택하세요.";
+    return "설정 기준을 선택하세요.";
   }
 
   if (!requestedBy.trim()) {
@@ -112,7 +113,7 @@ async function loadProfiles() {
     profiles.value = await getConfigurationProfiles();
   } catch (error) {
     profilesError.value = getApiErrorMessage(error);
-    ElMessage.error("Configuration Profile 목록을 불러오지 못했습니다.");
+    ElMessage.error("설정 기준 목록을 불러오지 못했습니다.");
   } finally {
     loadingProfiles.value = false;
   }
@@ -124,7 +125,7 @@ async function submitOperationJob(
   request: BackupJobRequest | CreateConfigurationCheckJobRequest | CreateConfigurationApplyJobRequest,
 ) {
   if (jobType === "RESTART") {
-    ElMessage.warning("RESTART Job 생성 API는 아직 제공되지 않습니다.");
+    ElMessage.warning("재시작 요청 미지원");
     return;
   }
 
@@ -146,7 +147,7 @@ async function submitOperationJob(
     jobType === "CONFIGURATION_APPLY" &&
     (request as CreateConfigurationApplyJobRequest).parameters.length === 0
   ) {
-    ElMessage.warning("Apply Parameter는 parameterName=targetValue 형식으로 하나 이상 입력하세요.");
+    ElMessage.warning("항목=값 형식의 설정을 한 줄 이상 입력하세요.");
     return;
   }
 
@@ -192,9 +193,9 @@ async function submitOperationJob(
     }
 
     upsertJob(createdJob);
-    ElMessage.success(`${createdJob.jobType} Job이 생성되었습니다. jobId=${createdJob.jobId}`);
+    ElMessage.success(`${operationalLabel(createdJob.jobType)} 요청 완료 · 작업 #${createdJob.jobId}`);
   } catch (error) {
-    ElMessage.error(`Operation Job 생성에 실패했습니다. ${getApiErrorMessage(error)}`);
+    ElMessage.error(`운영 작업 생성에 실패했습니다. ${getApiErrorMessage(error)}`);
   } finally {
     creatingJob.value = false;
   }
@@ -204,7 +205,7 @@ async function lookupJob(jobId: string) {
   const normalizedJobId = jobId.trim();
 
   if (!normalizedJobId) {
-    ElMessage.warning("조회할 Job ID를 입력하세요.");
+    ElMessage.warning("조회할 작업 번호를 입력하세요.");
     return;
   }
 
@@ -214,9 +215,9 @@ async function lookupJob(jobId: string) {
     const job = await getOperationJob(normalizedJobId);
 
     upsertJob(job);
-    ElMessage.success(`Job #${job.jobId} 상태를 조회했습니다.`);
+    ElMessage.success(`작업 #${job.jobId} 상태를 조회했습니다.`);
   } catch (error) {
-    ElMessage.error(`Job 조회에 실패했습니다. ${getApiErrorMessage(error)}`);
+    ElMessage.error(`작업 조회에 실패했습니다. ${getApiErrorMessage(error)}`);
   } finally {
     lookingUpJob.value = false;
   }
@@ -227,9 +228,9 @@ async function refreshJob(job: OperationJobResponse) {
     const refreshedJob = await getOperationJob(job.jobId);
 
     upsertJob(refreshedJob);
-    ElMessage.success(`Job #${job.jobId} 상태를 갱신했습니다.`);
+    ElMessage.success(`작업 #${job.jobId} 상태를 갱신했습니다.`);
   } catch (error) {
-    ElMessage.error(`Job 갱신에 실패했습니다. ${getApiErrorMessage(error)}`);
+    ElMessage.error(`작업 새로고침에 실패했습니다. ${getApiErrorMessage(error)}`);
   }
 }
 
@@ -249,10 +250,7 @@ onMounted(() => {
       <template #header>
         <div class="card-header">
           <div>
-            <span>Operation Jobs</span>
-            <p class="card-subtitle">
-              Backup, Configuration Check, Configuration Apply 등 운영 Job을 생성하고 상태를 추적합니다.
-            </p>
+            <span>작업 요청 및 조회</span>
           </div>
 
           <div class="card-actions">
@@ -261,7 +259,7 @@ onMounted(() => {
               :loading="loadingDatabases"
               @click="loadDatabases"
             >
-              Refresh DBs
+              데이터베이스 새로고침
             </el-button>
           </div>
         </div>
@@ -281,7 +279,6 @@ onMounted(() => {
         :looking-up-job="lookingUpJob"
         @create-operation-job="submitOperationJob"
         @lookup-job="lookupJob"
-        @refresh-databases="loadDatabases"
         @refresh-profiles="loadProfiles"
       />
 

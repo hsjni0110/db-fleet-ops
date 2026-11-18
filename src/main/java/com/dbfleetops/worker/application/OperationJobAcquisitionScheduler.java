@@ -1,7 +1,7 @@
 package com.dbfleetops.worker.application;
 
-import com.dbfleetops.operation.job.application.provided.JobClaim;
-import com.dbfleetops.operation.job.dto.ClaimJobResponse;
+import com.dbfleetops.operation.job.application.provided.JobAcquisition;
+import com.dbfleetops.operation.job.dto.JobAcquisitionResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -10,45 +10,45 @@ import org.springframework.stereotype.Component;
 
 @Component
 @ConditionalOnProperty(prefix = "db-fleetops.worker", name = "enabled", havingValue = "true")
-public class OperationJobClaimScheduler {
+public class OperationJobAcquisitionScheduler {
 
-    private static final Logger log = LoggerFactory.getLogger(OperationJobClaimScheduler.class);
+    private static final Logger log = LoggerFactory.getLogger(OperationJobAcquisitionScheduler.class);
 
-    private final JobClaim jobClaim;
+    private final JobAcquisition jobAcquisition;
     private final WorkerShutdownState workerShutdownState;
     private final WorkerProperties workerProperties;
 
-    public OperationJobClaimScheduler(
-            JobClaim jobClaim,
+    public OperationJobAcquisitionScheduler(
+            JobAcquisition jobAcquisition,
             WorkerShutdownState workerShutdownState,
             WorkerProperties workerProperties
     ) {
-        this.jobClaim = jobClaim;
+        this.jobAcquisition = jobAcquisition;
         this.workerShutdownState = workerShutdownState;
         this.workerProperties = workerProperties;
     }
 
-    @Scheduled(fixedDelayString = "${db-fleetops.worker.claim-interval-ms:5000}")
-    public void claimAvailableJob() {
+    @Scheduled(fixedDelayString = "${db-fleetops.worker.acquisition-interval-ms:5000}")
+    public void acquireAvailableJob() {
         if (workerShutdownState.isShuttingDown()) {
-            log.debug("job_claim_poll_skipped reason=worker_shutdown workerId={}",
+            log.debug("job_acquisition_poll_skipped reason=worker_shutdown workerId={}",
                     workerProperties.getId());
             return;
         }
 
         try {
-            ClaimJobResponse response = jobClaim.claimJob(workerProperties.getId());
+            JobAcquisitionResponse response = jobAcquisition.acquireJob(workerProperties.getId());
 
-            if (!response.claimed()) {
-                log.debug("job_claim_poll_empty workerId={}", workerProperties.getId());
+            if (!response.acquired()) {
+                log.debug("job_acquisition_poll_empty workerId={}", workerProperties.getId());
                 return;
             }
 
-            log.info("job_claim_poll_claimed workerId={} jobId={} jobType={} status={}",
+            log.info("job_acquisition_poll_acquired workerId={} jobId={} jobType={} status={}",
                     workerProperties.getId(), response.jobId(), response.jobType(),
                     response.status());
         } catch (Exception exception) {
-            log.error("job_claim_poll_failed workerId={} error={}", workerProperties.getId(),
+            log.error("job_acquisition_poll_failed workerId={} error={}", workerProperties.getId(),
                     exception.getMessage(), exception);
         }
     }

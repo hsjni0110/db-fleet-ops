@@ -140,6 +140,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 return ResponseEntity.status(errorCode.status()).body(problem);
         }
 
+        @ExceptionHandler(IllegalArgumentException.class)
+        public ResponseEntity<Object> handleInvalidRequest(IllegalArgumentException exception,
+                        HttpServletRequest request) {
+                ApiErrorCode errorCode = ApiErrorCode.INVALID_REQUEST;
+                ProblemDetail problem = createProblemDetail(errorCode, request);
+                problem.setDetail(exception.getMessage());
+                return ResponseEntity.status(errorCode.status()).body(problem);
+        }
+
         /*
          * 위에서 분류하지 못한 예상 밖의 오류
          */

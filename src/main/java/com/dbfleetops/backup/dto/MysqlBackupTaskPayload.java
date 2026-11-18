@@ -5,7 +5,7 @@ import java.util.List;
 public record MysqlBackupTaskPayload(Long operationJobId, Long databaseId, String databaseName,
         String host, Integer port, String username, String password, String backupType,
         Boolean compression, Boolean verifyAfterBackup, List<String> expectedTables,
-        Boolean verifyRowCount, Boolean cleanup) {
+        Boolean verifyRowCount, Boolean cleanup, String businessVerificationProfileKey) {
 
     public boolean shouldVerifyAfterBackup() {
         return verifyAfterBackup == null || verifyAfterBackup;

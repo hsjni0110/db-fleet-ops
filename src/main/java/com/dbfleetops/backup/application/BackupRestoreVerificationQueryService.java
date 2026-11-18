@@ -3,8 +3,11 @@ package com.dbfleetops.backup.application;
 import com.dbfleetops.backup.domain.BackupRestoreVerification;
 import com.dbfleetops.backup.dto.BackupRestoreVerificationItemResponse;
 import com.dbfleetops.backup.dto.BackupRestoreVerificationResponse;
+import com.dbfleetops.backup.dto.BusinessRuleResultResponse;
 import com.dbfleetops.backup.infra.BackupRestoreVerificationItemRepository;
 import com.dbfleetops.backup.infra.BackupRestoreVerificationRepository;
+import com.dbfleetops.backup.infra.BusinessRuleResultRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,12 +18,22 @@ public class BackupRestoreVerificationQueryService {
 
     private final BackupRestoreVerificationRepository verificationRepository;
     private final BackupRestoreVerificationItemRepository itemRepository;
+    private final BusinessRuleResultRepository ruleResultRepository;
+
+    @Autowired
+    public BackupRestoreVerificationQueryService(
+            BackupRestoreVerificationRepository verificationRepository,
+            BackupRestoreVerificationItemRepository itemRepository,
+            BusinessRuleResultRepository ruleResultRepository) {
+        this.verificationRepository = verificationRepository;
+        this.itemRepository = itemRepository;
+        this.ruleResultRepository = ruleResultRepository;
+    }
 
     public BackupRestoreVerificationQueryService(
             BackupRestoreVerificationRepository verificationRepository,
             BackupRestoreVerificationItemRepository itemRepository) {
-        this.verificationRepository = verificationRepository;
-        this.itemRepository = itemRepository;
+        this(verificationRepository, itemRepository, null);
     }
 
     @Transactional(readOnly = true)
@@ -57,6 +70,11 @@ public class BackupRestoreVerificationQueryService {
                 itemRepository.findByVerificationIdOrderByTableNameAsc(verification.getId())
                         .stream().map(BackupRestoreVerificationItemResponse::from).toList();
 
-        return BackupRestoreVerificationResponse.from(verification, items);
+        List<BusinessRuleResultResponse> ruleResults = ruleResultRepository == null ? List.of()
+                : ruleResultRepository
+                        .findByVerificationIdOrderByRuleCodeAsc(verification.getId()).stream()
+                        .map(BusinessRuleResultResponse::from).toList();
+
+        return BackupRestoreVerificationResponse.from(verification, items, ruleResults);
     }
 }

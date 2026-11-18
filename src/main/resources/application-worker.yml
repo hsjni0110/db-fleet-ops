@@ -2,9 +2,9 @@ db-fleetops:
   worker:
     enabled: true
     id: ${DB_FLEETOPS_WORKER_ID:worker-1}
-    claim-interval-ms: ${DB_FLEETOPS_WORKER_CLAIM_INTERVAL_MS:5000}
+    acquisition-interval-ms: ${DB_FLEETOPS_WORKER_ACQUISITION_INTERVAL_MS:5000}
     shutdown:
-      stop-claiming-on-shutdown: true
+      stop-acquiring-on-shutdown: true
 
 spring:
   main:

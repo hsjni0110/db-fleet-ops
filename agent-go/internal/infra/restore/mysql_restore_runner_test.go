@@ -2,6 +2,7 @@ package restore
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,30 @@ import (
 	"testing"
 )
 
+func TestMySQLRestoreRunnerRejectsChangedBackupBeforeConnecting(t *testing.T) {
+	backupFile := createTestBackupFile(t)
+	original, err := os.ReadFile(backupFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(backupFile, []byte(strings.Replace(string(original), "VALUES (1)", "VALUES (2)", 1)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	commands := &fakeCommandRunner{}
+	runner := NewMySQLRestoreRunnerWithCommandRunner(commands)
+	result, err := runner.Run(context.Background(), MySQLRestoreRequest{
+		Host: "127.0.0.1", Port: 3306, Username: "restore_user", Password: "secret",
+		BackupFile: backupFile, ExpectedChecksumSHA256: fmt.Sprintf("%x", sha256.Sum256(original)),
+		TemporaryDatabaseName: "restore_verify_orders_100", Cleanup: true,
+	})
+	if err == nil || result.ErrorCode != "BACKUP_INTEGRITY_CHECK_FAILED" {
+		t.Fatalf("expected backup integrity failure, got %+v, %v", result, err)
+	}
+	if len(commands.commands) != 0 {
+		t.Fatalf("expected no MySQL commands, got %d", len(commands.commands))
+	}
+}
+
 type recordedCommand struct {
 	name      string
 	args      []string
@@ -17,9 +42,9 @@ type recordedCommand struct {
 }
 
 type fakeCommandRunner struct {
-	commands       []recordedCommand
-	failOnCommand  int
-	failWithError  error
+	commands      []recordedCommand
+	failOnCommand int
+	failWithError error
 }
 
 func (r *fakeCommandRunner) Run(
@@ -87,13 +112,14 @@ func TestMySQLRestoreRunnerRestoresBackupAndCleansUp(t *testing.T) {
 		runner.Run(
 			context.Background(),
 			MySQLRestoreRequest{
-				Host:                  "127.0.0.1",
-				Port:                  3306,
-				Username:              "restore_user",
-				Password:              "secret",
-				BackupFile:            backupFile,
-				TemporaryDatabaseName: "restore_verify_orders_100",
-				Cleanup:               true,
+				Host:                   "127.0.0.1",
+				Port:                   3306,
+				Username:               "restore_user",
+				Password:               "secret",
+				BackupFile:             backupFile,
+				ExpectedChecksumSHA256: "56ca8ca7f31856e85bc45ff68abcf254d47a59ea3a2e5441d3cf668dfddc8edf",
+				TemporaryDatabaseName:  "restore_verify_orders_100",
+				Cleanup:                true,
 			},
 		)
 

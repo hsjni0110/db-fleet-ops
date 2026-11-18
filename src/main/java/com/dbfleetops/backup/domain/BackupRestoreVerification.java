@@ -44,6 +44,26 @@ public class BackupRestoreVerification {
 
     private Long totalRowCount;
 
+    @Enumerated(EnumType.STRING)
+    private TechnicalVerificationStatus technicalStatus;
+
+    private String businessVerificationProfileKey;
+
+    @Enumerated(EnumType.STRING)
+    private BusinessVerificationStatus businessStatus;
+
+    private Integer checkedRuleCount;
+
+    private Integer failedRuleCount;
+
+    @Enumerated(EnumType.STRING)
+    private CleanupStatus cleanupStatus;
+
+    private String cleanupErrorCode;
+
+    @Column(length = 2000)
+    private String cleanupErrorMessage;
+
     private String errorCode;
 
     @Column(length = 2000)
@@ -74,6 +94,10 @@ public class BackupRestoreVerification {
         this.restoredTableCount = 0;
         this.checkedTableCount = 0;
         this.totalRowCount = 0L;
+        this.businessStatus = BusinessVerificationStatus.NOT_APPLIED;
+        this.checkedRuleCount = 0;
+        this.failedRuleCount = 0;
+        this.cleanupStatus = CleanupStatus.NOT_REQUESTED;
         this.createdAt = LocalDateTime.now();
     }
 
@@ -106,6 +130,7 @@ public class BackupRestoreVerification {
         this.restoredTableCount = restoredTableCount;
         this.checkedTableCount = checkedTableCount;
         this.totalRowCount = totalRowCount;
+        this.technicalStatus = TechnicalVerificationStatus.VERIFIED;
         this.completedAt = LocalDateTime.now();
     }
 
@@ -115,6 +140,9 @@ public class BackupRestoreVerification {
         }
 
         this.status = BackupRestoreVerificationStatus.FAILED;
+        if (this.technicalStatus == null) {
+            this.technicalStatus = TechnicalVerificationStatus.FAILED;
+        }
         this.errorCode = errorCode;
         this.errorMessage = errorMessage;
         this.completedAt = LocalDateTime.now();
@@ -129,8 +157,61 @@ public class BackupRestoreVerification {
         }
 
         this.status = BackupRestoreVerificationStatus.CLEANUP_FAILED;
+        this.cleanupStatus = CleanupStatus.FAILED;
+        this.cleanupErrorCode = errorCode;
+        this.cleanupErrorMessage = errorMessage;
         this.errorCode = errorCode;
         this.errorMessage = errorMessage;
+        this.completedAt = LocalDateTime.now();
+    }
+
+    public void complete(TechnicalVerificationStatus technicalStatus,
+            String businessVerificationProfileKey, BusinessVerificationStatus businessStatus,
+            Integer checkedRuleCount, Integer failedRuleCount, CleanupStatus cleanupStatus,
+            Integer restoredTableCount, Integer checkedTableCount, Long totalRowCount,
+            String errorCode, String errorMessage, String cleanupErrorCode,
+            String cleanupErrorMessage) {
+        if (status != BackupRestoreVerificationStatus.RUNNING) {
+            throw new IllegalStateException(
+                    "Only RUNNING verification can be completed. currentStatus=" + status);
+        }
+        if (technicalStatus == null || businessStatus == null || cleanupStatus == null) {
+            throw new IllegalArgumentException("Verification phase statuses are required.");
+        }
+        validateCounts(restoredTableCount, checkedTableCount, totalRowCount);
+        if (checkedRuleCount == null || checkedRuleCount < 0 || failedRuleCount == null
+                || failedRuleCount < 0 || failedRuleCount > checkedRuleCount) {
+            throw new IllegalArgumentException("Business Rule counts are invalid.");
+        }
+
+        this.technicalStatus = technicalStatus;
+        this.businessVerificationProfileKey = normalize(businessVerificationProfileKey);
+        this.businessStatus = businessStatus;
+        this.checkedRuleCount = checkedRuleCount;
+        this.failedRuleCount = failedRuleCount;
+        this.cleanupStatus = cleanupStatus;
+        this.restoredTableCount = restoredTableCount;
+        this.checkedTableCount = checkedTableCount;
+        this.totalRowCount = totalRowCount;
+        this.cleanupErrorCode = cleanupErrorCode;
+        this.cleanupErrorMessage = cleanupErrorMessage;
+
+        if (technicalStatus == TechnicalVerificationStatus.FAILED
+                || businessStatus == BusinessVerificationStatus.FAILED
+                || businessStatus == BusinessVerificationStatus.ERROR
+                || businessStatus == BusinessVerificationStatus.SKIPPED) {
+            this.status = BackupRestoreVerificationStatus.FAILED;
+            this.errorCode = errorCode;
+            this.errorMessage = errorMessage;
+        } else if (cleanupStatus == CleanupStatus.FAILED) {
+            this.status = BackupRestoreVerificationStatus.CLEANUP_FAILED;
+            this.errorCode = cleanupErrorCode;
+            this.errorMessage = cleanupErrorMessage;
+        } else {
+            this.status = BackupRestoreVerificationStatus.VERIFIED;
+            this.errorCode = null;
+            this.errorMessage = null;
+        }
         this.completedAt = LocalDateTime.now();
     }
 
@@ -185,6 +266,10 @@ public class BackupRestoreVerification {
                     "checkedTableCount cannot exceed restoredTableCount. restoredTableCount="
                             + restoredTableCount + ", checkedTableCount=" + checkedTableCount);
         }
+    }
+
+    private String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
 

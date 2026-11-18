@@ -19,7 +19,7 @@ public class JobStoreAdapter implements JobStore {
     public Optional<OperationJob> findDuplicate(Long databaseId, JobType type, String key) {
         return repository.findByTargetDatabaseIdAndJobTypeAndIdempotencyKey(databaseId, type, key);
     }
-    public List<OperationJob> findClaimable(JobStatus status, LocalDateTime now, int limit) {
+    public List<OperationJob> findAcquirable(JobStatus status, LocalDateTime now, int limit) {
         return repository.findTop10ByStatusAndAvailableAtLessThanEqualOrderByPriorityDescCreatedAtAsc(status, now)
                 .stream().limit(limit).toList();
     }

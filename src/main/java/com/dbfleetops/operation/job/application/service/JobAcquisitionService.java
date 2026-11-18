@@ -2,13 +2,13 @@ package com.dbfleetops.operation.job.application.service;
 
 import com.dbfleetops.operation.job.application.execution.JobExecutionDispatcher;
 import com.dbfleetops.operation.job.application.service.OperationJobLeaseProperties;
-import com.dbfleetops.operation.job.application.provided.JobClaim;
+import com.dbfleetops.operation.job.application.provided.JobAcquisition;
 import com.dbfleetops.operation.shared.application.required.AuditWriter;
 import com.dbfleetops.operation.job.application.required.JobStore;
 import com.dbfleetops.operation.job.application.required.WorkerState;
 import com.dbfleetops.operation.job.domain.JobStatus;
 import com.dbfleetops.operation.job.domain.OperationJob;
-import com.dbfleetops.operation.job.dto.ClaimJobResponse;
+import com.dbfleetops.operation.job.dto.JobAcquisitionResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -21,10 +21,10 @@ import java.util.Optional;
 import static org.springframework.util.Assert.hasText;
 
 @Service
-public class JobClaimService implements JobClaim {
+public class JobAcquisitionService implements JobAcquisition {
 
-    private static final Logger log = LoggerFactory.getLogger(JobClaimService.class);
-    private static final int CLAIM_CANDIDATE_LIMIT = 10;
+    private static final Logger log = LoggerFactory.getLogger(JobAcquisitionService.class);
+    private static final int ACQUISITION_CANDIDATE_LIMIT = 10;
 
     private final JobStore jobs;
     private final WorkerState workerState;
@@ -34,7 +34,7 @@ public class JobClaimService implements JobClaim {
     private final Clock clock;
     private final OperationJobLeaseProperties lease;
 
-    public JobClaimService(JobStore jobs, WorkerState workerState,
+    public JobAcquisitionService(JobStore jobs, WorkerState workerState,
             JobExecutionDispatcher executions, JobExecutionResultService results,
             AuditWriter audit, Clock clock, OperationJobLeaseProperties lease) {
         this.jobs = jobs;
@@ -48,52 +48,52 @@ public class JobClaimService implements JobClaim {
 
     @Override
     @Transactional
-    public ClaimJobResponse claimJob(String workerId) {
+    public JobAcquisitionResponse acquireJob(String workerId) {
         hasText(workerId, "Worker ID는 필수입니다.");
 
-        if (cannotClaim(workerId, null)) {
-            return ClaimJobResponse.empty();
+        if (cannotAcquire(workerId, null)) {
+            return JobAcquisitionResponse.empty();
         }
 
         Optional<OperationJob> waitingJob = findWaitingJob();
         if (waitingJob.isEmpty()) {
-            return ClaimJobResponse.empty();
+            return JobAcquisitionResponse.empty();
         }
 
         OperationJob job = waitingJob.get();
-        if (cannotClaim(workerId, job)) {
-            return ClaimJobResponse.empty();
+        if (cannotAcquire(workerId, job)) {
+            return JobAcquisitionResponse.empty();
         }
 
         startJob(workerId, job);
         results.apply(workerId, job, executions.execute(job));
 
-        return ClaimJobResponse.claimed(job);
+        return JobAcquisitionResponse.acquired(job);
     }
 
     private Optional<OperationJob> findWaitingJob() {
-        return jobs.findClaimable(JobStatus.QUEUED, now(), CLAIM_CANDIDATE_LIMIT)
+        return jobs.findAcquirable(JobStatus.QUEUED, now(), ACQUISITION_CANDIDATE_LIMIT)
                 .stream().findFirst();
     }
 
     private void startJob(String workerId, OperationJob job) {
         LocalDateTime startedAt = now();
         job.start(workerId, startedAt, startedAt.plus(lease.duration()));
-        audit.record(workerId, "JOB_CLAIMED", "OPERATION_JOB", String.valueOf(job.getId()),
-                "SUCCESS", "Job claimed by worker. leaseUntil=" + job.getLeaseUntil());
+        audit.record(workerId, "JOB_ACQUIRED", "OPERATION_JOB", String.valueOf(job.getId()),
+                "SUCCESS", "Job acquired by worker. leaseUntil=" + job.getLeaseUntil());
     }
 
-    private boolean cannotClaim(String workerId, OperationJob job) {
+    private boolean cannotAcquire(String workerId, OperationJob job) {
         if (!workerState.isShuttingDown()) {
             return false;
         }
 
         String jobId = job == null ? "-" : String.valueOf(job.getId());
         String message = job == null
-                ? "Job claim skipped because worker is shutting down."
-                : "Job claim skipped after lookup because worker is shutting down.";
-        log.info("job_claim_skipped reason=worker_shutdown workerId={} jobId={}", workerId, jobId);
-        audit.record(workerId, "JOB_CLAIM_SKIPPED", "OPERATION_JOB", jobId, "SKIPPED", message);
+                ? "Job acquisition skipped because worker is shutting down."
+                : "Job acquisition skipped after lookup because worker is shutting down.";
+        log.info("job_acquisition_skipped reason=worker_shutdown workerId={} jobId={}", workerId, jobId);
+        audit.record(workerId, "JOB_ACQUISITION_SKIPPED", "OPERATION_JOB", jobId, "SKIPPED", message);
         return true;
     }
 

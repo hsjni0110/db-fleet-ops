@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import FieldHelp from "../components/FieldHelp.vue";
+import { operationalLabel } from "../labels";
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -39,10 +41,6 @@ const activeDatabases = computed(() => {
   return databases.value.filter((database) => database.status === "ACTIVE");
 });
 
-const selectedDatabase = computed(() => {
-  return databases.value.find((database) => database.id === selectedDatabaseId.value) ?? null;
-});
-
 function getStatusTagType(status: RestoreVerificationStatus) {
   if (status === "VERIFIED") {
     return "success";
@@ -68,6 +66,13 @@ function getItemStatusTagType(status: RestoreVerificationItemStatus) {
     return "danger";
   }
 
+  return "info";
+}
+
+function getPhaseStatusTagType(status?: string) {
+  if (status === "VERIFIED" || status === "COMPLETED") return "success";
+  if (status === "FAILED" || status === "ERROR") return "danger";
+  if (status === "SKIPPED") return "warning";
   return "info";
 }
 
@@ -132,7 +137,7 @@ async function lookupByJobId() {
   const normalizedJobId = Number(jobLookupId.value.trim());
 
   if (!Number.isInteger(normalizedJobId) || normalizedJobId <= 0) {
-    ElMessage.warning("조회할 Job ID를 숫자로 입력하세요.");
+    ElMessage.warning("조회할 작업 번호를 숫자로 입력하세요.");
     return;
   }
 
@@ -143,7 +148,7 @@ async function lookupByJobId() {
   try {
     selectedVerification.value = await getRestoreVerificationByJobId(normalizedJobId);
     selectedDatabaseId.value = selectedVerification.value.databaseId;
-    ElMessage.success(`Job #${normalizedJobId} Restore Verification을 조회했습니다.`);
+    ElMessage.success(`작업 #${normalizedJobId} 복원 검증을 조회했습니다.`);
   } catch (error) {
     selectedVerification.value = null;
     lookupError.value = getApiErrorMessage(error);
@@ -156,7 +161,7 @@ async function lookupByVerificationId() {
   const normalizedVerificationId = Number(verificationLookupId.value.trim());
 
   if (!Number.isInteger(normalizedVerificationId) || normalizedVerificationId <= 0) {
-    ElMessage.warning("조회할 Verification ID를 숫자로 입력하세요.");
+    ElMessage.warning("조회할 검증 번호를 숫자로 입력하세요.");
     return;
   }
 
@@ -167,7 +172,7 @@ async function lookupByVerificationId() {
   try {
     selectedVerification.value = await getRestoreVerification(normalizedVerificationId);
     selectedDatabaseId.value = selectedVerification.value.databaseId;
-    ElMessage.success(`Verification #${normalizedVerificationId} 상세를 조회했습니다.`);
+    ElMessage.success(`복원 검증 #${normalizedVerificationId} 상세를 조회했습니다.`);
   } catch (error) {
     selectedVerification.value = null;
     lookupError.value = getApiErrorMessage(error);
@@ -199,8 +204,7 @@ onMounted(async () => {
       <template #header>
         <div class="card-header">
           <div>
-            <span>Restore Verifications</span>
-            <p class="card-subtitle">Backup Job 이후 생성된 복원 검증 결과를 조회합니다.</p>
+            <span>검증 결과 조회</span>
           </div>
 
           <div class="card-actions">
@@ -210,7 +214,7 @@ onMounted(async () => {
               :disabled="!selectedDatabaseId"
               @click="loadLatestVerification"
             >
-              Refresh Latest
+              최근 결과 새로고침
             </el-button>
           </div>
         </div>
@@ -227,11 +231,11 @@ onMounted(async () => {
 
       <el-form label-position="top" @submit.prevent>
         <div class="detail-summary-grid">
-          <el-form-item label="Target Database">
+          <el-form-item label="대상 데이터베이스">
             <el-select
               v-model="selectedDatabaseId"
               class="full-width"
-              placeholder="DB 선택"
+              placeholder="데이터베이스 선택"
               :loading="loadingDatabases"
               :disabled="activeDatabases.length === 0"
               @change="loadLatestVerification"
@@ -245,15 +249,16 @@ onMounted(async () => {
             </el-select>
           </el-form-item>
 
-          <el-form-item label="Job ID Lookup">
+          <el-form-item label="작업 번호">
             <el-input
               v-model="jobLookupId"
-              placeholder="operationJobId"
+              placeholder="예: 15"
               clearable
               @keyup.enter="lookupByJobId"
             >
               <template #append>
                 <el-button
+                  aria-label="작업 번호 조회"
                   :icon="Search"
                   :loading="loadingJobLookup"
                   @click="lookupByJobId"
@@ -262,15 +267,16 @@ onMounted(async () => {
             </el-input>
           </el-form-item>
 
-          <el-form-item label="Verification ID Lookup">
+          <el-form-item label="검증 번호">
             <el-input
               v-model="verificationLookupId"
-              placeholder="verificationId"
+              placeholder="예: 3"
               clearable
               @keyup.enter="lookupByVerificationId"
             >
               <template #append>
                 <el-button
+                  aria-label="검증 번호 조회"
                   :icon="View"
                   :loading="loadingVerificationLookup"
                   @click="lookupByVerificationId"
@@ -279,13 +285,6 @@ onMounted(async () => {
             </el-input>
           </el-form-item>
 
-          <div class="summary-tile">
-            <span class="summary-label">Selected DB</span>
-            <strong>{{ selectedDatabase?.name ?? "-" }}</strong>
-            <span class="muted-text">
-              {{ selectedDatabase ? `#${selectedDatabase.id} ${selectedDatabase.engine}` : "No active database" }}
-            </span>
-          </div>
         </div>
       </el-form>
 
@@ -296,7 +295,7 @@ onMounted(async () => {
         show-icon
         :closable="false"
       >
-        <template #title>Latest Restore Verification 조회 실패</template>
+        <template #title>최근 복원 검증 조회 실패</template>
         <p>{{ latestError }}</p>
       </el-alert>
 
@@ -307,13 +306,13 @@ onMounted(async () => {
         show-icon
         :closable="false"
       >
-        <template #title>Restore Verification 조회 실패</template>
+        <template #title>복원 검증 조회 실패</template>
         <p>{{ lookupError }}</p>
       </el-alert>
 
       <el-empty
         v-if="activeDatabases.length === 0 && !loadingDatabases && !databasesError"
-        description="Restore Verification을 조회할 Active DB가 없습니다."
+        description="활성 데이터베이스 없음"
       />
     </el-card>
 
@@ -321,11 +320,11 @@ onMounted(async () => {
       <template #header>
         <div class="card-header">
           <div>
-            <span>Verification #{{ selectedVerification.id }}</span>
-            <p class="card-subtitle">
-              Job #{{ selectedVerification.operationJobId }} /
+            <span>복원 검증 #{{ selectedVerification.id }}</span>
+            <span class="record-context">
+              작업 #{{ selectedVerification.operationJobId }} /
               DB #{{ selectedVerification.databaseId }}
-            </p>
+            </span>
           </div>
 
           <div class="card-actions">
@@ -333,134 +332,190 @@ onMounted(async () => {
               :icon="View"
               @click="openJobDetail(selectedVerification.operationJobId)"
             >
-              Open Job
+              작업 상세
             </el-button>
             <el-button
               :icon="View"
               @click="openDatabaseDetail(selectedVerification.databaseId)"
             >
-              Open DB
+              데이터베이스 상세
             </el-button>
           </div>
         </div>
       </template>
 
+      <el-alert
+        v-if="selectedVerification.errorCode === 'BACKUP_INTEGRITY_CHECK_FAILED'"
+        class="page-alert"
+        title="백업 파일 무결성 확인 실패"
+        description="백업 당시와 파일 내용 대조 실패. 임시 데이터베이스 생성 전 복원 중단."
+        type="error"
+        show-icon
+        :closable="false"
+      />
+      <p v-if="selectedVerification.errorCode" class="muted-text">오류 코드 · <code>{{ selectedVerification.errorCode }}</code></p>
       <div class="metric-grid">
         <div class="metric-card">
-          <span class="metric-label">Status</span>
+          <span class="metric-label">상태</span>
           <el-tag :type="getStatusTagType(selectedVerification.status)" effect="dark">
-            {{ selectedVerification.status }}
+            {{ operationalLabel(selectedVerification.status) }}
           </el-tag>
           <small>{{ selectedVerification.completedAt ?? selectedVerification.createdAt }}</small>
         </div>
 
         <div class="metric-card">
-          <span class="metric-label">Source DB</span>
+          <span class="metric-label">원본 데이터베이스</span>
           <strong>{{ selectedVerification.sourceDatabaseName }}</strong>
           <small>{{ selectedVerification.temporaryDatabaseName }}</small>
         </div>
 
         <div class="metric-card">
-          <span class="metric-label">Tables</span>
+          <span class="metric-label">검증 / 복원 테이블 수</span>
           <strong>
             {{ selectedVerification.checkedTableCount }} /
             {{ selectedVerification.restoredTableCount }}
           </strong>
-          <small>checked / restored</small>
+
         </div>
 
         <div class="metric-card">
-          <span class="metric-label">Total Rows</span>
+          <span class="metric-label">검증 행 수</span>
           <strong>{{ selectedVerification.totalRowCount }}</strong>
-          <small>verified rows</small>
+
         </div>
       </div>
 
-      <div class="detail-summary-grid">
-        <div class="summary-tile">
-          <span class="summary-label">Operation Job</span>
-          <strong>#{{ selectedVerification.operationJobId }}</strong>
-          <span class="muted-text">backup workflow</span>
+      <div
+        v-if="selectedVerification.technicalStatus || selectedVerification.businessVerification || selectedVerification.cleanupStatus"
+        class="metric-grid"
+      >
+        <div v-if="selectedVerification.technicalStatus" class="metric-card">
+          <span class="metric-label">
+            기본 복원 검증
+            <FieldHelp label="기본 복원 검증" text="백업을 임시 데이터베이스에 복원한 후 필수 테이블과 설정된 행 수 조회 확인." />
+          </span>
+          <el-tag :type="getPhaseStatusTagType(selectedVerification.technicalStatus)" effect="light">
+            {{ operationalLabel(selectedVerification.technicalStatus) }}
+          </el-tag>
         </div>
-
-        <div class="summary-tile">
-          <span class="summary-label">Backup Task</span>
-          <strong>#{{ selectedVerification.backupTaskId }}</strong>
-          <span class="muted-text">MYSQL_LOGICAL_BACKUP</span>
+        <div v-if="selectedVerification.businessVerification" class="metric-card">
+          <span class="metric-label">
+            업무 검증
+            <FieldHelp label="업무 검증" text="복원된 데이터에서 누락된 계약이나 중복 지급 등의 업무 규칙 위반 확인." />
+          </span>
+          <el-tag :type="getPhaseStatusTagType(selectedVerification.businessVerification.status)" effect="light">
+            {{ operationalLabel(selectedVerification.businessVerification.status) }}
+          </el-tag>
+          <small>{{ selectedVerification.businessVerification.profileKey ?? "기준 없음" }}</small>
         </div>
-
-        <div class="summary-tile">
-          <span class="summary-label">Restore Verify Task</span>
-          <strong>#{{ selectedVerification.restoreVerifyTaskId }}</strong>
-          <span class="muted-text">MYSQL_RESTORE_VERIFY</span>
+        <div v-if="selectedVerification.businessVerification" class="metric-card">
+          <span class="metric-label">검사한 업무 규칙</span>
+          <strong>{{ selectedVerification.businessVerification.checkedRuleCount }}</strong>
+          <small>{{ selectedVerification.businessVerification.failedRuleCount }} 개 실패</small>
         </div>
-
-        <div class="summary-tile">
-          <span class="summary-label">Database</span>
-          <strong>#{{ selectedVerification.databaseId }}</strong>
-          <span class="muted-text">{{ selectedDatabase?.name ?? "selected verification target" }}</span>
+        <div v-if="selectedVerification.cleanupStatus" class="metric-card">
+          <span class="metric-label">
+            임시 데이터베이스 정리
+            <FieldHelp label="임시 데이터베이스 정리" text="복원 검증에 사용한 임시 데이터베이스 삭제 결과." />
+          </span>
+          <el-tag :type="getPhaseStatusTagType(selectedVerification.cleanupStatus)" effect="light">
+            {{ operationalLabel(selectedVerification.cleanupStatus) }}
+          </el-tag>
         </div>
       </div>
 
-      <el-descriptions :column="1" border>
-        <el-descriptions-item label="Backup File">
-          {{ selectedVerification.backupFile }}
-        </el-descriptions-item>
+      <details class="record-details">
+        <summary>백업 파일 및 실행 기록</summary>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="백업 단계 번호">#{{ selectedVerification.backupTaskId }}</el-descriptions-item>
+          <el-descriptions-item label="복원 단계 번호">#{{ selectedVerification.restoreVerifyTaskId }}</el-descriptions-item>
+          <el-descriptions-item label="백업 파일">
+            {{ selectedVerification.backupFile }}
+          </el-descriptions-item>
 
-        <el-descriptions-item label="Started At">
-          {{ formatNullable(selectedVerification.startedAt) }}
-        </el-descriptions-item>
+          <el-descriptions-item label="시작 시각">
+            {{ formatNullable(selectedVerification.startedAt) }}
+          </el-descriptions-item>
 
-        <el-descriptions-item label="Completed At">
-          {{ formatNullable(selectedVerification.completedAt) }}
-        </el-descriptions-item>
+          <el-descriptions-item label="완료 시각">
+            {{ formatNullable(selectedVerification.completedAt) }}
+          </el-descriptions-item>
 
-        <el-descriptions-item label="Error">
-          {{ formatNullable(selectedVerification.errorCode) }}
-          {{ selectedVerification.errorMessage ? `- ${selectedVerification.errorMessage}` : "" }}
-        </el-descriptions-item>
-      </el-descriptions>
+          <el-descriptions-item label="오류">
+            {{ formatNullable(selectedVerification.errorCode) }}
+            {{ selectedVerification.errorMessage ? `- ${selectedVerification.errorMessage}` : "" }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </details>
+    </el-card>
+
+    <el-card v-if="selectedVerification?.businessVerification" shadow="never">
+      <template #header>
+        <div class="card-header">
+          <div>
+            <span>업무 규칙 검증 결과</span>
+          </div>
+        </div>
+      </template>
+      <el-table scrollbar-tabindex="0"
+        :data="selectedVerification.businessVerification.ruleResults"
+        border
+        stripe
+        empty-text="업무 규칙 결과 없음"
+      >
+        <el-table-column prop="ruleCode" label="규칙 코드" min-width="260" />
+        <el-table-column prop="ruleName" label="이름" min-width="220" />
+        <el-table-column prop="status" label="상태" width="120">
+          <template #default="{ row }">
+            <el-tag :type="getPhaseStatusTagType(row.status)" effect="light">{{ operationalLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="violationCount" label="위반 건수" width="120">
+          <template #default="{ row }">{{ formatNullable(row.violationCount) }}</template>
+        </el-table-column>
+        <el-table-column prop="durationMillis" label="실행 시간 (ms)" width="140" />
+        <el-table-column prop="message" label="메시지" min-width="280" show-overflow-tooltip />
+      </el-table>
     </el-card>
 
     <el-card v-if="selectedVerification" shadow="never">
       <template #header>
         <div class="card-header">
           <div>
-            <span>Verification Items</span>
-            <p class="card-subtitle">복원된 임시 DB에서 테이블 단위로 확인한 결과입니다.</p>
+            <span>테이블별 복원 결과</span>
           </div>
         </div>
       </template>
 
-      <el-table
+      <el-table scrollbar-tabindex="0"
         class="console-table"
         :data="selectedVerification.items"
         border
         stripe
-        empty-text="Restore Verification Item이 없습니다."
+        empty-text="테이블별 결과 없음"
       >
-        <el-table-column prop="tableName" label="Table" min-width="190" />
-        <el-table-column prop="existsInRestoredDb" label="Exists" width="110">
+        <el-table-column prop="tableName" label="테이블" min-width="190" />
+        <el-table-column prop="existsInRestoredDb" label="존재 여부" width="110">
           <template #default="{ row }">
             <el-tag :type="row.existsInRestoredDb ? 'success' : 'danger'" effect="light">
-              {{ row.existsInRestoredDb ? "YES" : "NO" }}
+              {{ row.existsInRestoredDb ? "있음" : "없음" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="rowCount" label="Row Count" width="130">
+        <el-table-column prop="rowCount" label="행 수" width="130">
           <template #default="{ row }">
             {{ formatNullable(row.rowCount) }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="Status" width="150">
+        <el-table-column prop="status" label="상태" width="150">
           <template #default="{ row }">
             <el-tag :type="getItemStatusTagType(row.status)" effect="light">
-              {{ row.status }}
+              {{ operationalLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="Created At" min-width="190" />
-        <el-table-column prop="message" label="Message" min-width="300" show-overflow-tooltip>
+        <el-table-column prop="createdAt" label="등록 시각" min-width="190" />
+        <el-table-column prop="message" label="메시지" min-width="300" show-overflow-tooltip>
           <template #default="{ row }">
             {{ formatNullable(row.message) }}
           </template>
@@ -469,10 +524,10 @@ onMounted(async () => {
     </el-card>
 
     <el-card
-      v-else-if="!loadingLatest && !loadingJobLookup && !loadingVerificationLookup"
+      v-else-if="activeDatabases.length && !loadingLatest && !loadingJobLookup && !loadingVerificationLookup && !latestError && !lookupError && !databasesError"
       shadow="never"
     >
-      <el-empty description="선택한 조건의 Restore Verification 결과가 없습니다." />
+      <el-empty description="조회된 복원 검증 결과 없음" />
     </el-card>
   </section>
 </template>

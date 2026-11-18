@@ -2,12 +2,21 @@ package com.dbfleetops.backup.application;
 
 import com.dbfleetops.backup.domain.BackupRestoreVerification;
 import com.dbfleetops.backup.domain.BackupRestoreVerificationItem;
+import com.dbfleetops.backup.domain.BusinessRuleResult;
+import com.dbfleetops.backup.domain.BusinessRuleStatus;
+import com.dbfleetops.backup.domain.BusinessVerificationStatus;
+import com.dbfleetops.backup.domain.CleanupStatus;
+import com.dbfleetops.backup.domain.TechnicalVerificationStatus;
+import com.dbfleetops.backup.infra.BusinessRuleResultRepository;
 import com.dbfleetops.backup.infra.BackupRestoreVerificationItemRepository;
 import com.dbfleetops.backup.infra.BackupRestoreVerificationRepository;
+import com.dbfleetops.backup.dto.BusinessRuleResultPayload;
+import com.dbfleetops.backup.dto.BusinessVerificationResultPayload;
 import com.dbfleetops.backup.dto.RestoreVerificationItemResult;
 import com.dbfleetops.backup.dto.RestoreVerificationResult;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -17,14 +26,24 @@ public class BackupRestoreVerificationResultRecorder {
 
     private final BackupRestoreVerificationRepository verificationRepository;
     private final BackupRestoreVerificationItemRepository itemRepository;
+    private final BusinessRuleResultRepository ruleResultRepository;
     private final ObjectMapper objectMapper;
+
+    @Autowired
+    public BackupRestoreVerificationResultRecorder(
+            BackupRestoreVerificationRepository verificationRepository,
+            BackupRestoreVerificationItemRepository itemRepository,
+            BusinessRuleResultRepository ruleResultRepository, ObjectMapper objectMapper) {
+        this.verificationRepository = verificationRepository;
+        this.itemRepository = itemRepository;
+        this.ruleResultRepository = ruleResultRepository;
+        this.objectMapper = objectMapper;
+    }
 
     public BackupRestoreVerificationResultRecorder(
             BackupRestoreVerificationRepository verificationRepository,
             BackupRestoreVerificationItemRepository itemRepository, ObjectMapper objectMapper) {
-        this.verificationRepository = verificationRepository;
-        this.itemRepository = itemRepository;
-        this.objectMapper = objectMapper;
+        this(verificationRepository, itemRepository, null, objectMapper);
     }
 
     public RestoreVerificationResult record(Long operationJobId, Long restoreVerifyTaskId,
@@ -41,27 +60,89 @@ public class BackupRestoreVerificationResultRecorder {
 
         verification.start();
 
-        if (resultPayload.isVerified()) {
-            verification.verify(safeInteger(resultPayload.restoredTableCount()),
-                    safeInteger(resultPayload.checkedTableCount()),
-                    safeLong(resultPayload.totalRowCount()));
-        } else if (resultPayload.isCleanupFailed()) {
-            verification
-                    .cleanupFailed(defaultErrorCode(resultPayload.errorCode(), "CLEANUP_FAILED"),
-                            defaultErrorMessage(resultPayload.errorMessage(),
-                                    resultPayload.message(),
-                                    "restore verification completed but cleanup failed"));
-        } else {
-            verification.fail(defaultErrorCode(resultPayload.errorCode(), "RESTORE_VERIFY_FAILED"),
-                    defaultErrorMessage(resultPayload.errorMessage(), resultPayload.message(),
-                            "restore verification failed"));
-        }
+        BusinessVerificationResultPayload business = resultPayload.businessVerification();
+        TechnicalVerificationStatus technicalStatus = technicalStatus(resultPayload);
+        BusinessVerificationStatus businessStatus = businessStatus(business);
+        CleanupStatus cleanupStatus = cleanupStatus(resultPayload);
+
+        verification.complete(technicalStatus, business == null ? null : business.profileKey(),
+                businessStatus, business == null ? 0 : safeInteger(business.checkedRuleCount()),
+                business == null ? 0 : safeInteger(business.failedRuleCount()), cleanupStatus,
+                safeInteger(resultPayload.restoredTableCount()),
+                safeInteger(resultPayload.checkedTableCount()),
+                safeLong(resultPayload.totalRowCount()), errorCode(resultPayload, businessStatus),
+                defaultErrorMessage(resultPayload.errorMessage(), resultPayload.message(),
+                        "restore verification failed"), resultPayload.cleanupErrorCode(),
+                resultPayload.cleanupErrorMessage());
 
         BackupRestoreVerification savedVerification = verificationRepository.save(verification);
 
         saveItems(savedVerification.getId(), resultPayload.items());
+        saveRuleResults(savedVerification.getId(), business);
 
         return resultPayload;
+    }
+
+    private void saveRuleResults(Long verificationId,
+            BusinessVerificationResultPayload business) {
+        if (ruleResultRepository == null || business == null || business.ruleResults() == null) {
+            return;
+        }
+        for (BusinessRuleResultPayload result : business.ruleResults()) {
+            ruleResultRepository.save(BusinessRuleResult.create(verificationId, result.code(),
+                    result.name(), parseRuleStatus(result.status()), result.violationCount(),
+                    safeLong(result.durationMillis()), result.message()));
+        }
+    }
+
+    private BusinessRuleStatus parseRuleStatus(String status) {
+        try {
+            return BusinessRuleStatus.valueOf(status == null ? "" : status.toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Unsupported Business Rule status: " + status,
+                    exception);
+        }
+    }
+
+    private TechnicalVerificationStatus technicalStatus(RestoreVerificationResult result) {
+        if (result.technicalStatus() != null) {
+            return result.technicalStatus();
+        }
+        return result.isVerified() || result.isCleanupFailed()
+                ? TechnicalVerificationStatus.VERIFIED : TechnicalVerificationStatus.FAILED;
+    }
+
+    private BusinessVerificationStatus businessStatus(BusinessVerificationResultPayload business) {
+        if (business == null || business.status() == null || business.status().isBlank()) {
+            return BusinessVerificationStatus.NOT_APPLIED;
+        }
+        try {
+            return BusinessVerificationStatus.valueOf(business.status().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(
+                    "Unsupported Business Verification status: " + business.status(), exception);
+        }
+    }
+
+    private CleanupStatus cleanupStatus(RestoreVerificationResult result) {
+        if (result.cleanupStatus() != null) {
+            return result.cleanupStatus();
+        }
+        return result.isCleanupFailed() ? CleanupStatus.FAILED : CleanupStatus.COMPLETED;
+    }
+
+    private String errorCode(RestoreVerificationResult result,
+            BusinessVerificationStatus businessStatus) {
+        if (result.errorCode() != null && !result.errorCode().isBlank()) {
+            return result.errorCode();
+        }
+        if (businessStatus == BusinessVerificationStatus.ERROR) {
+            return "BUSINESS_VERIFICATION_ERROR";
+        }
+        if (businessStatus == BusinessVerificationStatus.FAILED) {
+            return "BUSINESS_VERIFICATION_FAILED";
+        }
+        return result.isCleanupFailed() ? "CLEANUP_FAILED" : "RESTORE_VERIFY_FAILED";
     }
 
     private RestoreVerificationResult parseResultPayload(String resultPayloadJson) {

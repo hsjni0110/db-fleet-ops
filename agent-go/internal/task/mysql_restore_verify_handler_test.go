@@ -11,13 +11,13 @@ import (
 )
 
 type fakeRestoreRunner struct {
-	runCalled     bool
-	cleanupCalled bool
-	runRequest    restore.MySQLRestoreRequest
+	runCalled      bool
+	cleanupCalled  bool
+	runRequest     restore.MySQLRestoreRequest
 	cleanupRequest restore.MySQLRestoreCleanupRequest
-	runResult     restore.MySQLRestoreResult
-	runErr        error
-	cleanupErr    error
+	runResult      restore.MySQLRestoreResult
+	runErr         error
+	cleanupErr     error
 }
 
 func (r *fakeRestoreRunner) Run(
@@ -59,6 +59,17 @@ type fakeRestoreVerifier struct {
 	request restore.MySQLRestoreVerifyRequest
 	result  restore.MySQLRestoreVerifyResult
 	err     error
+}
+
+type fakeBusinessVerifier struct {
+	called bool
+	result restore.MySQLBusinessVerifyResult
+}
+
+func (v *fakeBusinessVerifier) Verify(ctx context.Context,
+	request restore.MySQLBusinessVerifyRequest) restore.MySQLBusinessVerifyResult {
+	v.called = true
+	return v.result
 }
 
 func (v *fakeRestoreVerifier) Verify(
@@ -303,8 +314,8 @@ func TestMySQLRestoreVerifyHandlerReturnsFailedWhenRunnerFails(t *testing.T) {
 			},
 		)
 
-	if err == nil {
-		t.Fatalf("expected error")
+	if err != nil {
+		t.Fatalf("expected structured result without task error, got %v", err)
 	}
 
 	var result MySQLRestoreVerifyResult
@@ -364,8 +375,8 @@ func TestMySQLRestoreVerifyHandlerReturnsCleanupFailedWhenCleanupFails(t *testin
 			},
 		)
 
-	if err == nil {
-		t.Fatalf("expected cleanup error")
+	if err != nil {
+		t.Fatalf("expected structured result without task error, got %v", err)
 	}
 
 	var result MySQLRestoreVerifyResult
@@ -383,5 +394,42 @@ func TestMySQLRestoreVerifyHandlerReturnsCleanupFailedWhenCleanupFails(t *testin
 
 	if result.ErrorCode != "CLEANUP_FAILED" {
 		t.Fatalf("expected CLEANUP_FAILED, got %s", result.ErrorCode)
+	}
+}
+
+func TestMySQLRestoreVerifyHandlerReturnsBusinessFailureAndStillCleansUp(t *testing.T) {
+	runner := &fakeRestoreRunner{}
+	technicalVerifier := &fakeRestoreVerifier{}
+	violationCount := int64(1)
+	businessVerifier := &fakeBusinessVerifier{result: restore.MySQLBusinessVerifyResult{
+		ProfileKey: "INSURANCE_SANDBOX_V1", Status: "FAILED", CheckedRuleCount: 1,
+		FailedRuleCount: 1, RuleResults: []restore.BusinessRuleResult{{
+			Code: "DUPLICATE_COMPLETED_PREMIUM_PAYMENT", Name: "duplicate",
+			Status: "FAILED", ViolationCount: &violationCount,
+		}},
+	}}
+	handler := NewMySQLRestoreVerifyHandlerWithAllDependencies(runner, technicalVerifier,
+		businessVerifier)
+
+	resultJSON, err := handler.Handle(context.Background(), port.Task{ParametersJSON: `{
+		"operationJobId":100,"databaseId":1,"backupTaskId":200,
+		"sourceDatabaseName":"insurance_sandbox","backupFile":"/tmp/insurance.sql",
+		"host":"127.0.0.1","port":3306,"username":"restore_user",
+		"temporaryDatabaseName":"restore_verify_insurance_100","cleanup":true,
+		"businessVerificationProfileKey":"INSURANCE_SANDBOX_V1",
+		"businessRules":[{"code":"DUPLICATE_COMPLETED_PREMIUM_PAYMENT","name":"duplicate","query":"SELECT 0 AS violation_count","timeoutMillis":5000}]
+	}`})
+	if err != nil {
+		t.Fatalf("expected structured result, got %v", err)
+	}
+	var result MySQLRestoreVerifyResult
+	if err := json.Unmarshal([]byte(resultJSON), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "FAILED" || result.ErrorCode != "BUSINESS_VERIFICATION_FAILED" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if !businessVerifier.called || !runner.cleanupCalled {
+		t.Fatalf("business verification and cleanup must both run")
 	}
 }

@@ -104,7 +104,7 @@ public class OperationTask {
         return new OperationTask(agentId, operationJobId, credentialId, taskType, parametersJson);
     }
 
-    public void claim(LocalDateTime now, LocalDateTime leaseExpiresAt) {
+    public void acquire(LocalDateTime now, LocalDateTime leaseExpiresAt) {
         requireExecution(status == OperationTaskStatus.QUEUED,
                 "대기 중인 Task만 시작할 수 있습니다. 현재 상태=" + status);
         notNull(now, "선점 시각은 필수입니다.");

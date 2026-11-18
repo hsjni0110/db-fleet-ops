@@ -6,8 +6,8 @@ import com.dbfleetops.operation.job.domain.OperationJob;
 
 import java.time.LocalDateTime;
 
-public record ClaimJobResponse(
-        boolean claimed,
+public record JobAcquisitionResponse(
+        boolean acquired,
         Long jobId,
         JobType jobType,
         JobStatus status,
@@ -15,10 +15,10 @@ public record ClaimJobResponse(
         String leaseOwner,
         LocalDateTime leaseUntil
 ) {
-    public static ClaimJobResponse claimed(
+    public static JobAcquisitionResponse acquired(
             OperationJob job
     ) {
-        return new ClaimJobResponse(
+        return new JobAcquisitionResponse(
                 true,
                 job.getId(),
                 job.getJobType(),
@@ -29,8 +29,8 @@ public record ClaimJobResponse(
         );
     }
 
-    public static ClaimJobResponse empty() {
-        return new ClaimJobResponse(
+    public static JobAcquisitionResponse empty() {
+        return new JobAcquisitionResponse(
                 false,
                 null,
                 null,

@@ -91,18 +91,18 @@ class TaskReportServiceTest {
     private OperationTask runningTask(Long agentId) {
         OperationTask task = OperationTask.create(
                 agentId, OperationTaskType.COLLECT_LINUX_STATUS, "{}");
-        return claim(task);
+        return acquire(task);
     }
 
     private OperationTask runningLinkedTask(Long agentId, Long jobId) {
         OperationTask task = OperationTask.createForJob(
                 agentId, jobId, OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
-        return claim(task);
+        return acquire(task);
     }
 
-    private OperationTask claim(OperationTask task) {
+    private OperationTask acquire(OperationTask task) {
         LocalDateTime now = LocalDateTime.now(CLOCK);
-        task.claim(now.minusSeconds(1), now.plusMinutes(1));
+        task.acquire(now.minusSeconds(1), now.plusMinutes(1));
         return task;
     }
 }

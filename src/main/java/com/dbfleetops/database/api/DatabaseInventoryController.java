@@ -4,6 +4,7 @@ import com.dbfleetops.database.application.DatabaseInventoryService;
 import com.dbfleetops.database.dto.DatabaseCreateRequest;
 import com.dbfleetops.database.dto.DatabaseResponse;
 import com.dbfleetops.database.dto.DatabaseUpdateRequest;
+import com.dbfleetops.database.dto.ConnectBusinessVerificationProfileRequest;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -44,5 +45,12 @@ public class DatabaseInventoryController {
     @DeleteMapping("/{databaseId}")
     public void deactivate(@PathVariable Long databaseId) {
         databaseInventoryService.deactivate(databaseId);
+    }
+
+    @PutMapping("/{databaseId}/business-verification-profile")
+    public DatabaseResponse connectBusinessVerificationProfile(@PathVariable Long databaseId,
+            @RequestBody ConnectBusinessVerificationProfileRequest request) {
+        return databaseInventoryService.connectBusinessVerificationProfile(databaseId,
+                request.profileKey());
     }
 }

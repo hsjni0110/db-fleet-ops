@@ -22,6 +22,7 @@ public class DatabaseContextAdapter implements DatabaseReader {
         return databases.findById(databaseId).map(database -> new DatabaseExecutionTarget(
                 database.getId(), database.getDatabaseName(), database.getHost(), database.getPort(),
                 database.getEngine() == null ? null : database.getEngine().name(),
-                database.getAssignedAgentId(), database.getStatus() == DatabaseStatus.ACTIVE));
+                database.getAssignedAgentId(), database.getStatus() == DatabaseStatus.ACTIVE,
+                database.getBusinessVerificationProfileKey()));
     }
 }

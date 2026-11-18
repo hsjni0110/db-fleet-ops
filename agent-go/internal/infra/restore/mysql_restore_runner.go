@@ -2,6 +2,7 @@ package restore
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -10,14 +11,17 @@ import (
 	"time"
 )
 
+const BackupIntegrityCheckFailed = "BACKUP_INTEGRITY_CHECK_FAILED"
+
 type MySQLRestoreRequest struct {
-	Host                  string
-	Port                  int
-	Username              string
-	Password              string
-	BackupFile            string
-	TemporaryDatabaseName string
-	Cleanup               bool
+	Host                   string
+	Port                   int
+	Username               string
+	Password               string
+	BackupFile             string
+	ExpectedChecksumSHA256 string
+	TemporaryDatabaseName  string
+	Cleanup                bool
 }
 
 type MySQLRestoreCleanupRequest struct {
@@ -105,6 +109,19 @@ func (r *MySQLRestoreRunner) Run(
 	startedAt :=
 		time.Now()
 
+	backupFile, err := os.Open(request.BackupFile)
+	if err != nil {
+		return MySQLRestoreResult{}, err
+	}
+	defer backupFile.Close()
+
+	if request.ExpectedChecksumSHA256 != "" {
+		if err := verifyBackupChecksum(backupFile, request.ExpectedChecksumSHA256); err != nil {
+			return MySQLRestoreResult{Status: "FAILED", ErrorCode: BackupIntegrityCheckFailed,
+				ErrorMessage: err.Error()}, err
+		}
+	}
+
 	defaultsFile, err :=
 		createDefaultsFile(
 			mysqlDefaultsFileRequest{
@@ -136,7 +153,7 @@ func (r *MySQLRestoreRunner) Run(
 		r.restoreBackupFile(
 			ctx,
 			defaultsFile,
-			request.BackupFile,
+			backupFile,
 			request.TemporaryDatabaseName,
 		)
 
@@ -189,6 +206,18 @@ func (r *MySQLRestoreRunner) Run(
 		CompletedAt:           time.Now().Format(time.RFC3339),
 		Message:               "mysql backup restored to temporary database",
 	}, nil
+}
+
+func verifyBackupChecksum(file *os.File, expected string) error {
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return fmt.Errorf("could not read backup for SHA-256 verification: %w", err)
+	}
+	if !strings.EqualFold(fmt.Sprintf("%x", hash.Sum(nil)), expected) {
+		return fmt.Errorf("backup SHA-256 does not match the recorded checksum")
+	}
+	_, err := file.Seek(0, io.SeekStart)
+	return err
 }
 
 func (r *MySQLRestoreRunner) Cleanup(
@@ -263,21 +292,12 @@ func (r *MySQLRestoreRunner) createTemporaryDatabase(
 func (r *MySQLRestoreRunner) restoreBackupFile(
 	ctx context.Context,
 	defaultsFile string,
-	backupFile string,
+	backupFile io.Reader,
 	temporaryDatabaseName string,
 ) error {
-	file, err :=
-		os.Open(backupFile)
-
-	if err != nil {
-		return err
-	}
-
-	defer file.Close()
-
 	var stderr strings.Builder
 
-	err =
+	err :=
 		r.commandRunner.Run(
 			ctx,
 			"mysql",
@@ -285,7 +305,7 @@ func (r *MySQLRestoreRunner) restoreBackupFile(
 				"--defaults-extra-file=" + defaultsFile,
 				temporaryDatabaseName,
 			},
-			file,
+			backupFile,
 			io.Discard,
 			&stderr,
 		)

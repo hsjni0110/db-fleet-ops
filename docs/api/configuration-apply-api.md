@@ -45,7 +45,7 @@ OperationJob 생성
   ↓
 status = QUEUED
   ↓
-Worker가 Job Claim
+Worker가 Job 선점
   ↓
 변경 전 Snapshot 저장
   ↓
@@ -211,7 +211,7 @@ Idempotency-Key: idem-config-apply-001
 
 요청을 검증한 뒤 `CONFIGURATION_APPLY` Job을 생성하고 `QUEUED` 상태로 저장합니다.
 
-실제 설정 변경은 Worker가 Job을 Claim한 뒤 실행합니다.
+실제 설정 변경은 Worker가 Job을 선점한 뒤 실행합니다.
 
 ```text
 POST Apply 요청
@@ -255,23 +255,23 @@ curl -X POST http://localhost:8080/api/v1/database-instances/1/operations/config
 ## Request
 
 ```http
-POST /api/v1/operation-jobs/claim?workerId=worker-1
+POST /internal/v1/workers/worker-1/jobs/acquire
 ```
 
-정확한 경로는 현재 Operation Job Claim Controller 매핑을 따릅니다.
+정확한 경로는 현재 Operation Job 선점 Controller 매핑을 따릅니다.
 
 ---
 
 ## 설명
 
-`CONFIGURATION_APPLY` Job은 Worker가 Claim할 때 실행됩니다.
+`CONFIGURATION_APPLY` Job은 Worker가 선점할 때 실행됩니다.
 
 실행 흐름은 다음과 같습니다.
 
 ```text
 QUEUED Job 조회
   ↓
-Worker가 Job Claim
+Worker가 Job 선점
   ↓
 JobStatus = RUNNING
   ↓
@@ -992,7 +992,7 @@ slow_query_log = ON
   ↓
 3. Configuration Apply Job 생성
   ↓
-4. Worker Claim
+4. Worker의 Job 선점
   ↓
 5. Apply 실행
   ↓
@@ -1074,10 +1074,10 @@ curl -X POST http://localhost:8080/api/v1/database-instances/1/operations/config
 
 ---
 
-## 10.4 Worker Claim
+## 10.4 Worker의 Job 선점
 
 ```bash
-curl -X POST "http://localhost:8080/api/v1/operation-jobs/claim?workerId=worker-1"
+curl -X POST "http://localhost:8080/internal/v1/workers/worker-1/jobs/acquire"
 ```
 
 ---

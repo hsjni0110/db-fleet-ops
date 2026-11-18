@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { operationalLabel } from "../labels";
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -118,7 +119,7 @@ async function loadAgentDetail() {
     detail.value = await getAgentDetail(agentId.value);
   } catch (error) {
     errorMessage.value = getApiErrorMessage(error);
-    ElMessage.error("Agent 상세 정보를 불러오지 못했습니다.");
+    ElMessage.error("실행기 상세 정보를 불러오지 못했습니다.");
   } finally {
     loading.value = false;
   }
@@ -150,16 +151,15 @@ onMounted(loadAgentDetail);
       <template #header>
         <div class="card-header">
           <div>
-            <span>Agent Detail #{{ route.params.agentId }}</span>
-            <p class="card-subtitle">Agent 기본 정보와 최근 Host Metric, Operation Task를 확인합니다.</p>
+            <span>실행기 상세 #{{ route.params.agentId }}</span>
           </div>
 
           <div class="card-actions">
             <el-button :icon="ArrowLeft" @click="goBack">
-              Back
+              목록
             </el-button>
             <el-button :icon="Refresh" :loading="loading" @click="loadAgentDetail">
-              Refresh
+              새로고침
             </el-button>
           </div>
         </div>
@@ -176,48 +176,48 @@ onMounted(loadAgentDetail);
 
       <div v-if="agent" v-loading="loading" class="detail-summary-grid">
         <div class="summary-tile">
-          <span class="summary-label">Agent Name</span>
+          <span class="summary-label">실행기 이름</span>
           <strong>{{ agent.agentName }}</strong>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Status</span>
+          <span class="summary-label">상태</span>
           <strong>
             <el-tag :type="getStatusTagType(agent.status)">
-              {{ agent.status }}
+              {{ operationalLabel(agent.status) }}
             </el-tag>
           </strong>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Host</span>
+          <span class="summary-label">호스트</span>
           <strong>{{ agent.hostname }}</strong>
           <small class="muted-text">{{ agent.ipAddress }}</small>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Runtime</span>
+          <span class="summary-label">실행 환경</span>
           <strong>{{ agent.osName }}</strong>
           <small class="muted-text">{{ agent.architecture }} / {{ agent.agentVersion }}</small>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Last Heartbeat</span>
+          <span class="summary-label">마지막 접속</span>
           <strong>{{ formatNullable(agent.lastHeartbeatAt) }}</strong>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Heartbeat Delay</span>
+          <span class="summary-label">마지막 접속 후 경과</span>
           <strong>{{ formatHeartbeatDelay(agent.heartbeatDelaySeconds) }}</strong>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Created At</span>
+          <span class="summary-label">등록 시각</span>
           <strong>{{ formatNullable(agent.createdAt) }}</strong>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Updated At</span>
+          <span class="summary-label">수정 시각</span>
           <strong>{{ formatNullable(agent.updatedAt) }}</strong>
         </div>
       </div>
 
       <el-empty
         v-else-if="!loading"
-        description="Agent detail is not available."
+        description="실행기 정보 없음"
       />
     </el-card>
 
@@ -226,64 +226,66 @@ onMounted(loadAgentDetail);
       class="detail-tabs"
       type="border-card"
     >
-      <el-tab-pane label="Host Metrics">
+      <el-tab-pane label="서버 자원">
         <div class="tab-toolbar">
-          <h3>Recent Host Metrics</h3>
+          <h3>최근 자원 사용량</h3>
         </div>
 
-        <el-table
+        <el-table scrollbar-tabindex="0"
           class="console-table"
           :data="detail?.recentHostMetrics ?? []"
-          empty-text="No host metrics collected yet."
+          empty-text="수집된 자원 사용량 없음"
         >
-          <el-table-column prop="metricId" label="Metric ID" width="110" />
+          <el-table-column prop="metricId" label="측정 번호" width="110" />
           <el-table-column label="CPU" width="120">
             <template #default="{ row }">
               {{ formatPercent(row.cpuUsagePercent) }}
             </template>
           </el-table-column>
-          <el-table-column label="Memory" width="120">
+          <el-table-column label="메모리" width="120">
             <template #default="{ row }">
               {{ formatPercent(row.memoryUsagePercent) }}
             </template>
           </el-table-column>
-          <el-table-column label="Disk" width="120">
+          <el-table-column label="디스크" width="120">
             <template #default="{ row }">
               {{ formatPercent(row.diskUsagePercent) }}
             </template>
           </el-table-column>
-          <el-table-column prop="collectedAt" label="Collected At" min-width="190" />
+          <el-table-column prop="collectedAt" label="수집 시각" min-width="190" />
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane label="Operation Tasks">
+      <el-tab-pane label="실행 단계">
         <div class="tab-toolbar">
-          <h3>Recent Operation Tasks</h3>
+          <h3>최근 실행 단계</h3>
         </div>
 
-        <el-table
+        <el-table scrollbar-tabindex="0"
           class="console-table"
           :data="detail?.recentOperationTasks ?? []"
-          empty-text="No operation tasks assigned yet."
+          empty-text="할당된 실행 단계 없음"
         >
-          <el-table-column prop="taskId" label="Task ID" width="100" />
-          <el-table-column prop="taskType" label="Task Type" min-width="210" />
-          <el-table-column label="Job ID" width="120">
+          <el-table-column prop="taskId" label="단계 번호" width="100" />
+          <el-table-column prop="taskType" label="단계 유형" min-width="210">
+            <template #default="{ row }">{{ operationalLabel(row.taskType) }}</template>
+          </el-table-column>
+          <el-table-column label="작업 번호" width="120">
             <template #default="{ row }">
               {{ formatNullable(row.operationJobId) }}
             </template>
           </el-table-column>
-          <el-table-column label="Status" width="120">
+          <el-table-column label="상태" width="120">
             <template #default="{ row }">
               <el-tag :type="getTaskStatusTagType(row.status)">
-                {{ row.status }}
+                {{ operationalLabel(row.status) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="startedAt" label="Started At" min-width="180" />
-          <el-table-column prop="completedAt" label="Completed At" min-width="180" />
-          <el-table-column prop="errorCode" label="Error Code" min-width="160" />
-          <el-table-column label="Actions" width="130" fixed="right">
+          <el-table-column prop="startedAt" label="시작 시각" min-width="180" />
+          <el-table-column prop="completedAt" label="완료 시각" min-width="180" />
+          <el-table-column prop="errorCode" label="오류 코드" min-width="160" />
+          <el-table-column label="관리" width="130">
             <template #default="{ row }">
               <el-button
                 v-if="row.operationJobId"
@@ -293,7 +295,7 @@ onMounted(loadAgentDetail);
                 :icon="View"
                 @click="openJob(row.operationJobId)"
               >
-                Job
+                작업
               </el-button>
               <span v-else class="muted-text">-</span>
             </template>

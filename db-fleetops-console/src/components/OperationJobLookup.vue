@@ -1,18 +1,13 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import {
-  Refresh,
-  Search,
-} from "@element-plus/icons-vue";
+import { Search } from "@element-plus/icons-vue";
 
 defineProps<{
-  loadingDatabases: boolean;
   lookingUpJob: boolean;
 }>();
 
 const emit = defineEmits<{
   lookupJob: [jobId: string];
-  refreshDatabases: [];
 }>();
 
 const lookupJobId = ref("");
@@ -25,7 +20,7 @@ function lookupJob() {
 <template>
   <el-form label-position="top" class="operation-job-lookup" @submit.prevent>
     <div class="operation-job-lookup-row">
-      <el-form-item label="Find Job By ID">
+      <el-form-item label="작업 번호">
         <el-input
           v-model="lookupJobId"
           placeholder="예: 1"
@@ -36,20 +31,11 @@ function lookupJob() {
 
       <div class="operation-job-lookup-actions">
         <el-button
-          type="success"
           :icon="Search"
           :loading="lookingUpJob"
           @click="lookupJob"
         >
-          Lookup
-        </el-button>
-
-        <el-button
-          :icon="Refresh"
-          :loading="loadingDatabases"
-          @click="emit('refreshDatabases')"
-        >
-          Refresh DBs
+          조회
         </el-button>
       </div>
     </div>

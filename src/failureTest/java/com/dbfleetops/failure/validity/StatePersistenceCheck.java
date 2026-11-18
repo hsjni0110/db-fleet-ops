@@ -20,7 +20,7 @@ final class StatePersistenceCheck implements ArchitectureCheck {
     }
 
     @Override
-    public String claim() {
+    public String expectation() {
         return "작업 장부는 중앙 관제 Process와 분리되어 재시작 뒤에도 남습니다.";
     }
 
@@ -38,7 +38,7 @@ final class StatePersistenceCheck implements ArchitectureCheck {
         environment.restartControlPlane();
 
         String statusAfterRestart = environment.taskStatus(taskId);
-        long returnedTaskId = environment.claimNextTask(agentIdentity)
+        long returnedTaskId = environment.acquireNextTask(agentIdentity)
                 .body().path("taskId").asLong();
         return CheckValues.inOrder(
                 "재시작 전 Task 상태", statusBeforeRestart,

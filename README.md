@@ -22,6 +22,7 @@ README는 전체 구조만 설명합니다. 설계 근거와 테스트 결과는
 | [용어 정리](docs/용어%20정리.md) | 문서와 코드에서 사용하는 공통 용어 |
 | [도메인 정리](docs/도메인%20정리.md) | 도메인별 역할과 규칙 |
 | [유스케이스별 객체 관계](docs/diagram/유스케이스별-객체-관계.md) | 주요 유스케이스의 객체와 메시지 관계 |
+| [금융·보험 개선 로드맵](docs/db-fleet-ops_finance_insurance_roadmap.md) | Insurance Sandbox부터 업무 정합성 검증까지의 단계별 계획 |
 
 ## 2. 무엇을 할 수 있나요?
 
@@ -38,8 +39,8 @@ README는 전체 구조만 설명합니다. 설계 근거와 테스트 결과는
 | 관리 Database (`ManagedDatabase`) | DB FleetOps에 등록하여 관리하는 Database |
 | 운영 Job (`OperationJob`) | 운영자가 달성하려는 하나의 목표. 예: “주문 Database를 백업하고 복원 가능성을 확인한다” |
 | 운영 Task (`OperationTask`) | Job을 완료하기 위해 Agent가 한 번에 실행하는 구체적인 일. 예: 백업 파일 생성 |
-| Worker | 대기 중인 Job을 가져와 실행 순서와 상태를 조정하는 중앙 관제 서버의 구성요소 |
-| Agent | Database Host 가까이에서 Task를 가져와 실제 명령을 실행하는 프로그램 |
+| Worker | 대기 중인 Job을 선점해 실행 순서와 상태를 조정하는 중앙 관제 서버의 구성요소 |
+| Agent | Database Host 가까이에서 Task를 선점해 실제 명령을 실행하는 프로그램 |
 | 설정 기준 (`ConfigurationProfile`) | Database가 따라야 할 설정값 묶음 |
 | 실제 설정 기록 (`ConfigurationSnapshot`) | 특정 시점에 Database에서 수집한 실제 설정값 |
 | 설정 차이 (`ConfigurationDrift`) | 설정 기준과 실제 설정을 비교해서 찾은 차이 |
@@ -55,43 +56,49 @@ Job과 Task는 다음처럼 구분합니다.
 
 ## 4. 화면에서 확인할 수 있는 것
 
-### 관리 Database
+아래 캡처는 2026년 11월 18일 로컬 콘솔 화면입니다. 화면 문구와 표시 기준은 [운영 콘솔 문서](./db-fleetops-console/README.md)에 정리했습니다.
 
-등록된 Database의 상태와 기본 정보를 확인합니다.
+### 운영 현황
 
-![Database inventory 확인](./docs/images/1-db-instance-관리.png)
+![운영 현황](./docs/images/dashboard.jpg)
 
-Database 상세 화면에서는 접속 정보와 관련 운영 정보를 확인합니다.
+### 데이터베이스 목록
 
-![DB detail](./docs/images/2-db-detail.png)
+등록된 데이터베이스의 상태와 기본 정보를 확인합니다.
 
-### 운영 Job
+![데이터베이스 목록](./docs/images/1-db-instance.jpg)
+
+데이터베이스 상세 화면에서는 접속 정보와 관련 운영 정보를 확인합니다.
+
+![데이터베이스 상세](./docs/images/2-db-detail.jpg)
+
+### 운영 작업
 
 백업과 설정 점검 같은 운영 목표가 어디까지 진행됐는지 확인합니다.
 
-![Operation job](./docs/images/3-operation-job.png)
+![백업 작업 상세](./docs/images/3-operation-job.jpg)
 
-### Agent
+### 실행기 목록
 
-등록 상태, 최근 생존 연락과 Agent가 실행한 Task를 확인합니다.
+등록 상태, 마지막 접속 시각과 실행 단계를 확인합니다.
 
-![Agent Management](./docs/images/4-agent-detail.png)
+![실행기 접속 상태](./docs/images/4-agent-list.jpg)
 
 ### 설정 기준과 설정 차이
 
 Database가 따라야 할 설정 기준을 등록합니다.
 
-![Configuration Profile](./docs/images/5-configuration-profile.png)
+![설정 기준 목록](./docs/images/5-configuration-profile.jpg)
 
 설정 기준과 실제 설정이 다른 항목을 확인합니다.
 
-![Configuration Drift](./docs/images/6-configuration-draft.png)
+![설정 점검 이력과 항목별 차이](./docs/images/6-configuration-drift.jpg)
 
 ### 복원 검증
 
 백업 파일을 임시 Database에 복원한 결과와 검증 내용을 확인합니다.
 
-![Restore Verify](./docs/images/7-restore-verify.png)
+![테이블별 백업 복원 검증 결과](./docs/images/7-restore-verify.jpg)
 
 ## 5. 어떻게 동작하나요?
 
@@ -103,7 +110,7 @@ Database가 따라야 할 설정 기준을 등록합니다.
   │
   ├─ Worker가 Job의 실행 순서와 상태를 조정
   │
-  └─ Agent가 Task를 가져갈 수 있도록 제공
+  └─ Agent가 Task를 선점할 수 있도록 제공
                     │
                     ▼
               Go Agent
@@ -112,7 +119,7 @@ Database가 따라야 할 설정 기준을 등록합니다.
               관리 Database
 ```
 
-중앙 관제 서버는 요청과 실행 상태를 관리하고, 실제 Host 작업은 Go Agent가 수행합니다. Agent가 중앙 관제 서버에 먼저 연결해 Task를 가져가므로 Agent용 외부 수신 Port가 필요하지 않습니다.
+중앙 관제 서버는 요청과 실행 상태를 관리하고, 실제 Host 작업은 Go Agent가 수행합니다. Agent가 중앙 관제 서버에 먼저 연결해 Task를 선점하므로 Agent용 외부 수신 Port가 필요하지 않습니다.
 
 오래 걸리는 실행이 중간에 끊겨도 Task가 계속 `RUNNING`에 머물지 않도록 Task 실행권과 실행 번호를 사용합니다. 같은 결과가 다시 보고되면 결과 보고 번호로 중복을 확인하여 후속 Task나 결과가 두 번 만들어지지 않게 합니다.
 
@@ -157,12 +164,7 @@ Database가 따라야 할 설정 기준을 등록합니다.
 
 ## 7. 로컬 실행
 
-Credential 암호화 Key를 설정하고 전체 구성을 실행합니다. Key에는 Base64로 인코딩한 32-byte 값을 사용합니다.
-
-```bash
-export DB_FLEETOPS_CREDENTIAL_ENCRYPTION_KEY='<Base64 32-byte key>'
-docker compose up --build -d
-```
+키 설정, JAR 빌드와 컨테이너 실행은 [Docker Compose 실행 절차](docs/9-DB-FleetOps-배포와-관측성.md#4-docker-compose-실행)를 따릅니다.
 
 | 구성요소 | 접속 위치 |
 |---|---|
@@ -184,6 +186,44 @@ docker compose down
 ```
 
 `docker compose down -v`는 Metadata Database와 Agent 데이터까지 지우므로 전체 초기화가 필요할 때만 사용합니다.
+
+### Insurance Sandbox
+
+기본 관리 대상 MySQL은 `insurance_sandbox`를 생성하고 다음 합성 데이터를 넣습니다.
+
+| 데이터 | 건수 |
+|---|---:|
+| 고객 (`Customer`) | 10,000 |
+| 보험 계약 (`Policy`) | 30,000 |
+| 보험료 수납 (`PremiumPayment`) | 300,000 |
+| 보험금 청구 (`Claim`) | 20,000 |
+| 보험금 지급 (`ClaimPayment`) | 10,000 |
+
+실제 개인정보나 난수를 사용하지 않으므로 새 volume에서는 항상 같은 데이터가 생성됩니다.
+기존 `target-mysql-data` volume에는 초기화 SQL이 다시 실행되지 않습니다. 기존 데이터를
+보존할 필요가 없는 경우에만 `docker compose down -v`로 전체 volume을 삭제한 뒤 다시
+실행합니다.
+
+정상 데이터 확인과 의도적 오류 데이터의 주입·원복은 하나의 도구로 실행합니다.
+
+```bash
+./scripts/insurance-sandbox.sh verify
+./scripts/insurance-sandbox.sh inject
+./scripts/insurance-sandbox.sh reset
+```
+
+`inject`는 중복 수납, 중복 지급, 계약 없는 청구, 0원 완료 지급, 고객 없는 활성 계약을
+예약된 ID로 한 번씩 생성합니다. 같은 명령을 다시 실행해도 오류 데이터가 늘어나지 않으며,
+`reset`은 이 예약된 데이터만 제거하고 정상 상태를 다시 검증합니다.
+
+FleetOps에 등록할 때 Docker network 내부 접속 정보는 host `target-mysql`, port `3306`,
+database name `insurance_sandbox`입니다. Agent가 등록된 뒤 해당 Agent ID를 관리 DB의
+`assignedAgentId`로 지정해야 백업과 복원 검증 Task를 실행할 수 있습니다.
+
+관리 DB 등록 화면에서 `Insurance Sandbox V1` 업무 검증 Profile을 선택하거나, 상세 화면에서
+연결할 수 있습니다. Profile이 연결되면 복원된 임시 DB에서 7개 내부 Business Rule을 읽기
+전용 Transaction으로 실행합니다. Profile을 `None`으로 두면 기존과 같이 Table·Row Count
+기술 검증만 수행합니다. Rule SQL과 DB 인증 정보는 Console 및 공개 API에 노출하지 않습니다.
 
 ## 8. 테스트
 

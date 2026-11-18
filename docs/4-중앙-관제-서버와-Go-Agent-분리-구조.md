@@ -30,7 +30,7 @@ DB FleetOps는 작업을 관리하는 중앙 관제 서버(Control Plane)와 실
 
 ### Worker
 
-Worker는 실행할 수 있는 `OperationJob`을 가져와 전체 순서를 진행합니다.
+Worker는 실행할 수 있는 `OperationJob`을 선점해 전체 순서를 진행합니다.
 
 예를 들어 백업 작업이라면 백업 파일 생성이 끝난 뒤 복원 확인 작업이 이어지도록 조정합니다.
 
@@ -75,7 +75,7 @@ Linux 상태 수집과 MySQL 백업은 실제 데이터베이스가 운영되는
 
 따라서 긴 작업을 중앙 관제 서버와 다른 Process에서 실행한다는 장점은 확인되었습니다.
 
-## 4. 왜 현장 실행기가 작업을 가져가는가
+## 4. 왜 현장 실행기가 Task를 선점하는가
 
 현재 구조에서는 중앙 관제 서버가 현장 실행기에 직접 접속하여 작업을 밀어 넣지 않습니다. 현장 실행기가 중앙 관제 서버에 다음 작업을 물어봅니다. 이를 Pull 방식이라고 합니다.
 
@@ -199,7 +199,7 @@ Agent는 작업 중 20초마다 60초 Lease를 갱신합니다. Agent가 종료�
 
 - Go Agent의 `maintainTaskLease(...)`가 작업 중 Lease를 주기적으로 갱신합니다.
 - `ExpiredOperationTaskScheduler`가 일정 시간마다 만료 Task 검사를 시작합니다.
-- `ExpiredOperationTaskService`가 만료 Task를 Lock으로 가져와 재대기 또는 최종 시간 초과를 결정합니다.
+- `ExpiredOperationTaskService`가 만료 Task를 Lock으로 조회해 재대기 또는 최종 시간 초과를 결정합니다.
 - `OperationTask`가 `requeueExpiredLease(...)`, `timeoutExpiredLease(...)`로 실제 상태를 변경합니다.
 
 쉽게 말하면 Agent는 “아직 작업 중”이라고 계속 알리고, 중앙 서버는 연락이 끊긴 Task를 찾아 다시 실행할 수 있게 정리합니다.
@@ -224,9 +224,9 @@ QUEUED Task 조회와 Lock
 코드는 다음 역할로 나누었습니다.
 
 - `AgentOperationTaskController.nextTask(...)`가 `POST /tasks/next` 요청을 받습니다.
-- `OperationTaskClaimService.claimNext(...)`가 Agent Token을 확인하고 선점 Transaction을 관리합니다.
-- `OperationTaskRepository.findTop1ByAgentIdAndStatusOrderByCreatedAtAsc(...)`가 `PESSIMISTIC_WRITE` Lock으로 가장 오래된 `QUEUED` Task를 하나만 가져옵니다.
-- `OperationTask.claim(...)`이 상태를 `RUNNING`으로 바꾸고 실행 번호와 Lease 시각을 기록합니다.
+- `TaskAcquisitionService.acquireNext(...)`가 Agent Token을 확인하고 선점 Transaction을 관리합니다.
+- `OperationTaskRepository.findTop1ByAgentIdAndStatusOrderByCreatedAtAsc(...)`가 `PESSIMISTIC_WRITE` Lock으로 가장 오래된 `QUEUED` Task를 하나만 조회합니다.
+- `OperationTask.acquire(...)`이 상태를 `RUNNING`으로 바꾸고 실행 번호와 Lease 시각을 기록합니다.
 
 Controller는 HTTP 요청만 받고, 선점 순서는 Service가 관리하며, 상태 변경 규칙은 `OperationTask` 안에 둔 구조입니다.
 

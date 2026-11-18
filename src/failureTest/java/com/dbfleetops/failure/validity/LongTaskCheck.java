@@ -29,7 +29,7 @@ final class LongTaskCheck
     }
 
     @Override
-    public String claim() {
+    public String expectation() {
         return "긴 작업은 현장 실행기에서 수행되고 중앙 관제 서버는 계속 응답합니다.";
     }
 

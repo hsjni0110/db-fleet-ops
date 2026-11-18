@@ -22,7 +22,7 @@ final class PullAgentCheck implements ArchitectureCheck {
     }
 
     @Override
-    public String claim() {
+    public String expectation() {
         return "현장 실행기는 수신 Port 없이 자신이 시작한 연결만으로 작업할 수 있습니다.";
     }
 

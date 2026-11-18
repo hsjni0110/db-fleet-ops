@@ -1,7 +1,7 @@
 package com.dbfleetops.operation.task.adapter.webapi;
 
 import com.dbfleetops.operation.task.application.provided.AgentTasks;
-import com.dbfleetops.operation.task.application.provided.TaskClaim;
+import com.dbfleetops.operation.task.application.provided.TaskAcquisition;
 import com.dbfleetops.operation.task.application.provided.TaskCredential;
 import com.dbfleetops.operation.task.application.provided.TaskLease;
 import com.dbfleetops.operation.task.application.provided.TaskReports;
@@ -24,17 +24,17 @@ public class AgentOperationTaskController {
 
     private final AgentTasks operationTaskService;
     private final TaskReports taskReportService;
-    private final TaskClaim operationTaskClaimService;
+    private final TaskAcquisition operationTaskAcquisitionService;
     private final TaskLease operationTaskLeaseService;
     private final TaskCredential taskCredentialService;
 
     public AgentOperationTaskController(AgentTasks operationTaskService, TaskReports taskReportService,
-            TaskClaim operationTaskClaimService,
+            TaskAcquisition operationTaskAcquisitionService,
             TaskLease operationTaskLeaseService,
             TaskCredential taskCredentialService) {
         this.operationTaskService = operationTaskService;
         this.taskReportService = taskReportService;
-        this.operationTaskClaimService = operationTaskClaimService;
+        this.operationTaskAcquisitionService = operationTaskAcquisitionService;
         this.operationTaskLeaseService = operationTaskLeaseService;
         this.taskCredentialService = taskCredentialService;
     }
@@ -55,7 +55,7 @@ public class AgentOperationTaskController {
     @PostMapping("/{agentId}/tasks/next")
     public ResponseEntity<NextOperationTaskResponse> nextTask(@PathVariable Long agentId,
             @RequestParam String agentToken) {
-        return ResponseEntity.ok(operationTaskClaimService.claimNext(agentId, agentToken));
+        return ResponseEntity.ok(operationTaskAcquisitionService.acquireNext(agentId, agentToken));
     }
 
     @PostMapping("/{agentId}/tasks/{taskId}/lease")

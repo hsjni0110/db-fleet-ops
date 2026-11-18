@@ -3,8 +3,13 @@ package com.dbfleetops.backup.application;
 import com.dbfleetops.backup.domain.BackupRestoreVerification;
 import com.dbfleetops.backup.domain.BackupRestoreVerificationItem;
 import com.dbfleetops.backup.domain.BackupRestoreVerificationStatus;
+import com.dbfleetops.backup.domain.BusinessRuleResult;
+import com.dbfleetops.backup.domain.BusinessVerificationStatus;
+import com.dbfleetops.backup.domain.CleanupStatus;
+import com.dbfleetops.backup.domain.TechnicalVerificationStatus;
 import com.dbfleetops.backup.infra.BackupRestoreVerificationItemRepository;
 import com.dbfleetops.backup.infra.BackupRestoreVerificationRepository;
+import com.dbfleetops.backup.infra.BusinessRuleResultRepository;
 import com.dbfleetops.backup.dto.RestoreVerificationResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -25,9 +30,12 @@ class BackupRestoreVerificationResultRecorderTest {
     private final BackupRestoreVerificationItemRepository itemRepository =
             mock(BackupRestoreVerificationItemRepository.class);
 
+    private final BusinessRuleResultRepository ruleResultRepository =
+            mock(BusinessRuleResultRepository.class);
+
     private final BackupRestoreVerificationResultRecorder recorder =
             new BackupRestoreVerificationResultRecorder(verificationRepository, itemRepository,
-                    new ObjectMapper());
+                    ruleResultRepository, new ObjectMapper());
 
     @Test
     void recordVerifiedRestoreVerificationResult() {
@@ -142,6 +150,56 @@ class BackupRestoreVerificationResultRecorderTest {
         assertThat(savedVerification.getStatus()).isEqualTo(BackupRestoreVerificationStatus.FAILED);
 
         assertThat(savedVerification.getErrorCode()).isEqualTo("RESTORE_VERIFY_FAILED");
+    }
+
+    @Test
+    void recordBusinessRuleResultsAndCleanupStatus() {
+        when(verificationRepository.save(any(BackupRestoreVerification.class)))
+                .thenAnswer(invocation -> {
+                    BackupRestoreVerification verification = invocation.getArgument(0);
+                    setId(verification, 401L);
+                    return verification;
+                });
+
+        recorder.record(100L, 300L, """
+                {
+                  "status": "FAILED",
+                  "databaseId": 1,
+                  "backupTaskId": 200,
+                  "sourceDatabaseName": "insurance_sandbox",
+                  "backupFile": "/tmp/insurance.sql",
+                  "temporaryDatabaseName": "restore_verify_insurance_100",
+                  "restoredTableCount": 5,
+                  "checkedTableCount": 5,
+                  "totalRowCount": 370000,
+                  "technicalStatus": "VERIFIED",
+                  "cleanupStatus": "COMPLETED",
+                  "businessVerification": {
+                    "profileKey": "INSURANCE_SANDBOX_V1",
+                    "status": "FAILED",
+                    "checkedRuleCount": 1,
+                    "failedRuleCount": 1,
+                    "ruleResults": [{
+                      "code": "DUPLICATE_COMPLETED_PREMIUM_PAYMENT",
+                      "name": "완료된 보험료 수납 중복",
+                      "status": "FAILED",
+                      "violationCount": 1,
+                      "durationMillis": 12,
+                      "message": "Business Rule found 1 violation(s)"
+                    }]
+                  }
+                }
+                """);
+
+        ArgumentCaptor<BackupRestoreVerification> verificationCaptor =
+                ArgumentCaptor.forClass(BackupRestoreVerification.class);
+        verify(verificationRepository).save(verificationCaptor.capture());
+        BackupRestoreVerification saved = verificationCaptor.getValue();
+        assertThat(saved.getTechnicalStatus()).isEqualTo(TechnicalVerificationStatus.VERIFIED);
+        assertThat(saved.getBusinessStatus()).isEqualTo(BusinessVerificationStatus.FAILED);
+        assertThat(saved.getCleanupStatus()).isEqualTo(CleanupStatus.COMPLETED);
+        assertThat(saved.getErrorCode()).isEqualTo("BUSINESS_VERIFICATION_FAILED");
+        verify(ruleResultRepository).save(any(BusinessRuleResult.class));
     }
 
     private void setId(Object target, Long id) {

@@ -43,7 +43,7 @@ class TaskLeaseServicesTest {
                     Duration.ofSeconds(5), 3, 100);
 
     @Test
-    void claimNextAtomicallyStartsTaskAndReturnsExecutionIdentity() {
+    void acquireNextAtomicallyStartsTaskAndReturnsExecutionIdentity() {
         AgentReader agents = mock(AgentReader.class);
         TaskStore tasks = mock(TaskStore.class);
         AuditWriter audit = mock(AuditWriter.class);
@@ -54,8 +54,8 @@ class TaskLeaseServicesTest {
         when(tasks.findNextForUpdate(
                 1L, OperationTaskStatus.QUEUED)).thenReturn(Optional.of(task));
 
-        var response = new TaskClaimService(agents, tasks, PROPERTIES, audit, CLOCK)
-                .claimNext(1L, "agent-token-001");
+        var response = new TaskAcquisitionService(agents, tasks, PROPERTIES, audit, CLOCK)
+                .acquireNext(1L, "agent-token-001");
 
         assertThat(response.executionAttempt()).isEqualTo(1);
         assertThat(response.leaseExpiresAt()).isEqualTo(NOW.plusSeconds(60));
@@ -63,7 +63,7 @@ class TaskLeaseServicesTest {
     }
 
     @Test
-    void claimNextReturnsEmptyWhenAgentHasNoWaitingTask() {
+    void acquireNextReturnsEmptyWhenAgentHasNoWaitingTask() {
         AgentReader agents = mock(AgentReader.class);
         TaskStore tasks = mock(TaskStore.class);
         AuditWriter audit = mock(AuditWriter.class);
@@ -72,8 +72,8 @@ class TaskLeaseServicesTest {
         when(tasks.findNextForUpdate(1L, OperationTaskStatus.QUEUED))
                 .thenReturn(Optional.empty());
 
-        var response = new TaskClaimService(agents, tasks, PROPERTIES, audit, CLOCK)
-                .claimNext(1L, "agent-token-001");
+        var response = new TaskAcquisitionService(agents, tasks, PROPERTIES, audit, CLOCK)
+                .acquireNext(1L, "agent-token-001");
 
         assertThat(response.taskId()).isNull();
         verify(audit, never()).record(any(), any(), any(), any(), any(), any());
@@ -85,7 +85,7 @@ class TaskLeaseServicesTest {
         TaskStore tasks = mock(TaskStore.class);
         OperationTask task = OperationTask.create(1L,
                 OperationTaskType.COLLECT_LINUX_STATUS, "{}");
-        task.claim(NOW.minusSeconds(10), NOW.plusSeconds(50));
+        task.acquire(NOW.minusSeconds(10), NOW.plusSeconds(50));
         when(agents.findAgent(1L)).thenReturn(Optional.of(new AgentExecutionTarget(1L, true)));
         when(agents.matchesToken(1L, "agent-token-001")).thenReturn(true);
         when(tasks.findById(10L)).thenReturn(Optional.of(task));
@@ -103,7 +103,7 @@ class TaskLeaseServicesTest {
         TaskStore tasks = mock(TaskStore.class);
         OperationTask task = OperationTask.create(1L,
                 OperationTaskType.COLLECT_LINUX_STATUS, "{}");
-        task.claim(NOW.minusSeconds(10), NOW.plusSeconds(50));
+        task.acquire(NOW.minusSeconds(10), NOW.plusSeconds(50));
         when(agents.findAgent(1L)).thenReturn(Optional.of(new AgentExecutionTarget(1L, true)));
         when(agents.matchesToken(1L, "agent-token-001")).thenReturn(true);
         when(tasks.findById(10L)).thenReturn(Optional.of(task));
@@ -124,9 +124,9 @@ class TaskLeaseServicesTest {
         OperationTask task = OperationTask.createForJob(1L, 100L,
                 OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
         for (int attempt = 1; attempt <= 3; attempt++) {
-            LocalDateTime claimedAt = NOW.minusMinutes(4 - attempt);
-            task.claim(claimedAt, claimedAt.plusSeconds(30));
-            if (attempt < 3) task.requeueExpiredLease(claimedAt.plusSeconds(30), 3);
+            LocalDateTime acquiredAt = NOW.minusMinutes(4 - attempt);
+            task.acquire(acquiredAt, acquiredAt.plusSeconds(30));
+            if (attempt < 3) task.requeueExpiredLease(acquiredAt.plusSeconds(30), 3);
         }
         OperationJob job = OperationJob.create(JobType.BACKUP, 1L, "user", "key", NOW);
         job.start("worker-1", NOW, NOW.plusMinutes(1));

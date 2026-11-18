@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { operationalLabel } from "../labels";
 import type { OperationJobStatus } from "../types";
 
 defineProps<{
@@ -24,6 +25,6 @@ function getStatusTagType(status: OperationJobStatus) {
 
 <template>
   <el-tag :type="getStatusTagType(status)" effect="light">
-    {{ status }}
+    {{ operationalLabel(status) }}
   </el-tag>
 </template>

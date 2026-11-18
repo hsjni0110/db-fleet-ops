@@ -22,13 +22,13 @@ public class WorkerShutdownState {
     @EventListener(ContextClosedEvent.class)
     public void onContextClosed() {
         if (shuttingDown.compareAndSet(false, true)) {
-            log.info("worker_shutdown_started stop_new_job_claim=true");
+            log.info("worker_shutdown_started stop_new_job_acquisition=true");
         }
     }
 
     public void markShuttingDown() {
         if (shuttingDown.compareAndSet(false, true)) {
-            log.info("worker_shutdown_marked stop_new_job_claim=true");
+            log.info("worker_shutdown_marked stop_new_job_acquisition=true");
         }
     }
 }

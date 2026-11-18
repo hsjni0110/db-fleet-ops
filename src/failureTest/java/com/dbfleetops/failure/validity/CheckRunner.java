@@ -21,7 +21,7 @@ final class CheckRunner {
         System.out.println();
         System.out.println("============================================================");
         System.out.println("[구조 확인] " + check.title());
-        System.out.println("[확인할 내용] " + check.claim());
+        System.out.println("[확인할 내용] " + check.expectation());
         System.out.println("[통과 기준] " + check.criterion());
         System.out.println("============================================================");
     }

@@ -49,6 +49,8 @@ public class ManagedDatabase {
 
     private Long assignedAgentId;
 
+    private String businessVerificationProfileKey;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -106,6 +108,11 @@ public class ManagedDatabase {
         this.updatedAt = LocalDateTime.now();
     }
 
+    public void connectBusinessVerificationProfile(String profileKey) {
+        this.businessVerificationProfileKey = normalize(profileKey);
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public void deactivate() {
         state(status == DatabaseStatus.ACTIVE,
                 "이미 비활성화된 데이터베이스입니다.");
@@ -131,6 +138,10 @@ public class ManagedDatabase {
     private static void validateMetadata(String name, String environment) {
         hasText(name, "데이터베이스 이름은 필수입니다.");
         hasText(environment, "운영 환경은 필수입니다.");
+    }
+
+    private static String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
 }

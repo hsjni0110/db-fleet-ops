@@ -1,6 +1,6 @@
 package com.dbfleetops.operation.task.application.service;
 
-import com.dbfleetops.operation.task.application.provided.TaskClaim;
+import com.dbfleetops.operation.task.application.provided.TaskAcquisition;
 import com.dbfleetops.operation.shared.application.required.AgentReader;
 import com.dbfleetops.operation.shared.application.required.AuditWriter;
 import com.dbfleetops.operation.task.application.required.TaskStore;
@@ -18,7 +18,7 @@ import static org.springframework.util.Assert.hasText;
 import static org.springframework.util.Assert.notNull;
 
 @Service
-public class TaskClaimService implements TaskClaim {
+public class TaskAcquisitionService implements TaskAcquisition {
 
     private final AgentReader agents;
     private final TaskStore tasks;
@@ -26,7 +26,7 @@ public class TaskClaimService implements TaskClaim {
     private final AuditWriter audit;
     private final Clock clock;
 
-    public TaskClaimService(AgentReader agents, TaskStore tasks,
+    public TaskAcquisitionService(AgentReader agents, TaskStore tasks,
             OperationTaskLeaseProperties lease, AuditWriter audit, Clock clock) {
         this.agents = agents;
         this.tasks = tasks;
@@ -37,7 +37,7 @@ public class TaskClaimService implements TaskClaim {
 
     @Override
     @Transactional
-    public NextOperationTaskResponse claimNext(Long agentId, String agentToken) {
+    public NextOperationTaskResponse acquireNext(Long agentId, String agentToken) {
         validateRequest(agentId, agentToken);
         authenticateAgent(agentId, agentToken);
 
@@ -49,8 +49,8 @@ public class TaskClaimService implements TaskClaim {
 
         OperationTask task = waitingTask.get();
 
-        claimTask(task);
-        recordClaim(agentId, task);
+        acquireTask(task);
+        recordAcquisition(agentId, task);
 
         return NextOperationTaskResponse.from(task);
     }
@@ -59,15 +59,15 @@ public class TaskClaimService implements TaskClaim {
         return tasks.findNextForUpdate(agentId, OperationTaskStatus.QUEUED);
     }
 
-    private void claimTask(OperationTask task) {
-        LocalDateTime claimedAt = now();
-        task.claim(claimedAt, claimedAt.plus(lease.duration()));
+    private void acquireTask(OperationTask task) {
+        LocalDateTime acquiredAt = now();
+        task.acquire(acquiredAt, acquiredAt.plus(lease.duration()));
     }
 
-    private void recordClaim(Long agentId, OperationTask task) {
-        audit.record("agent-" + agentId, "OPERATION_TASK_CLAIMED", "OPERATION_TASK",
+    private void recordAcquisition(Long agentId, OperationTask task) {
+        audit.record("agent-" + agentId, "OPERATION_TASK_ACQUIRED", "OPERATION_TASK",
                 String.valueOf(task.getId()), "SUCCESS",
-                "Task claimed. executionAttempt=" + task.getExecutionAttempt());
+                "Task acquired. executionAttempt=" + task.getExecutionAttempt());
     }
 
     private void authenticateAgent(Long agentId, String agentToken) {

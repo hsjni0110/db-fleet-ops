@@ -1,9 +1,9 @@
 package com.dbfleetops.worker.application;
 
-import com.dbfleetops.operation.job.application.provided.JobClaim;
+import com.dbfleetops.operation.job.application.provided.JobAcquisition;
 import com.dbfleetops.operation.job.domain.JobStatus;
 import com.dbfleetops.operation.job.domain.JobType;
-import com.dbfleetops.operation.job.dto.ClaimJobResponse;
+import com.dbfleetops.operation.job.dto.JobAcquisitionResponse;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -13,19 +13,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class OperationJobClaimSchedulerTest {
+class OperationJobAcquisitionSchedulerTest {
 
     @Test
-    void claimAvailableJobRequestsAJobWithConfiguredWorkerId() {
-        JobClaim workerService = mock(JobClaim.class);
+    void acquireAvailableJobRequestsAJobWithConfiguredWorkerId() {
+        JobAcquisition workerService = mock(JobAcquisition.class);
         WorkerShutdownState workerShutdownState = mock(WorkerShutdownState.class);
         WorkerProperties workerProperties = new WorkerProperties();
 
         workerProperties.setId("worker-test-1");
 
         when(workerShutdownState.isShuttingDown()).thenReturn(false);
-        when(workerService.claimJob("worker-test-1"))
-                .thenReturn(new ClaimJobResponse(
+        when(workerService.acquireJob("worker-test-1"))
+                .thenReturn(new JobAcquisitionResponse(
                         true,
                         1L,
                         JobType.BACKUP,
@@ -35,21 +35,21 @@ class OperationJobClaimSchedulerTest {
                         LocalDateTime.now().plusSeconds(60)
                 ));
 
-        OperationJobClaimScheduler scheduler =
-                new OperationJobClaimScheduler(
+        OperationJobAcquisitionScheduler scheduler =
+                new OperationJobAcquisitionScheduler(
                         workerService,
                         workerShutdownState,
                         workerProperties
                 );
 
-        scheduler.claimAvailableJob();
+        scheduler.acquireAvailableJob();
 
-        verify(workerService).claimJob("worker-test-1");
+        verify(workerService).acquireJob("worker-test-1");
     }
 
     @Test
-    void claimAvailableJobSkipsClaimWhenWorkerIsShuttingDown() {
-        JobClaim workerService = mock(JobClaim.class);
+    void acquireAvailableJobSkipsAcquisitionWhenWorkerIsShuttingDown() {
+        JobAcquisition workerService = mock(JobAcquisition.class);
         WorkerShutdownState workerShutdownState = mock(WorkerShutdownState.class);
         WorkerProperties workerProperties = new WorkerProperties();
 
@@ -57,15 +57,15 @@ class OperationJobClaimSchedulerTest {
 
         when(workerShutdownState.isShuttingDown()).thenReturn(true);
 
-        OperationJobClaimScheduler scheduler =
-                new OperationJobClaimScheduler(
+        OperationJobAcquisitionScheduler scheduler =
+                new OperationJobAcquisitionScheduler(
                         workerService,
                         workerShutdownState,
                         workerProperties
                 );
 
-        scheduler.claimAvailableJob();
+        scheduler.acquireAvailableJob();
 
-        verify(workerService, never()).claimJob("worker-test-1");
+        verify(workerService, never()).acquireJob("worker-test-1");
     }
 }

@@ -25,7 +25,7 @@ public interface JobStore {
     Optional<OperationJob> findDuplicate(Long databaseId, JobType type, String idempotencyKey);
 
     /** 현재 실행할 수 있는 대기 Job을 우선순위와 생성 순서에 따라 제한된 개수만 조회합니다. */
-    List<OperationJob> findClaimable(JobStatus status, LocalDateTime now, int limit);
+    List<OperationJob> findAcquirable(JobStatus status, LocalDateTime now, int limit);
 
     /** 최근에 생성된 Job부터 전체 목록을 조회합니다. */
     List<OperationJob> findLatest();

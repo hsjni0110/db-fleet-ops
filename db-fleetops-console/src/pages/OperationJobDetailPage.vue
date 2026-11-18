@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import FieldHelp from "../components/FieldHelp.vue";
+import { operationalLabel } from "../labels";
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -41,7 +43,7 @@ async function loadJob() {
     job.value = await getOperationJob(jobId.value);
   } catch (error) {
     errorMessage.value = getApiErrorMessage(error);
-    ElMessage.error("Job 상세 정보를 불러오지 못했습니다.");
+    ElMessage.error("작업 상세 정보를 불러오지 못했습니다.");
   } finally {
     loading.value = false;
   }
@@ -62,16 +64,13 @@ onMounted(() => {
       <template #header>
         <div class="card-header">
           <div>
-            <span>Operation Job Detail #{{ jobId }}</span>
-            <p class="card-subtitle">
-              비동기 운영 Job의 상태, lease, retry, 결과 메시지를 확인합니다.
-            </p>
+            <span>운영 작업 상세 #{{ jobId }}</span>
           </div>
 
           <div class="card-actions">
-            <el-button :icon="Back" @click="goBack">Jobs</el-button>
+            <el-button :icon="Back" @click="goBack">작업 목록</el-button>
             <el-button :icon="Refresh" :loading="loading" @click="loadJob">
-              Refresh
+              새로고침
             </el-button>
           </div>
         </div>
@@ -84,7 +83,7 @@ onMounted(() => {
         :closable="false"
         class="page-alert"
       >
-        <template #title>Operation Job API 호출 실패</template>
+        <template #title>작업 상세 조회 실패</template>
         <p>{{ errorMessage }}</p>
       </el-alert>
 
@@ -92,70 +91,73 @@ onMounted(() => {
         <template v-if="job">
           <div class="detail-summary-grid">
             <div class="summary-tile">
-              <span class="summary-label">Status</span>
+              <span class="summary-label">상태</span>
               <strong>
                 <OperationJobStatusTag :status="job.status" />
               </strong>
             </div>
 
             <div class="summary-tile">
-              <span class="summary-label">Job Type</span>
-              <strong>{{ job.jobType }}</strong>
+              <span class="summary-label">작업 유형</span>
+              <strong>{{ operationalLabel(job.jobType) }}</strong>
             </div>
 
             <div class="summary-tile">
-              <span class="summary-label">Target Database</span>
+              <span class="summary-label">대상 데이터베이스</span>
               <strong>#{{ job.targetDatabaseId }}</strong>
             </div>
 
             <div class="summary-tile">
-              <span class="summary-label">Requested By</span>
+              <span class="summary-label">요청자</span>
               <strong>{{ job.requestedBy }}</strong>
             </div>
           </div>
 
           <el-tabs class="detail-tabs">
-            <el-tab-pane label="Overview">
+            <el-tab-pane label="기본 정보">
               <el-descriptions :column="2" border>
-                <el-descriptions-item label="Job ID">
+                <el-descriptions-item label="작업 번호">
                   {{ job.jobId }}
                 </el-descriptions-item>
-                <el-descriptions-item label="Retry">
+                <el-descriptions-item label="재시도">
                   {{ job.retryCount }} / {{ job.maxRetryCount }}
                 </el-descriptions-item>
-                <el-descriptions-item label="Created At">
+                <el-descriptions-item label="등록 시각">
                   {{ formatDateTime(job.createdAt) }}
                 </el-descriptions-item>
-                <el-descriptions-item label="Available At">
+                <el-descriptions-item label="실행 가능 시각">
                   {{ formatDateTime(job.availableAt) }}
                 </el-descriptions-item>
-                <el-descriptions-item label="Started At">
+                <el-descriptions-item label="시작 시각">
                   {{ formatDateTime(job.startedAt) }}
                 </el-descriptions-item>
-                <el-descriptions-item label="Finished At">
+                <el-descriptions-item label="종료 시각">
                   {{ formatDateTime(job.finishedAt) }}
                 </el-descriptions-item>
               </el-descriptions>
             </el-tab-pane>
 
-            <el-tab-pane label="Lease">
+            <el-tab-pane label="실행권">
+              <div class="tab-toolbar">
+                <h3>작업 중복 방지 <FieldHelp label="실행권" text="한 번에 한 실행기만 작업을 처리하도록 제한 시간 동안 부여하는 권한." /></h3>
+              </div>
               <el-descriptions :column="2" border>
-                <el-descriptions-item label="Lease Owner">
+                <el-descriptions-item label="실행권 보유자">
                   {{ formatNullable(job.leaseOwner) }}
                 </el-descriptions-item>
-                <el-descriptions-item label="Lease Until">
+                <el-descriptions-item label="실행권 만료 시각">
                   {{ formatDateTime(job.leaseUntil) }}
                 </el-descriptions-item>
               </el-descriptions>
             </el-tab-pane>
 
-            <el-tab-pane label="Result">
+            <el-tab-pane label="결과">
               <el-descriptions :column="1" border>
-                <el-descriptions-item label="Result Code">
+                <el-descriptions-item label="결과 코드">
                   {{ formatNullable(job.resultCode) }}
                 </el-descriptions-item>
-                <el-descriptions-item label="Result Message">
-                  {{ formatNullable(job.resultMessage) }}
+                <el-descriptions-item label="결과 메시지">
+                  <pre class="diagnostic-output">{{ formatNullable(job.resultMessage) }}</pre>
                 </el-descriptions-item>
               </el-descriptions>
             </el-tab-pane>
@@ -163,8 +165,8 @@ onMounted(() => {
         </template>
 
         <el-empty
-          v-else-if="!loading"
-          description="조회된 Operation Job이 없습니다."
+          v-else-if="!loading && !errorMessage"
+          description="조회된 작업 없음"
         />
       </div>
     </el-card>

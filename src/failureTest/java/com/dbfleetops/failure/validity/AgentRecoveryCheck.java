@@ -23,7 +23,7 @@ final class AgentRecoveryCheck implements ArchitectureCheck {
     }
 
     @Override
-    public String claim() {
+    public String expectation() {
         return "한 현장 실행기의 장애는 다른 실행기와 중앙 관제 서버를 중단시키지 않습니다.";
     }
 

@@ -60,6 +60,7 @@ class RestoreVerifyTaskPayloadFactoryTest {
         assertThat(payload.sourceDatabaseName()).isEqualTo("orders");
 
         assertThat(payload.backupFile()).isEqualTo("/tmp/db-fleetops-backups/orders.sql");
+        assertThat(payload.expectedChecksumSha256()).isEqualTo("abc123");
 
         assertThat(payload.host()).isEqualTo("127.0.0.1");
 
@@ -100,6 +101,31 @@ class RestoreVerifyTaskPayloadFactoryTest {
         assertThat(payload.shouldVerifyRowCount()).isTrue();
 
         assertThat(payload.shouldCleanup()).isTrue();
+    }
+
+    @Test
+    void snapshotInsuranceProfileIntoRestorePayload() throws Exception {
+        String restorePayloadJson = factory.createRestoreVerifyTaskPayloadJson(100L, 200L, """
+                {
+                  "databaseId": 1,
+                  "databaseName": "insurance_sandbox",
+                  "host": "target-mysql",
+                  "port": 3306,
+                  "businessVerificationProfileKey": "INSURANCE_SANDBOX_V1"
+                }
+                """, """
+                {"status":"VERIFIED","backupFile":"/tmp/insurance.sql"}
+                """);
+
+        MysqlRestoreVerifyTaskPayload payload = objectMapper.readValue(restorePayloadJson,
+                MysqlRestoreVerifyTaskPayload.class);
+        assertThat(payload.businessVerificationProfileKey()).isEqualTo("INSURANCE_SANDBOX_V1");
+        assertThat(payload.expectedTables()).containsExactly("customer", "policy",
+                "premium_payment", "claim", "claim_payment");
+        assertThat(payload.businessRules()).hasSize(7).allSatisfy(rule -> {
+            assertThat(rule.query()).startsWith("SELECT");
+            assertThat(rule.timeoutMillis()).isEqualTo(5_000L);
+        });
     }
 
     @Test

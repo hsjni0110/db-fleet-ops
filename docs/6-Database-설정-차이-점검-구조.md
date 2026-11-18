@@ -26,7 +26,7 @@ ConfigurationDrift    기준과 현재 설정을 비교한 결과
 
 ```text
 설정 점검 Job 생성
-  → Worker가 Job 가져오기
+  → Worker가 Job 선점
   → Database의 현재 설정 수집
   → ConfigurationSnapshot 저장
   → ConfigurationProfile과 비교

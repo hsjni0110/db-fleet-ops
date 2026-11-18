@@ -16,7 +16,8 @@ public record DatabaseResponse(
     String serviceName,
     String owner,
     String description,
-    Long assignedAgentId
+    Long assignedAgentId,
+    String businessVerificationProfileKey
 ) {
     public static DatabaseResponse from(ManagedDatabase database) {
         return new DatabaseResponse(
@@ -31,7 +32,8 @@ public record DatabaseResponse(
             database.getServiceName(),
             database.getOwner(),
             database.getDescription(),
-            database.getAssignedAgentId()
+            database.getAssignedAgentId(),
+            database.getBusinessVerificationProfileKey()
         );
     }
 }

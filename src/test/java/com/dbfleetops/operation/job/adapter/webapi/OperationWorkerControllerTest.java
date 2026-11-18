@@ -1,11 +1,11 @@
 package com.dbfleetops.operation.job.adapter.webapi;
 
 
-import com.dbfleetops.operation.job.application.provided.JobClaim;
+import com.dbfleetops.operation.job.application.provided.JobAcquisition;
 import com.dbfleetops.operation.job.application.provided.JobReports;
 import com.dbfleetops.operation.job.domain.JobStatus;
 import com.dbfleetops.operation.job.domain.JobType;
-import com.dbfleetops.operation.job.dto.ClaimJobResponse;
+import com.dbfleetops.operation.job.dto.JobAcquisitionResponse;
 import com.dbfleetops.operation.job.dto.OperationJobResponse;
 
 import org.junit.jupiter.api.Test;
@@ -27,15 +27,15 @@ class OperationWorkerControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private JobClaim jobClaim;
+    private JobAcquisition jobAcquisition;
 
     @MockitoBean
     private JobReports jobReports;
 
     @Test
-    void claimJobReturnsClaimedJob() throws Exception {
-        when(jobClaim.claimJob("worker-1"))
-                .thenReturn(new ClaimJobResponse(
+    void acquireJobReturnsAcquiredJob() throws Exception {
+        when(jobAcquisition.acquireJob("worker-1"))
+                .thenReturn(new JobAcquisitionResponse(
                         true,
                         1L,
                         JobType.BACKUP,
@@ -46,10 +46,10 @@ class OperationWorkerControllerTest {
                 ));
 
         mockMvc.perform(post(
-                        "/internal/v1/workers/worker-1/jobs/claim"
+                        "/internal/v1/workers/worker-1/jobs/acquire"
                 ))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.claimed").value(true))
+                .andExpect(jsonPath("$.acquired").value(true))
                 .andExpect(jsonPath("$.jobId").value(1))
                 .andExpect(jsonPath("$.jobType").value("BACKUP"))
                 .andExpect(jsonPath("$.status").value("RUNNING"))
@@ -58,15 +58,15 @@ class OperationWorkerControllerTest {
     }
 
     @Test
-    void claimJobReturnsEmptyWhenNoJobExists() throws Exception {
-        when(jobClaim.claimJob("worker-1"))
-                .thenReturn(ClaimJobResponse.empty());
+    void acquireJobReturnsEmptyWhenNoJobExists() throws Exception {
+        when(jobAcquisition.acquireJob("worker-1"))
+                .thenReturn(JobAcquisitionResponse.empty());
 
         mockMvc.perform(post(
-                        "/internal/v1/workers/worker-1/jobs/claim"
+                        "/internal/v1/workers/worker-1/jobs/acquire"
                 ))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.claimed").value(false))
+                .andExpect(jsonPath("$.acquired").value(false))
                 .andExpect(jsonPath("$.jobId").doesNotExist());
     }
 

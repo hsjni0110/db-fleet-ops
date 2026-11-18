@@ -13,8 +13,8 @@ class OperationTaskTest {
         private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 7, 12, 0);
         private static final String REPORT_ID = "8d77288c-cf64-4ae8-a5be-a4010192fc6e";
 
-        private static void claim(OperationTask task) {
-                task.claim(NOW, NOW.plusMinutes(1));
+        private static void acquire(OperationTask task) {
+                task.acquire(NOW, NOW.plusMinutes(1));
         }
 
         @Test
@@ -58,7 +58,7 @@ class OperationTaskTest {
         void startChangesQueuedTaskToRunning() {
                 OperationTask task = newLinuxStatusTask();
 
-                claim(task);
+                acquire(task);
 
                 assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.RUNNING);
 
@@ -68,10 +68,10 @@ class OperationTaskTest {
         @Test
         void startRejectsTaskThatIsNotQueued() {
                 OperationTask task = newLinuxStatusTask();
-                claim(task);
+                acquire(task);
 
                 assertThatIllegalStateException()
-                                .isThrownBy(() -> claim(task))
+                                .isThrownBy(() -> acquire(task))
                                 .withMessage("대기 중인 Task만 시작할 수 있습니다. 현재 상태=RUNNING");
         }
 
@@ -79,7 +79,7 @@ class OperationTaskTest {
         void completeChangesRunningTaskToSucceeded() {
                 OperationTask task = newLinuxStatusTask();
 
-                claim(task);
+                acquire(task);
 
                 task.acceptSuccessReport(1, REPORT_ID, "success-fingerprint", "{\"cpuUsagePercent\":12.5}", NOW.plusSeconds(10));
 
@@ -94,7 +94,7 @@ class OperationTaskTest {
         void failChangesRunningTaskToFailed() {
                 OperationTask task = newLinuxStatusTask();
 
-                claim(task);
+                acquire(task);
 
                 task.acceptFailureReport(1, REPORT_ID, "failure-fingerprint", "LINUX_STATUS_FAILED", "failed to read /proc/stat", NOW.plusSeconds(10));
 
@@ -126,7 +126,7 @@ class OperationTaskTest {
         @Test
         void failRejectsMissingErrorCode() {
                 OperationTask task = newLinuxStatusTask();
-                claim(task);
+                acquire(task);
 
                 assertThatIllegalArgumentException()
                                 .isThrownBy(() -> task.acceptFailureReport(1, REPORT_ID, "failure-fingerprint", " ", "failed", NOW.plusSeconds(10)))

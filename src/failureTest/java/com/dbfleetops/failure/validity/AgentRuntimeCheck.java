@@ -28,7 +28,7 @@ final class AgentRuntimeCheck implements ArchitectureCheck {
     }
 
     @Override
-    public String claim() {
+    public String expectation() {
         return "Go Agent는 작은 단일 실행 파일로 빠르게 시작하며 두 CPU 종류로 Build할 수 있습니다.";
     }
 

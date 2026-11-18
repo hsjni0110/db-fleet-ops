@@ -286,7 +286,7 @@ POST /internal/v1/agents/tasks
 
 ### 설명
 
-기존에는 Agent가 가져가는 작업을 `AgentTask`로 표현했습니다.
+기존에는 Agent가 선점하는 Task를 `AgentTask`로 표현했습니다.
 
 현재는 작업의 성격을 더 명확히 하기 위해 `OperationTask`로 변경했습니다.
 

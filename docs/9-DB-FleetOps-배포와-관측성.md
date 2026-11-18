@@ -27,7 +27,7 @@ docker,api     Worker 스케줄러 비활성화
 docker,worker  Worker 스케줄러 활성화
 ```
 
-API를 여러 개 실행해도 각 API가 Job을 직접 가져가지 않고, Worker 수를 별도로 조절할 수 있습니다.
+API를 여러 개 실행해도 각 API가 Job을 직접 선점하지 않고, Worker 수를 별도로 조절할 수 있습니다.
 
 ## 3. Container Image
 
@@ -37,11 +37,14 @@ API를 여러 개 실행해도 각 API가 Job을 직접 가져가지 않고, Wor
 
 ## 4. Docker Compose 실행
 
-Credential 암호화 Key를 먼저 설정해야 합니다.
+API와 Worker는 DB 접속 비밀번호를 암호화하고 읽는 데 같은 키를 사용합니다. 키는 32바이트를 Base64로 인코딩한 값입니다. 기존 환경을 다시 띄울 때는 기존 비밀번호를 암호화한 키를 프로젝트 루트의 `.env`에 `DB_FLEETOPS_CREDENTIAL_ENCRYPTION_KEY`로 설정합니다. 키를 바꾸면 저장된 비밀번호를 기존 방식으로 읽을 수 없습니다. 처음 설치하는 경우에만 `openssl rand -base64 32`로 키를 새로 생성합니다.
+
+터미널에 같은 이름의 환경 변수가 이미 설정돼 있으면 Compose는 그 값을 `.env`보다 우선합니다. `.env`의 값을 사용하려면 먼저 `unset DB_FLEETOPS_CREDENTIAL_ENCRYPTION_KEY`를 실행합니다. 키가 비어 있거나 디코딩한 길이가 32바이트가 아니면 API와 Worker는 시작 단계에서 종료됩니다.
+
+Dockerfile은 `build/libs`에 있는 JAR를 이미지로 복사합니다. 코드를 바꾼 뒤에는 이미지를 만들기 전에 JAR를 다시 빌드합니다.
 
 ```bash
-export DB_FLEETOPS_CREDENTIAL_ENCRYPTION_KEY='<Base64 32-byte key>'
-docker compose up --build -d
+./gradlew bootJar && docker compose up --build -d
 ```
 
 기본 접속 위치는 다음과 같습니다.
@@ -93,12 +96,12 @@ Gauge는 현재 개수만 보여 줍니다. 처리량, 실행 시간과 오류 �
 
 ## 7. Worker 종료 처리
 
-Worker가 종료 신호를 받으면 새 Job 가져오기를 중단하고 Spring의 graceful shutdown을 기다립니다.
+Worker가 종료 신호를 받으면 새 Job 선점를 중단하고 Spring의 graceful shutdown을 기다립니다.
 
 ```text
 종료 신호
   → WorkerState를 종료 중으로 변경
-  → 새 Job 가져오기 중단
+  → 새 Job 선점 중단
   → 진행 중 요청 종료 대기
   → 제한 시간이 지나면 Process 종료
 ```

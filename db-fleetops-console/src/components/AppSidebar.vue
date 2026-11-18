@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { useRouter } from "vue-router";
 import {
-  Bell,
   Connection,
   DataAnalysis,
   Files,
@@ -11,76 +11,30 @@ import {
   Warning,
 } from "@element-plus/icons-vue";
 
-const appName = import.meta.env.VITE_APP_NAME ?? "DB FleetOps Console";
+const router = useRouter();
+const appName = import.meta.env.VITE_APP_NAME || "DB FleetOps";
 
 const menus = [
-  {
-    path: "/dashboard",
-    label: "Dashboard",
-    description: "운영 상태 요약",
-    icon: DataAnalysis,
-  },
-  {
-    path: "/databases",
-    label: "Databases",
-    description: "DB Inventory / Health",
-    icon: Platform,
-  },
-  {
-    path: "/jobs",
-    label: "Operation Jobs",
-    description: "Backup / Apply / Check",
-    icon: Operation,
-  },
-  {
-    path: "/agents",
-    label: "Agents",
-    description: "Heartbeat / Host Metric",
-    icon: Monitor,
-  },
-  {
-    path: "/alerts",
-    label: "Alerts",
-    description: "Ack / Resolve",
-    icon: Bell,
-  },
-  {
-    path: "/configuration-profiles",
-    label: "Configuration",
-    description: "Profile / Desired State",
-    icon: SetUp,
-  },
-  {
-    path: "/configuration-drifts",
-    label: "Drifts",
-    description: "Actual vs Expected",
-    icon: Warning,
-  },
-  {
-    path: "/restore-verifications",
-    label: "Restore Verify",
-    description: "Backup 검증 결과",
-    icon: Files,
-  },
+  { path: "/dashboard", icon: DataAnalysis },
+  { path: "/databases", icon: Platform },
+  { path: "/jobs", icon: Operation },
+  { path: "/restore-verifications", icon: Files },
+  { path: "/agents", icon: Monitor },
+  { path: "/configuration-profiles", icon: SetUp },
+  { path: "/configuration-drifts", icon: Warning },
 ];
 </script>
 
 <template>
   <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-icon">
-        <el-icon>
-          <Connection />
-        </el-icon>
-      </div>
+    <RouterLink to="/dashboard" class="brand">
+      <span class="brand-icon" aria-hidden="true">
+        <el-icon><Connection /></el-icon>
+      </span>
+      <strong>{{ appName }}</strong>
+    </RouterLink>
 
-      <div>
-        <strong>{{ appName }}</strong>
-        <span>Operations Console</span>
-      </div>
-    </div>
-
-    <nav class="sidebar-nav">
+    <nav class="sidebar-nav" aria-label="운영 메뉴">
       <RouterLink
         v-for="menu in menus"
         :key="menu.path"
@@ -88,14 +42,10 @@ const menus = [
         class="nav-item"
         active-class="active"
       >
-        <el-icon class="nav-icon">
+        <el-icon class="nav-icon" aria-hidden="true">
           <component :is="menu.icon" />
         </el-icon>
-
-        <span class="nav-text">
-          <strong>{{ menu.label }}</strong>
-          <small>{{ menu.description }}</small>
-        </span>
+        {{ router.resolve(menu.path).meta.title }}
       </RouterLink>
     </nav>
   </aside>

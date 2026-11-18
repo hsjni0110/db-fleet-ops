@@ -103,7 +103,7 @@ tasks.register('agentFailureTest', Test) {
 }
 
 tasks.register('architectureTest', Test) {
-    description = 'Measures whether the Control Plane-Agent split provides its claimed benefits.'
+    description = 'Measures whether the Control Plane-Agent split provides its intended benefits.'
     group = 'verification'
 
     dependsOn tasks.named('bootJar')

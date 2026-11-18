@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { operationalLabel } from "../labels";
 import { computed, onMounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { CircleCheck, CircleClose, Plus, Refresh, View } from "@element-plus/icons-vue";
@@ -134,7 +135,7 @@ function openCreateDialog() {
 
 function openParameterDialog() {
   if (!selectedProfile.value) {
-    ElMessage.warning("Parameter를 추가할 Profile을 선택하세요.");
+    ElMessage.warning("설정 항목을 추가할 기준을 선택하세요.");
     return;
   }
 
@@ -144,15 +145,15 @@ function openParameterDialog() {
 
 function validateProfileForm() {
   if (!profileForm.profileName.trim()) {
-    return "Profile name is required.";
+    return "기준 이름을 입력하세요.";
   }
 
   if (!profileForm.engineType) {
-    return "Engine type is required.";
+    return "엔진을 선택하세요.";
   }
 
   if (!profileForm.environment.trim()) {
-    return "Environment is required.";
+    return "환경을 선택하세요.";
   }
 
   return null;
@@ -160,15 +161,15 @@ function validateProfileForm() {
 
 function validateParameterForm() {
   if (!parameterForm.parameterName.trim()) {
-    return "Parameter name is required.";
+    return "설정 항목 이름을 입력하세요.";
   }
 
   if (!parameterForm.expectedValue.trim()) {
-    return "Expected value is required.";
+    return "기준값을 입력하세요.";
   }
 
   if (!parameterForm.valueType) {
-    return "Value type is required.";
+    return "값 유형을 선택하세요.";
   }
 
   return null;
@@ -211,7 +212,7 @@ async function loadProfiles() {
     }
   } catch (error) {
     errorMessage.value = getApiErrorMessage(error);
-    ElMessage.error("Configuration Profile 목록을 불러오지 못했습니다.");
+    ElMessage.error("설정 기준 목록을 불러오지 못했습니다.");
   } finally {
     loading.value = false;
   }
@@ -244,9 +245,9 @@ async function submitCreateProfile() {
     upsertProfile(createdProfile);
     selectedProfileId.value = createdProfile.profileId;
     createDialogVisible.value = false;
-    ElMessage.success(`Configuration Profile을 생성했습니다. profileId=${createdProfile.profileId}`);
+    ElMessage.success(`설정 기준 등록 완료 · #${createdProfile.profileId}`);
   } catch (error) {
-    ElMessage.error(`Configuration Profile 생성에 실패했습니다. ${getApiErrorMessage(error)}`);
+    ElMessage.error(`설정 기준 생성에 실패했습니다. ${getApiErrorMessage(error)}`);
   } finally {
     creatingProfile.value = false;
   }
@@ -264,9 +265,9 @@ async function activateSelectedProfile() {
 
     upsertProfile(activatedProfile);
     selectedProfileId.value = activatedProfile.profileId;
-    ElMessage.success(`Profile #${activatedProfile.profileId}을 활성화했습니다.`);
+    ElMessage.success(`설정 기준 #${activatedProfile.profileId}을 활성화했습니다.`);
   } catch (error) {
-    ElMessage.error(`Profile 활성화에 실패했습니다. ${getApiErrorMessage(error)}`);
+    ElMessage.error(`설정 기준 활성화에 실패했습니다. ${getApiErrorMessage(error)}`);
   } finally {
     updatingStatus.value = false;
   }
@@ -284,9 +285,9 @@ async function deactivateSelectedProfile() {
 
     upsertProfile(deactivatedProfile);
     selectedProfileId.value = deactivatedProfile.profileId;
-    ElMessage.success(`Profile #${deactivatedProfile.profileId}을 비활성화했습니다.`);
+    ElMessage.success(`설정 기준 #${deactivatedProfile.profileId}을 비활성화했습니다.`);
   } catch (error) {
-    ElMessage.error(`Profile 비활성화에 실패했습니다. ${getApiErrorMessage(error)}`);
+    ElMessage.error(`설정 기준 비활성화에 실패했습니다. ${getApiErrorMessage(error)}`);
   } finally {
     updatingStatus.value = false;
   }
@@ -294,7 +295,7 @@ async function deactivateSelectedProfile() {
 
 async function submitAddParameter() {
   if (!selectedProfile.value) {
-    ElMessage.warning("Parameter를 추가할 Profile을 선택하세요.");
+    ElMessage.warning("설정 항목을 추가할 기준을 선택하세요.");
     return;
   }
 
@@ -315,9 +316,9 @@ async function submitAddParameter() {
 
     await refreshProfile(selectedProfile.value.profileId);
     parameterDialogVisible.value = false;
-    ElMessage.success("Profile Parameter를 추가했습니다.");
+    ElMessage.success("설정 항목를 추가했습니다.");
   } catch (error) {
-    ElMessage.error(`Profile Parameter 추가에 실패했습니다. ${getApiErrorMessage(error)}`);
+    ElMessage.error(`설정 항목 추가에 실패했습니다. ${getApiErrorMessage(error)}`);
   } finally {
     addingParameter.value = false;
   }
@@ -332,16 +333,15 @@ onMounted(loadProfiles);
       <template #header>
         <div class="card-header">
           <div>
-            <span>Configuration Profiles</span>
-            <p class="card-subtitle">DB가 따라야 할 Desired State 기준값을 확인합니다.</p>
+            <span>설정 기준 목록</span>
           </div>
 
           <div class="card-actions">
             <el-button type="primary" :icon="Plus" @click="openCreateDialog">
-              Create Profile
+              설정 기준 등록
             </el-button>
             <el-button :icon="Refresh" :loading="loading" @click="loadProfiles">
-              Refresh
+              새로고침
             </el-button>
           </div>
         </div>
@@ -356,7 +356,7 @@ onMounted(loadProfiles);
         :closable="false"
       />
 
-      <el-table
+      <el-table scrollbar-tabindex="0"
         v-if="hasProfiles || loading"
         v-loading="loading"
         class="console-table"
@@ -364,9 +364,9 @@ onMounted(loadProfiles);
         highlight-current-row
         @row-click="selectProfile"
       >
-        <el-table-column prop="profileId" label="Profile ID" width="110" />
+        <el-table-column prop="profileId" label="기준 번호" width="110" />
 
-        <el-table-column label="Profile" min-width="240">
+        <el-table-column label="설정 기준" min-width="240">
           <template #default="{ row }">
             <div class="table-primary-cell">
               <strong>{{ row.profileName }}</strong>
@@ -375,29 +375,33 @@ onMounted(loadProfiles);
           </template>
         </el-table-column>
 
-        <el-table-column prop="engineType" label="Engine" width="120" />
-        <el-table-column prop="environment" label="Environment" width="150" />
-        <el-table-column label="Version Range" min-width="150">
+        <el-table-column prop="engineType" label="엔진" width="120">
+          <template #default="{ row }">{{ operationalLabel(row.engineType) }}</template>
+        </el-table-column>
+        <el-table-column prop="environment" label="환경" width="150">
+          <template #default="{ row }">{{ operationalLabel(row.environment) }}</template>
+        </el-table-column>
+        <el-table-column label="버전 범위" min-width="150">
           <template #default="{ row }">
             {{ formatNullable(row.versionRange) }}
           </template>
         </el-table-column>
 
-        <el-table-column label="Status" width="120">
+        <el-table-column label="상태" width="120">
           <template #default="{ row }">
             <el-tag :type="getProfileStatusTagType(row.status)">
-              {{ row.status }}
+              {{ operationalLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column label="Parameters" width="120">
+        <el-table-column label="설정 항목" width="120">
           <template #default="{ row }">
             {{ row.parameters.length }}
           </template>
         </el-table-column>
 
-        <el-table-column label="Actions" width="120" fixed="right">
+        <el-table-column label="관리" width="120">
           <template #default="{ row }">
             <el-button
               type="primary"
@@ -406,7 +410,7 @@ onMounted(loadProfiles);
               :icon="View"
               @click.stop="selectProfile(row)"
             >
-              Select
+              선택
             </el-button>
           </template>
         </el-table-column>
@@ -414,7 +418,7 @@ onMounted(loadProfiles);
 
       <el-empty
         v-else
-        description="No configuration profiles registered yet."
+        description="등록된 설정 기준 없음"
       />
     </el-card>
 
@@ -423,7 +427,6 @@ onMounted(loadProfiles);
         <div class="card-header">
           <div>
             <span>{{ selectedProfile.profileName }}</span>
-            <p class="card-subtitle">Profile 기준값과 Parameter 정책을 확인합니다.</p>
           </div>
 
           <div class="card-actions">
@@ -435,7 +438,7 @@ onMounted(loadProfiles);
               :loading="updatingStatus"
               @click="activateSelectedProfile"
             >
-              Activate
+              활성화
             </el-button>
             <el-button
               v-if="canDeactivateSelectedProfile"
@@ -445,10 +448,10 @@ onMounted(loadProfiles);
               :loading="updatingStatus"
               @click="deactivateSelectedProfile"
             >
-              Deactivate
+              비활성화
             </el-button>
             <el-tag :type="getProfileStatusTagType(selectedProfile.status)">
-              {{ selectedProfile.status }}
+              {{ operationalLabel(selectedProfile.status) }}
             </el-tag>
           </div>
         </div>
@@ -456,19 +459,19 @@ onMounted(loadProfiles);
 
       <div class="detail-summary-grid">
         <div class="summary-tile">
-          <span class="summary-label">Profile ID</span>
+          <span class="summary-label">기준 번호</span>
           <strong>{{ selectedProfile.profileId }}</strong>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Engine</span>
-          <strong>{{ selectedProfile.engineType }}</strong>
+          <span class="summary-label">엔진</span>
+          <strong>{{ operationalLabel(selectedProfile.engineType) }}</strong>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Environment</span>
-          <strong>{{ selectedProfile.environment }}</strong>
+          <span class="summary-label">환경</span>
+          <strong>{{ operationalLabel(selectedProfile.environment) }}</strong>
         </div>
         <div class="summary-tile">
-          <span class="summary-label">Version Range</span>
+          <span class="summary-label">버전 범위</span>
           <strong>{{ formatNullable(selectedProfile.versionRange) }}</strong>
         </div>
       </div>
@@ -478,55 +481,54 @@ onMounted(loadProfiles);
       <template #header>
         <div class="card-header">
           <div>
-            <span>Profile Parameters</span>
-            <p class="card-subtitle">Expected value와 Apply 가능 정책을 확인합니다.</p>
+            <span>설정 기준 항목</span>
           </div>
 
           <div class="card-actions">
             <el-button type="primary" plain :icon="Plus" @click="openParameterDialog">
-              Add Parameter
+              설정 항목 추가
             </el-button>
-            <el-tag type="info">{{ selectedProfile.parameters.length }} items</el-tag>
+            <el-tag type="info">{{ selectedProfile.parameters.length }}개</el-tag>
           </div>
         </div>
       </template>
 
-      <el-table
+      <el-table scrollbar-tabindex="0"
         class="console-table"
         :data="selectedProfile.parameters"
-        empty-text="No parameters registered for this profile."
+        empty-text="등록된 설정 항목 없음"
       >
-        <el-table-column prop="parameterName" label="Parameter" min-width="210" />
-        <el-table-column prop="expectedValue" label="Expected Value" min-width="160" show-overflow-tooltip />
-        <el-table-column label="Value Type" width="130">
+        <el-table-column prop="parameterName" label="설정 항목" min-width="210" />
+        <el-table-column prop="expectedValue" label="기준값" min-width="160" show-overflow-tooltip />
+        <el-table-column label="값 유형" width="130">
           <template #default="{ row }">
             <el-tag :type="getValueTypeTagType(row.valueType)" effect="light">
-              {{ row.valueType }}
+              {{ operationalLabel(row.valueType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Required" width="110">
+        <el-table-column label="필수" width="110">
           <template #default="{ row }">
             <el-tag :type="row.required ? 'success' : 'info'" effect="light">
-              {{ row.required ? "YES" : "NO" }}
+              {{ row.required ? "필수" : "선택" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Dynamic" width="110">
+        <el-table-column label="재시작 없이 변경" width="110">
           <template #default="{ row }">
             <el-tag :type="row.dynamic ? 'success' : 'warning'" effect="light">
-              {{ row.dynamic ? "YES" : "NO" }}
+              {{ row.dynamic ? "가능" : "불가" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Apply Allowed" width="140">
+        <el-table-column label="변경 허용" width="140">
           <template #default="{ row }">
             <el-tag :type="row.applyAllowed ? 'success' : 'danger'" effect="light">
-              {{ row.applyAllowed ? "YES" : "NO" }}
+              {{ row.applyAllowed ? "허용" : "제한" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="Description" min-width="240" show-overflow-tooltip>
+        <el-table-column prop="description" label="설명" min-width="240" show-overflow-tooltip>
           <template #default="{ row }">
             {{ formatNullable(row.description) }}
           </template>
@@ -536,46 +538,46 @@ onMounted(loadProfiles);
 
     <el-dialog
       v-model="createDialogVisible"
-      title="Create Configuration Profile"
+      title="설정 기준 등록"
       width="640px"
       destroy-on-close
     >
       <el-form label-position="top" @submit.prevent>
-        <el-form-item label="Profile Name" required>
+        <el-form-item label="기준 이름" required>
           <el-input v-model="profileForm.profileName" placeholder="mysql-production-standard" />
         </el-form-item>
 
-        <el-form-item label="Engine Type" required>
+        <el-form-item label="엔진" required>
           <el-select v-model="profileForm.engineType" class="full-width">
-            <el-option label="MYSQL" value="MYSQL" />
-            <el-option label="POSTGRESQL" value="POSTGRESQL" />
+            <el-option label="MySQL" value="MYSQL" />
+            <el-option label="PostgreSQL" value="POSTGRESQL" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="Environment" required>
+        <el-form-item label="환경" required>
           <el-select
             v-model="profileForm.environment"
             class="full-width"
             allow-create
             filterable
           >
-            <el-option label="LOCAL" value="LOCAL" />
-            <el-option label="DEV" value="DEV" />
-            <el-option label="STAGING" value="STAGING" />
-            <el-option label="PRODUCTION" value="PRODUCTION" />
+            <el-option :label="operationalLabel('LOCAL')" value="LOCAL" />
+            <el-option :label="operationalLabel('DEV')" value="DEV" />
+            <el-option :label="operationalLabel('STAGING')" value="STAGING" />
+            <el-option :label="operationalLabel('PRODUCTION')" value="PRODUCTION" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="Version Range">
+        <el-form-item label="버전 범위">
           <el-input v-model="profileForm.versionRange" placeholder=">=8.0" />
         </el-form-item>
 
-        <el-form-item label="Description">
+        <el-form-item label="설명">
           <el-input
             v-model="profileForm.description"
             type="textarea"
             :rows="3"
-            placeholder="MySQL production baseline profile"
+            placeholder="예: 운영 DB 설정 기준"
           />
         </el-form-item>
       </el-form>
@@ -583,10 +585,10 @@ onMounted(loadProfiles);
       <template #footer>
         <div class="card-actions">
           <el-button @click="createDialogVisible = false">
-            Cancel
+            취소
           </el-button>
           <el-button type="primary" :loading="creatingProfile" @click="submitCreateProfile">
-            Create
+            등록
           </el-button>
         </div>
       </template>
@@ -594,52 +596,52 @@ onMounted(loadProfiles);
 
     <el-dialog
       v-model="parameterDialogVisible"
-      title="Add Profile Parameter"
+      title="설정 항목 추가"
       width="680px"
       destroy-on-close
     >
       <el-form label-position="top" @submit.prevent>
-        <el-form-item label="Target Profile">
+        <el-form-item label="대상 기준">
           <el-input :model-value="selectedProfile?.profileName ?? '-'" disabled />
         </el-form-item>
 
-        <el-form-item label="Parameter Name" required>
+        <el-form-item label="항목 이름" required>
           <el-input v-model="parameterForm.parameterName" placeholder="slow_query_log" />
         </el-form-item>
 
-        <el-form-item label="Expected Value" required>
+        <el-form-item label="기준값" required>
           <el-input v-model="parameterForm.expectedValue" placeholder="ON" />
         </el-form-item>
 
-        <el-form-item label="Value Type" required>
+        <el-form-item label="값 유형" required>
           <el-segmented
             v-model="parameterForm.valueType"
             :options="[
-              { label: 'String', value: 'STRING' },
-              { label: 'Number', value: 'NUMBER' },
-              { label: 'Boolean', value: 'BOOLEAN' },
+              { label: operationalLabel('STRING'), value: 'STRING' },
+              { label: operationalLabel('NUMBER'), value: 'NUMBER' },
+              { label: operationalLabel('BOOLEAN'), value: 'BOOLEAN' },
             ]"
           />
         </el-form-item>
 
-        <el-form-item label="Policy">
+        <el-form-item label="변경 정책">
           <el-checkbox v-model="parameterForm.required">
-            Required
+            필수
           </el-checkbox>
           <el-checkbox v-model="parameterForm.dynamic">
-            Dynamic
+            재시작 없이 변경
           </el-checkbox>
           <el-checkbox v-model="parameterForm.applyAllowed">
-            Apply Allowed
+            변경 허용
           </el-checkbox>
         </el-form-item>
 
-        <el-form-item label="Description">
+        <el-form-item label="설명">
           <el-input
             v-model="parameterForm.description"
             type="textarea"
             :rows="3"
-            placeholder="Production DB should enable slow query log."
+            placeholder="예: 느린 쿼리 기록 설정"
           />
         </el-form-item>
       </el-form>
@@ -647,10 +649,10 @@ onMounted(loadProfiles);
       <template #footer>
         <div class="card-actions">
           <el-button @click="parameterDialogVisible = false">
-            Cancel
+            취소
           </el-button>
           <el-button type="primary" :loading="addingParameter" @click="submitAddParameter">
-            Add Parameter
+            설정 항목 추가
           </el-button>
         </div>
       </template>

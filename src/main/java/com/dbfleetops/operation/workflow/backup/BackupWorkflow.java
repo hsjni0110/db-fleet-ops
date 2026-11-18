@@ -160,9 +160,10 @@ public class BackupWorkflow implements BackupStarter, BackupTaskResults {
         return """
                 {"operationJobId":%d,"databaseId":%d,"databaseName":"%s","host":"%s","port":%d,
                 "backupType":"LOGICAL","compression":true,"verifyAfterBackup":true,
-                "verifyRowCount":true,"cleanup":true}
+                "verifyRowCount":true,"cleanup":true,"businessVerificationProfileKey":%s}
                 """.formatted(jobId, database.id(), escape(database.databaseName()),
-                        escape(database.host()), database.port());
+                        escape(database.host()), database.port(),
+                        nullableJsonString(database.businessVerificationProfileKey()));
     }
 
     private void handleBackupResult(OperationJob job, OperationTask backupTask,
@@ -244,6 +245,10 @@ public class BackupWorkflow implements BackupStarter, BackupTaskResults {
 
     private String escape(String value) {
         return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private String nullableJsonString(String value) {
+        return value == null || value.isBlank() ? "null" : "\"" + escape(value) + "\"";
     }
 
     private LocalDateTime now() {

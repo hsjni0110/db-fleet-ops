@@ -40,7 +40,7 @@ class TaskServiceTest {
         OperationTask task = OperationTask.create(1L, OperationTaskType.COLLECT_LINUX_STATUS, "{}");
         ReflectionTestUtils.setField(task, "id", 10L);
         LocalDateTime now = LocalDateTime.of(2026, 8, 8, 0, 0);
-        task.claim(now, now.plusMinutes(1));
+        task.acquire(now, now.plusMinutes(1));
         when(tasks.findById(10L)).thenReturn(Optional.of(task));
         when(handler.supports(OperationTaskType.COLLECT_LINUX_STATUS)).thenReturn(true);
         TaskReportService service = new TaskReportService(agents, tasks,

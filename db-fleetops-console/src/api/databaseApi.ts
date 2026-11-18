@@ -5,6 +5,7 @@ import type {
   DatabaseInstanceSummary,
   DefaultDatabaseHealthResponse,
   InventoryHealthCheckResponse,
+  BusinessVerificationProfileResponse,
   UpdateDatabaseInstanceRequest,
 } from "../types";
 
@@ -16,6 +17,24 @@ export async function createDatabaseInstance(
     request,
   );
 
+  return response.data;
+}
+
+export async function getBusinessVerificationProfiles(): Promise<BusinessVerificationProfileResponse[]> {
+  const response = await http.get<BusinessVerificationProfileResponse[]>(
+    "/api/v1/business-verification-profiles",
+  );
+  return response.data;
+}
+
+export async function connectBusinessVerificationProfile(
+  databaseId: number,
+  profileKey: string | null,
+): Promise<DatabaseInstanceResponse> {
+  const response = await http.put<DatabaseInstanceResponse>(
+    `/api/v1/database-instances/${databaseId}/business-verification-profile`,
+    { profileKey },
+  );
   return response.data;
 }
 

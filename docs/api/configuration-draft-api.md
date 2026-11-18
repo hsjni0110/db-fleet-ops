@@ -365,15 +365,15 @@ status = QUEUED
 
 # 9. Configuration Check Job 실행
 
-Configuration Check Job은 Worker가 claim할 때 실행됩니다.
+Configuration Check Job은 Worker가 선점할 때 실행됩니다.
 
 ## Request
 
 ```http
-POST /api/v1/operation-jobs/claim?workerId=worker-1
+POST /internal/v1/workers/worker-1/jobs/acquire
 ```
 
-정확한 경로는 Operation Job Claim API Controller의 매핑 기준을 따릅니다.
+정확한 경로는 Operation Job 선점 API Controller의 매핑 기준을 따릅니다.
 
 ---
 
@@ -383,7 +383,7 @@ POST /api/v1/operation-jobs/claim?workerId=worker-1
 QUEUED Job 조회
       │
       ▼
-Worker가 Job Claim
+Worker가 Job 선점
       │
       ▼
 JobStatus = RUNNING
@@ -843,10 +843,10 @@ curl -X POST http://localhost:8080/api/v1/database-instances/1/operations/config
   }'
 ```
 
-## Worker Claim
+## Worker의 Job 선점
 
 ```bash
-curl -X POST "http://localhost:8080/api/v1/operation-jobs/claim?workerId=worker-1"
+curl -X POST "http://localhost:8080/internal/v1/workers/worker-1/jobs/acquire"
 ```
 
 ## 최신 Drift 조회

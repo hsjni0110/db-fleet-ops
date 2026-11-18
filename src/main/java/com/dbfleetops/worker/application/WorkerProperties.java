@@ -9,7 +9,7 @@ public class WorkerProperties {
 
     private String id = "worker-1";
 
-    private long claimIntervalMs = 5000L;
+    private long acquisitionIntervalMs = 5000L;
 
     public boolean isEnabled() {
         return enabled;
@@ -32,16 +32,16 @@ public class WorkerProperties {
         this.id = id;
     }
 
-    public long getClaimIntervalMs() {
-        return claimIntervalMs;
+    public long getAcquisitionIntervalMs() {
+        return acquisitionIntervalMs;
     }
 
-    public void setClaimIntervalMs(long claimIntervalMs) {
-        if (claimIntervalMs <= 0) {
-            this.claimIntervalMs = 5000L;
+    public void setAcquisitionIntervalMs(long acquisitionIntervalMs) {
+        if (acquisitionIntervalMs <= 0) {
+            this.acquisitionIntervalMs = 5000L;
             return;
         }
 
-        this.claimIntervalMs = claimIntervalMs;
+        this.acquisitionIntervalMs = acquisitionIntervalMs;
     }
 }

@@ -13,6 +13,28 @@ export type RestoreVerificationItemStatus =
   | "COUNT_FAILED"
   | "SKIPPED";
 
+export type TechnicalVerificationStatus = "VERIFIED" | "FAILED";
+export type BusinessVerificationStatus = "NOT_APPLIED" | "SKIPPED" | "VERIFIED" | "FAILED" | "ERROR";
+export type BusinessRuleStatus = "VERIFIED" | "FAILED" | "ERROR";
+export type CleanupStatus = "NOT_REQUESTED" | "COMPLETED" | "FAILED" | "SKIPPED";
+
+export interface BusinessRuleResultResponse {
+  ruleCode: string;
+  ruleName: string;
+  status: BusinessRuleStatus;
+  violationCount: Nullable<number>;
+  durationMillis: number;
+  message: Nullable<string>;
+}
+
+export interface BusinessVerificationResponse {
+  profileKey: Nullable<string>;
+  status: BusinessVerificationStatus;
+  checkedRuleCount: number;
+  failedRuleCount: number;
+  ruleResults: BusinessRuleResultResponse[];
+}
+
 export interface RestoreVerificationItemResponse {
   id: number;
   verificationId: number;
@@ -43,4 +65,9 @@ export interface RestoreVerificationResponse {
   completedAt: Nullable<DateTimeString>;
   createdAt: DateTimeString;
   items: RestoreVerificationItemResponse[];
+  technicalStatus?: TechnicalVerificationStatus;
+  cleanupStatus?: CleanupStatus;
+  cleanupErrorCode?: Nullable<string>;
+  cleanupErrorMessage?: Nullable<string>;
+  businessVerification?: BusinessVerificationResponse;
 }

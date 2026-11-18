@@ -26,8 +26,8 @@ class OperationTaskPersistenceTest {
         private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 7, 12, 0);
         private static final String REPORT_ID = "8d77288c-cf64-4ae8-a5be-a4010192fc6e";
 
-        private static void claim(OperationTask task) {
-                task.claim(NOW, NOW.plusMinutes(1));
+        private static void acquire(OperationTask task) {
+                task.acquire(NOW, NOW.plusMinutes(1));
         }
 
         @Autowired
@@ -93,7 +93,7 @@ class OperationTaskPersistenceTest {
 
                 OperationTask savedTask = taskRepository.save(task);
 
-                claim(savedTask);
+                acquire(savedTask);
 
                 entityManager.flush();
 
@@ -111,7 +111,7 @@ class OperationTaskPersistenceTest {
 
                 OperationTask savedTask = taskRepository.save(task);
 
-                claim(savedTask);
+                acquire(savedTask);
                 savedTask.acceptSuccessReport(1, REPORT_ID, "success-fingerprint",
                                 "{\"cpuUsagePercent\":12.5}", NOW.plusSeconds(10));
 
@@ -134,7 +134,7 @@ class OperationTaskPersistenceTest {
 
                 OperationTask savedTask = taskRepository.save(task);
 
-                claim(savedTask);
+                acquire(savedTask);
                 savedTask.acceptFailureReport(1, REPORT_ID, "failure-fingerprint",
                                 "LINUX_STATUS_FAILED", "failed to read /proc/stat",
                                 NOW.plusSeconds(10));

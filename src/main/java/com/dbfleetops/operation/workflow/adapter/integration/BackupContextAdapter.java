@@ -13,7 +13,7 @@ public class BackupContextAdapter implements BackupVerificationWriter {
     }
     public RestoreVerificationOutcome record(Long jobId, Long taskId, String payload) {
         var result = recorder.record(jobId, taskId, payload);
-        return new RestoreVerificationOutcome(result.isVerified(), result.errorCode(),
+        return new RestoreVerificationOutcome(result.isVerified(), result.finalErrorCode(),
                 result.errorMessage() == null ? result.message() : result.errorMessage());
     }
 }

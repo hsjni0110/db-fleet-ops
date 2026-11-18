@@ -31,7 +31,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class JobClaimAndReportServiceTest {
+class JobAcquisitionAndReportServiceTest {
 
     private static final Clock CLOCK = Clock.fixed(
             Instant.parse("2026-08-08T00:00:00Z"), ZoneOffset.UTC);
@@ -40,7 +40,7 @@ class JobClaimAndReportServiceTest {
     private AuditWriter audit;
     private WorkerState workerState;
     private JobExecutionDispatcher executions;
-    private JobClaimService claims;
+    private JobAcquisitionService acquisitions;
     private JobReportService reports;
 
     @BeforeEach
@@ -52,43 +52,43 @@ class JobClaimAndReportServiceTest {
         OperationJobLeaseProperties lease = new OperationJobLeaseProperties(
                 Duration.ofSeconds(60), Duration.ofSeconds(5), Duration.ofSeconds(30), 100, true);
         JobExecutionResultService results = new JobExecutionResultService(audit, CLOCK, lease);
-        claims = new JobClaimService(jobs, workerState, executions, results, audit, CLOCK, lease);
+        acquisitions = new JobAcquisitionService(jobs, workerState, executions, results, audit, CLOCK, lease);
         reports = new JobReportService(jobs, results);
     }
 
     @Test
-    void claimsWaitingJobAndStartsItsExecution() {
+    void acquiresWaitingJobAndStartsItsExecution() {
         OperationJob job = queuedJob(JobType.BACKUP);
-        when(jobs.findClaimable(eq(JobStatus.QUEUED), any(), eq(10)))
+        when(jobs.findAcquirable(eq(JobStatus.QUEUED), any(), eq(10)))
                 .thenReturn(List.of(job));
         when(executions.execute(job)).thenReturn(
                 JobExecutionOutcome.inProgress("Backup operation task created."));
 
-        var response = claims.claimJob("worker");
+        var response = acquisitions.acquireJob("worker");
 
-        assertThat(response.claimed()).isTrue();
+        assertThat(response.acquired()).isTrue();
         assertThat(job.getStatus()).isEqualTo(JobStatus.RUNNING);
         assertThat(job.getLeaseOwner()).isEqualTo("worker");
         verify(executions).execute(job);
     }
 
     @Test
-    void shuttingDownWorkerDoesNotClaimJob() {
+    void shuttingDownWorkerDoesNotAcquireJob() {
         when(workerState.isShuttingDown()).thenReturn(true);
 
-        assertThat(claims.claimJob("worker").claimed()).isFalse();
+        assertThat(acquisitions.acquireJob("worker").acquired()).isFalse();
 
-        verify(jobs, never()).findClaimable(any(), any(), any(Integer.class));
+        verify(jobs, never()).findAcquirable(any(), any(), any(Integer.class));
     }
 
     @Test
-    void successfulExecutionCompletesClaimedJob() {
+    void successfulExecutionCompletesAcquiredJob() {
         OperationJob job = queuedJob(JobType.CONFIGURATION_CHECK);
-        when(jobs.findClaimable(eq(JobStatus.QUEUED), any(), eq(10)))
+        when(jobs.findAcquirable(eq(JobStatus.QUEUED), any(), eq(10)))
                 .thenReturn(List.of(job));
         when(executions.execute(job)).thenReturn(JobExecutionOutcome.succeeded("점검 완료"));
 
-        claims.claimJob("worker");
+        acquisitions.acquireJob("worker");
 
         assertThat(job.getStatus()).isEqualTo(JobStatus.SUCCEEDED);
         assertThat(job.getResultMessage()).isEqualTo("점검 완료");

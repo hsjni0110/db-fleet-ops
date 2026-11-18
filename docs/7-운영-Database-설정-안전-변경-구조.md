@@ -26,7 +26,7 @@ Profile에 등록된 설정인가
 ```text
 설정 변경 요청 검증
   → CONFIGURATION_APPLY Job 생성
-  → Worker가 Job 가져오기
+  → Worker가 Job 선점
   → 변경 전 Snapshot 저장
   → 설정 항목별 변경 실행
   → 변경 후 Snapshot 저장

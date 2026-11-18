@@ -12,10 +12,10 @@ class OperationTaskLeaseTest {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 7, 12, 0);
 
     @Test
-    void claimStartsFirstExecutionAndCreatesLease() {
+    void acquireStartsFirstExecutionAndCreatesLease() {
         OperationTask task = newTask();
 
-        task.claim(NOW, NOW.plusSeconds(60));
+        task.acquire(NOW, NOW.plusSeconds(60));
 
         assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.RUNNING);
         assertThat(task.getExecutionAttempt()).isEqualTo(1);
@@ -24,12 +24,12 @@ class OperationTaskLeaseTest {
     }
 
     @Test
-    void expiredTaskIsRequeuedAndClaimedWithNextAttempt() {
+    void expiredTaskIsRequeuedAndAcquiredWithNextAttempt() {
         OperationTask task = newTask();
-        task.claim(NOW, NOW.plusSeconds(60));
+        task.acquire(NOW, NOW.plusSeconds(60));
         task.requeueExpiredLease(NOW.plusSeconds(60), 3);
 
-        task.claim(NOW.plusSeconds(61), NOW.plusSeconds(121));
+        task.acquire(NOW.plusSeconds(61), NOW.plusSeconds(121));
 
         assertThat(task.getExecutionAttempt()).isEqualTo(2);
         assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.RUNNING);
@@ -38,7 +38,7 @@ class OperationTaskLeaseTest {
     @Test
     void renewLeaseRequiresCurrentExecutionAndUnexpiredLease() {
         OperationTask task = newTask();
-        task.claim(NOW, NOW.plusSeconds(60));
+        task.acquire(NOW, NOW.plusSeconds(60));
 
         task.renewLease(1, NOW.plusSeconds(20), NOW.plusSeconds(80));
 
@@ -54,10 +54,10 @@ class OperationTaskLeaseTest {
     void thirdExpiredExecutionTimesOut() {
         OperationTask task = newTask();
         for (int attempt = 1; attempt <= 3; attempt++) {
-            LocalDateTime claimedAt = NOW.plusMinutes(attempt);
-            task.claim(claimedAt, claimedAt.plusSeconds(60));
-            if (attempt < 3) task.requeueExpiredLease(claimedAt.plusSeconds(60), 3);
-            else task.timeoutExpiredLease(claimedAt.plusSeconds(60), 3);
+            LocalDateTime acquiredAt = NOW.plusMinutes(attempt);
+            task.acquire(acquiredAt, acquiredAt.plusSeconds(60));
+            if (attempt < 3) task.requeueExpiredLease(acquiredAt.plusSeconds(60), 3);
+            else task.timeoutExpiredLease(acquiredAt.plusSeconds(60), 3);
         }
 
         assertThat(task.getStatus()).isEqualTo(OperationTaskStatus.TIMED_OUT);
@@ -67,7 +67,7 @@ class OperationTaskLeaseTest {
     @Test
     void staleExecutionCannotCompleteOrFailTask() {
         OperationTask task = newTask();
-        task.claim(NOW, NOW.plusSeconds(60));
+        task.acquire(NOW, NOW.plusSeconds(60));
 
         assertThatIllegalStateException().isThrownBy(
                 () -> task.acceptSuccessReport(0, "report-id", "fingerprint", "{}",
@@ -80,7 +80,7 @@ class OperationTaskLeaseTest {
     @Test
     void leaseExpiresAtExactBoundary() {
         OperationTask task = newTask();
-        task.claim(NOW, NOW.plusSeconds(60));
+        task.acquire(NOW, NOW.plusSeconds(60));
 
         assertThatIllegalStateException().isThrownBy(
                 () -> task.acceptSuccessReport(1, "report-id", "fingerprint", "{}",

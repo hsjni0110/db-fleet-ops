@@ -42,7 +42,7 @@ class TaskCredentialServiceTest {
     void returnsCredentialOnlyForTheCurrentExecution() {
         OperationTask task = OperationTask.createForJob(1L, 10L, 7L,
                 OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
-        task.claim(LocalDateTime.now(CLOCK), LocalDateTime.now(CLOCK).plusSeconds(60));
+        task.acquire(LocalDateTime.now(CLOCK), LocalDateTime.now(CLOCK).plusSeconds(60));
         when(agents.findAgent(1L)).thenReturn(Optional.of(new AgentExecutionTarget(1L, true)));
         when(agents.matchesToken(1L, "token")).thenReturn(true);
         when(tasks.findById(20L)).thenReturn(Optional.of(task));
@@ -67,7 +67,7 @@ class TaskCredentialServiceTest {
     void rejectsCredentialWhenDatabaseIsAssignedToAnotherAgent() {
         OperationTask task = OperationTask.createForJob(1L, 10L, 7L,
                 OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
-        task.claim(LocalDateTime.now(CLOCK), LocalDateTime.now(CLOCK).plusSeconds(60));
+        task.acquire(LocalDateTime.now(CLOCK), LocalDateTime.now(CLOCK).plusSeconds(60));
         when(agents.findAgent(1L)).thenReturn(Optional.of(new AgentExecutionTarget(1L, true)));
         when(agents.matchesToken(1L, "token")).thenReturn(true);
         when(tasks.findById(20L)).thenReturn(Optional.of(task));

@@ -52,7 +52,7 @@ class OperationTaskResultReportTest {
     private OperationTask runningTask() {
         OperationTask task = OperationTask.create(1L,
                 OperationTaskType.COLLECT_LINUX_STATUS, "{}");
-        task.claim(NOW.minusSeconds(10), NOW.plusSeconds(60));
+        task.acquire(NOW.minusSeconds(10), NOW.plusSeconds(60));
         return task;
     }
 }

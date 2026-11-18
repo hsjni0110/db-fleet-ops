@@ -45,7 +45,7 @@ class LinkedJobFailureTransactionTest {
 
         OperationTask task = OperationTask.createForJob(1L, job.getId(),
                 OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
-        task.claim(now, now.plusMinutes(1));
+        task.acquire(now, now.plusMinutes(1));
         task = tasks.save(task);
 
         Long jobId = job.getId();

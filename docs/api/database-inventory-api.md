@@ -32,7 +32,8 @@ POST /api/v1/database-instances
   "owner": "platform-team",
   "description": "local mysql",
   "username": "root",
-  "password": "password"
+  "password": "password",
+  "businessVerificationProfileKey": "INSURANCE_SANDBOX_V1"
 }
 ```
 
@@ -52,7 +53,8 @@ POST /api/v1/database-instances
   "environment": "LOCAL",
   "serviceName": "order-service",
   "owner": "platform-team",
-  "description": "local mysql"
+  "description": "local mysql",
+  "businessVerificationProfileKey": "INSURANCE_SANDBOX_V1"
 }
 ```
 
@@ -96,6 +98,10 @@ PATCH /api/v1/database-instances/{databaseId}
 ```
 
 Request Body는 등록 API와 동일합니다.
+
+`businessVerificationProfileKey`는 선택값입니다. `null`이면 복원 뒤 기술 검증만 실행합니다.
+존재하지 않는 Key 또는 관리 DB의 DBMS와 호환되지 않는 Profile은 `400 Bad Request`로
+거절합니다.
 
 ---
 
@@ -177,3 +183,35 @@ Health Result 저장
   "message": "MySQL connection check succeeded."
 }
 ```
+
+---
+
+# 8. 업무 검증 Profile 목록
+
+```http
+GET /api/v1/business-verification-profiles
+```
+
+```json
+[
+  {
+    "key": "INSURANCE_SANDBOX_V1",
+    "name": "Insurance Sandbox V1",
+    "description": "Insurance Sandbox의 계약·수납·청구·지급 업무 불변식을 검증합니다.",
+    "engine": "MYSQL",
+    "requiredTables": ["customer", "policy", "premium_payment", "claim", "claim_payment"],
+    "ruleCount": 7
+  }
+]
+```
+
+공개 응답에는 Rule SQL을 포함하지 않습니다.
+
+# 9. 관리 DB의 업무 검증 Profile 연결·해제
+
+```http
+PUT /api/v1/database-instances/{databaseId}/business-verification-profile
+```
+
+연결은 `{"profileKey":"INSURANCE_SANDBOX_V1"}`, 해제는 `{"profileKey":null}`을
+전송합니다. 변경된 `DatabaseResponse`를 반환합니다.

@@ -60,7 +60,7 @@ class BackupJobOperationTaskFlowTest {
         BackupWorkflow workflow = new BackupWorkflow(agents, databases, credentials, jobs, tasks,
                 payloads, verifications, CLOCK);
         OperationTask backup = toEntity(workflow.startBackup(100L, 1L), saved);
-        backup.claim(LocalDateTime.now(), LocalDateTime.now().plusMinutes(1));
+        backup.acquire(LocalDateTime.now(), LocalDateTime.now().plusMinutes(1));
         when(tasks.findById(backup.getId())).thenReturn(Optional.of(backup));
         BackupTaskSuccessHandler backupSuccessHandler = new BackupTaskSuccessHandler(workflow);
         TaskReportService reports = new TaskReportService(agents, tasks,
@@ -86,7 +86,7 @@ class BackupJobOperationTaskFlowTest {
         job.start("worker", now, now.plusMinutes(1));
         OperationTask task = OperationTask.createForJob(1L, 100L,
                 OperationTaskType.MYSQL_LOGICAL_BACKUP, "{}");
-        task.claim(LocalDateTime.now(), LocalDateTime.now().plusMinutes(1));
+        task.acquire(LocalDateTime.now(), LocalDateTime.now().plusMinutes(1));
         when(agents.findAgent(1L)).thenReturn(Optional.of(new AgentExecutionTarget(1L, true)));
         when(agents.matchesToken(1L, "token")).thenReturn(true);
         when(tasks.findById(10L)).thenReturn(Optional.of(task));
