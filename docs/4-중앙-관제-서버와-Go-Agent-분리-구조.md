@@ -101,19 +101,41 @@ Agent
 
 ## 5. Go Agent 선택 근거
 
-Agent는 백업이 오래 걸려도 중앙 서버에 생존 신호와 실행권 갱신 요청을 보내야 한다. 실행권을 잃으면 이미 시작한 MySQL 명령을 중단해야 한다. 이 두 동작을 각 DB 호스트에서 실행해야 해서 **동시 실행, OS 프로세스 취소, Linux 배포**를 함께 고려해 Go를 선택했다.
+**결정.** 중앙 관제 서버는 Spring Boot로 유지하고, DB 호스트에서 MySQL 명령을 실행하는 Agent는 Go로 구현했다. 언어 선택의 기준은 백업 중에도 제어 요청을 계속 보내고, 실행권을 잃었을 때 진행 중인 백업 명령을 중단하며, Linux 호스트에 Agent를 별도로 배포할 수 있는지였다.
 
-### 20초 백업 중 생존 신호 전송
+### 백업과 제어 요청의 실행 분리
 
-초기 구현은 백업이 끝나야 다음 생존 신호를 보냈다. 백업 명령에 20초 지연을 넣자 신호 간격이 최대 21초까지 늘었다. [AgentService.Run()](../agent-go/internal/application/agent_service.go)에서 신호 전송을 별도 goroutine으로 옮겨, 백업을 기다리는 동안에도 독립적으로 요청을 보내게 했다. 같은 지연을 다시 넣었을 때 최대 간격은 **2초**였고 백업 Task도 성공했다. 실험은 백업 명령의 대기 시간을 재현했다. [실패 재현 코드](../src/failureTest/java/com/dbfleetops/failure/scenario/AgentFailureTest.java)
+정상 동작에서 하나의 Agent는 다음 세 가지를 처리한다.
 
-### 실행권 상실 시 덤프 중단
+| 동작 | 유지 기간 | 늦어질 때 생기는 일 |
+|---|---|---|
+| Heartbeat | Agent가 실행되는 동안 | 중앙 서버에서 살아 있는 Agent의 마지막 응답 시각이 오래된 값으로 남는다. |
+| Task Lease 갱신 | 해당 실행 시도가 유효한 동안 | 백업 프로세스가 여전히 돌아가도 서버가 실행권 만료로 판단해 같은 작업을 다시 대기열에 넣을 수 있다. |
+| MySQL 명령 실행 | 명령 종료 또는 작업 취소까지 | 덤프가 끝날 때까지 기다리는 시간이 두 제어 요청의 주기에 영향을 줄 수 있다. |
 
-예를 들어 Task의 첫 번째 시도가 백업을 수행 중인데 중앙 서버가 실행권을 회수했다고 가정한다. 이전 실행이 계속 덤프를 쓰거나 결과를 보고하면 두 번째 실행과 겹칠 수 있다. [maintainTaskLease()](../agent-go/internal/application/agent_service.go)는 갱신 요청이 실행권 충돌로 거절되거나 갱신 실패가 실행권 기간만큼 이어지면 작업의 `context`를 취소한다. [MySQLDumpRunner](../agent-go/internal/infra/backup/mysql_dump_runner.go)는 이 값을 `exec.CommandContext`에 넘긴다. 취소 신호가 도착하면 Go가 실행한 `mysqldump` 프로세스가 종료되고, Agent는 실행권을 잃은 시도의 결과 보고를 건너뛴다. [Go 프로세스 취소 동작](https://pkg.go.dev/os/exec#CommandContext)
+예를 들어 `mysqldump`를 호출한 루프에서 명령이 끝난 다음 Heartbeat를 보내면 20초짜리 명령을 기다리는 동안 신호를 보낼 기회가 없다. 실제로 같은 흐름에 두었을 때 Heartbeat 최대 간격이 21초였다. `AgentService.Run()`은 Agent 수명의 goroutine에서 Heartbeat 타이머를 돌리고, 호출 흐름에서는 Task를 하나씩 받아 실행한다. `PollAndHandleTask()`는 실행 시도마다 수명이 짧은 Lease 갱신 goroutine을 시작한다. 이렇게 하면 하나의 Agent가 여러 덤프를 동시에 돌리지 않으면서도, 덤프를 기다리는 동안 제어 요청을 보낼 수 있다. [Agent 제어 흐름](../agent-go/internal/application/agent_service.go)
 
-Go를 선택한 이유는 **주기적으로 신호를 보내는 코드와 OS 명령이 같은 작업의 취소 신호에 반응하도록 연결할 수 있기 때문**이다. 중앙의 Spring Boot 애플리케이션은 작업 기록과 실행권 판정을 담당한다. 실행기는 [Dockerfile](../agent-go/Dockerfile)에서 `CGO_ENABLED=0`으로 빌드해 MySQL 도구가 있는 이미지에 실행 파일을 배치한다. DB 호스트에 중앙 서버와 같은 JVM 환경을 맞출 필요가 없다.
+goroutine을 고른 이유는 이 작업 모델에서 타이머와 HTTP 요청이 기다리는 동안 별도 루프를 유지하기 쉽고, 중단 범위를 `context`로 전달할 수 있어서다. Agent의 종료 신호는 상위 `context`를 취소해 Agent 수명의 작업에 전달한다. 반면 Task의 실행권 충돌은 그 시도의 하위 `context`만 취소해 Heartbeat를 계속 보낼 수 있게 한다. 타이머 간격이 응답 시간을 보장하는 것은 아니다. 실제 HTTP 지연과 타임아웃도 보고 간격에 영향을 준다. [종료 신호 처리](../agent-go/cmd/db-fleet-agent/main.go)와 [HTTP 클라이언트](../agent-go/internal/infra/http/control_plane_client.go)
 
-### 배포 기준과 측정값
+### 실행권 상실과 OS 프로세스 취소
+
+같은 Task의 첫 번째 시도에서 `mysqldump`가 파일을 쓰고 있다고 가정한다. 실행권 갱신이 충돌로 거절되면 갱신 goroutine은 상실 사실을 채널에 기록하고 작업의 `context`를 취소한다. [MySQLDumpRunner](../agent-go/internal/infra/backup/mysql_dump_runner.go)는 그 `context`를 `exec.CommandContext`에 넘겼기 때문에, 취소되면 Go가 시작한 `mysqldump` 프로세스도 종료된다. 덤프의 표준 출력은 파일에 직접 연결한다. Agent가 전체 SQL 덤프를 메모리 버퍼에 받은 뒤 쓰는 방식은 필요하지 않다. [Go 프로세스 취소 동작](https://pkg.go.dev/os/exec#CommandContext)
+
+명령에서 돌아온 Agent는 갱신 goroutine이 끝날 때까지 기다리고, 실행권 상실이 기록된 시도는 성공이나 실패를 보고하지 않는다. 네트워크 지연으로 이전 시도의 보고가 뒤늦게 도착하는 경우까지 처리하려면 중앙 서버도 실행 번호를 확인해야 한다. 프로세스를 중단해도 이미 디스크에 쓴 바이트가 되돌아가지는 않는다. [실행 번호와 상태 검사](../src/main/java/com/dbfleetops/operation/task/domain/OperationTask.java)
+
+### 대안과 선택 비용
+
+| 대안 | 구현 방식 | 이 프로젝트의 비용 |
+|---|---|---|
+| Java 21 Agent | `ScheduledExecutorService`로 두 주기 작업을 돌리고, `ProcessBuilder`로 시작한 프로세스의 핸들을 보관한다. Task 취소 때 프로세스를 직접 종료하고 종료 여부를 확인한다. | Java 코드를 재사용할 수 있다. 별도 Agent의 Java 런타임과 배포물을 관리하고, 스케줄러의 작업 취소를 OS 프로세스 종료까지 연결해야 한다. |
+| Go Agent | goroutine과 `time.Ticker`로 제어 요청을 실행한다. 작업 수명의 `context`를 HTTP 요청과 OS 명령에 전달한다. `CGO_ENABLED=0`으로 Linux 실행 파일을 빌드한다. | Java와 Go의 빌드 및 배포를 관리하고 Task 계약 변경을 양쪽에 반영해야 한다. MySQL 클라이언트 도구는 배포 환경에 포함해야 한다. |
+
+Java에서도 같은 동시성 구조를 만들 수 있다. Go의 선택 근거는 이 Agent가 하는 일이 HTTP 요청, 타이머, OS 명령에 집중돼 있어 **작업 취소를 표준 라이브러리로 명령 실행까지 연결하고, 별도의 JVM 없이 배포하는 조합이 이 구현에 잘 맞았다는 점**이다. 중앙 서버에서 쓰는 Spring Boot의 작업 저장이나 트랜잭션 코드는 Agent에 필요하지 않았다. [Java 주기 작업 API](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/ScheduledExecutorService.html)와 [Java 프로세스 종료 API](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Process.html)
+
+### 검증 결과와 범위
+
+- **Heartbeat 간격.** 20초 지연을 넣은 백업에서 루프를 분리한 뒤 최대 간격은 21초에서 2초로 줄었고 Task는 성공했다. 결과가 보여 주는 것은 실행 분리의 효과다. 실험용 명령이 대기 시간을 재현했으므로 실제 대용량 백업의 CPU와 디스크 부하는 이 실험으로 측정하지 않았다. [장애 재현 테스트](../src/failureTest/java/com/dbfleetops/failure/scenario/AgentFailureTest.java)
+- **실행권 충돌.** Go 단위 테스트에서 긴 작업 도중 갱신이 반복되는지 확인한 뒤, 서버가 충돌을 반환하도록 해 Handler가 취소되고 성공과 실패 보고가 모두 생략되는지 확인했다. 이 테스트에서는 Handler를 대체했다. 실제 `mysqldump`가 취소 신호를 받아 종료하기까지 걸리는 시간은 별도로 측정하지 않았다. [Lease 갱신 및 취소 테스트](../agent-go/internal/application/agent_service_test.go)
 
 빌드와 시작 조건은 [AgentRuntimeCheck](../src/failureTest/java/com/dbfleetops/failure/validity/AgentRuntimeCheck.java)에 고정했다.
 
@@ -124,7 +146,7 @@ Go를 선택한 이유는 **주기적으로 신호를 보내는 코드와 OS 명
 | 컨테이너 시작 시간 | 15초 미만 | 9.709초 |
 | Linux amd64와 arm64 빌드 | 두 대상 모두 성공 | 통과 |
 
-MySQL 도구를 포함한 실험 이미지 전체 크기는 **581.43MiB**였다. 이 수치는 Agent의 배포 기준을 통과했다는 근거다. 같은 기능의 Java Agent를 만들어 비교한 실험은 수행하지 않았다. [실행 환경 측정 원본](images/image-4.png)
+MySQL 도구를 포함한 실험 이미지 전체 크기는 581.43MiB였다. 같은 기능의 Java Agent를 만들어 비교한 실험은 수행하지 않았다. [실행 환경 측정 원본](images/image-4.png)
 
 ## 6. 전체 작업과 현장 작업을 나눈 이유
 

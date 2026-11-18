@@ -49,9 +49,9 @@ flowchart LR
 
 ### Go Agent 선택 근거
 
-20초 동안 백업을 기다리는 동안에도 Agent는 중앙 서버에 살아 있다는 신호를 보내고, 해당 작업을 계속 실행할 권한을 갱신해야 합니다. 반대로 그 권한을 잃으면 이미 시작한 `mysqldump`를 멈춰야 합니다. 이 두 동작을 각 DB 호스트에서 지원하려고 Go를 선택했습니다. goroutine으로 생존 신호와 작업 실행을 나누고, 작업의 `context`를 OS 명령까지 전달할 수 있기 때문입니다. 두 동작은 Go 표준 라이브러리로 구현했습니다. [Agent 실행 코드](agent-go/internal/application/agent_service.go)와 [덤프 실행 코드](agent-go/internal/infra/backup/mysql_dump_runner.go)
+백업 명령에 20초 지연을 넣었을 때, 명령 종료를 기다리는 루프에서는 Heartbeat 간격이 최대 21초였습니다. Agent 수명의 Heartbeat와 실행 시도마다 갱신하는 Lease를 별도 goroutine으로 실행하자 백업 중 최대 Heartbeat 간격은 2초였고 작업도 완료됐습니다. Lease 갱신이 충돌로 거절되면 그 작업의 `context`를 취소해 `mysqldump`를 종료하도록 연결했습니다.
 
-20초 지연을 넣은 장애 재현에서 백업과 생존 신호를 같은 흐름에 뒀을 때 신호 간격이 최대 **21초**였습니다. 신호 전송을 별도 goroutine으로 옮기자 같은 실험에서 최대 **2초**로 줄었고 작업도 완료됐습니다. 중앙 서버가 실행권 충돌로 갱신을 거절하면 Agent는 작업의 `context`를 취소하고 이전 시도의 결과를 보고하지 않습니다. [Go 선택 근거와 실험 기록](docs/4-중앙-관제-서버와-Go-Agent-분리-구조.md#5-go-agent-선택-근거)
+Java 21로도 두 제어 루프를 실행하고 자식 프로세스를 종료할 수 있습니다. Go는 타이머와 HTTP 요청을 돌리면서 같은 취소 신호를 OS 명령까지 전달하고, Agent 실행 파일을 JVM 없이 Linux amd64와 arm64에 배포하는 데 적합했습니다. [설계 결정과 대안, 실험 범위](docs/4-중앙-관제-서버와-Go-Agent-분리-구조.md#5-go-agent-선택-근거)
 
 ## 콘솔 화면
 
