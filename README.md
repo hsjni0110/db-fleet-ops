@@ -34,7 +34,7 @@ Go 테스트에서 값을 바꾼 덤프는 `BACKUP_INTEGRITY_CHECK_FAILED`로 �
 
 ## 구조와 운영 흐름
 
-예를 들어 운영자가 주문 DB의 백업을 요청하면 **Job** 하나가 생깁니다. Worker는 백업과 복원 검증을 각각 **Task**로 배정하고, DB 가까이에 있는 Go Agent가 Task를 가져가 실행합니다. 같은 완료 보고가 다시 도착해도 후속 Task는 한 번만 생성합니다. 콘솔은 작업 결과와 실패 원인을 보여 줍니다. [Job과 Task의 코드 흐름](docs/5-백업-Job과-Agent-Task-실행-구조.md)
+예를 들어 운영자가 주문 DB의 백업을 요청하면 **Job** 하나가 생깁니다. Worker는 백업과 복원 검증을 각각 **Task**로 배정하고, Go Agent는 DB에 접속할 수 있는 호스트에서 Task를 가져와 백업과 복원 명령을 실행합니다. 같은 완료 보고가 다시 도착해도 후속 Task는 한 번만 생성합니다. 콘솔은 작업 결과와 실패 원인을 보여 줍니다. [Job과 Task의 코드 흐름](docs/5-백업-Job과-Agent-Task-실행-구조.md)
 
 ```mermaid
 flowchart LR
@@ -47,11 +47,11 @@ flowchart LR
 
 설정 점검은 실제 값을 수집해 운영 기준과 비교합니다. 설정 변경은 허용된 항목과 값 형식을 확인한 뒤 적용하고, 변경 전후 값을 기록합니다. [설정 차이 점검](docs/6-Database-설정-차이-점검-구조.md), [설정 변경의 검증 흐름](docs/7-운영-Database-설정-안전-변경-구조.md)
 
-### 현장 실행기의 Go 선택
+### Go Agent 선택 근거
 
 20초 동안 백업을 기다리는 동안에도 Agent는 중앙 서버에 살아 있다는 신호를 보내고, 해당 작업을 계속 실행할 권한을 갱신해야 합니다. 반대로 그 권한을 잃으면 이미 시작한 `mysqldump`를 멈춰야 합니다. 이 두 동작을 각 DB 호스트에서 지원하려고 Go를 선택했습니다. goroutine으로 생존 신호와 작업 실행을 나누고, 작업의 `context`를 OS 명령까지 전달할 수 있기 때문입니다. 두 동작은 Go 표준 라이브러리로 구현했습니다. [Agent 실행 코드](agent-go/internal/application/agent_service.go)와 [덤프 실행 코드](agent-go/internal/infra/backup/mysql_dump_runner.go)
 
-20초 지연을 넣은 장애 재현에서 백업과 생존 신호를 같은 흐름에 뒀을 때 신호 간격이 최대 **21초**였습니다. 신호 전송을 별도 goroutine으로 옮기자 같은 실험에서 최대 **2초**로 줄었고 작업도 완료됐습니다. 중앙 서버가 실행권 충돌로 갱신을 거절하면 Agent는 작업의 `context`를 취소하고 이전 시도의 결과를 보고하지 않습니다. [Go 선택 근거와 실험 기록](docs/4-중앙-관제-서버와-Go-Agent-분리-구조.md#5-현장-실행기의-go-선택)
+20초 지연을 넣은 장애 재현에서 백업과 생존 신호를 같은 흐름에 뒀을 때 신호 간격이 최대 **21초**였습니다. 신호 전송을 별도 goroutine으로 옮기자 같은 실험에서 최대 **2초**로 줄었고 작업도 완료됐습니다. 중앙 서버가 실행권 충돌로 갱신을 거절하면 Agent는 작업의 `context`를 취소하고 이전 시도의 결과를 보고하지 않습니다. [Go 선택 근거와 실험 기록](docs/4-중앙-관제-서버와-Go-Agent-분리-구조.md#5-go-agent-선택-근거)
 
 ## 콘솔 화면
 
@@ -107,4 +107,4 @@ python3 scripts/mysql-pitr-rehearsal.py
 | 비동기 작업과 실행권 | [Job 구조](docs/3-비동기-작업-처리를-위한-Job-구조.md), [중앙 관제 서버와 Go Agent](docs/4-중앙-관제-서버와-Go-Agent-분리-구조.md), [객체 관계](docs/diagram/유스케이스별-객체-관계.md) |
 | 배포와 관측 | [Compose와 Kubernetes 예제, 운영 지표](docs/9-DB-FleetOps-배포와-관측성.md), [운영 콘솔](db-fleetops-console/README.md) |
 
-중앙 관제 서버는 Java 21과 Spring Boot, 콘솔은 Vue 3와 TypeScript, 현장 실행기는 Go를 사용합니다. 로컬 Compose의 작업 기록 DB와 관리 대상 DB는 MySQL 8.0입니다. 운영 적용 전에는 [고가용성, 보안, 부하 검증 항목](docs/9-DB-FleetOps-배포와-관측성.md#11-운영-적용-전에-보완할-부분)을 확인해야 합니다.
+중앙 관제 서버는 Java 21과 Spring Boot를 사용하고, 콘솔은 Vue 3와 TypeScript를 사용합니다. 로컬 Compose의 작업 기록 DB와 관리 대상 DB는 MySQL 8.0입니다. 운영 적용 전에는 [고가용성, 보안, 부하 검증 항목](docs/9-DB-FleetOps-배포와-관측성.md#11-운영-적용-전에-보완할-부분)을 확인해야 합니다.
